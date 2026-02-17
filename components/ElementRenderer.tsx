@@ -25,12 +25,13 @@ const ElementRenderer: React.FC<Props> = ({ element, isSelected, onSelect }) => 
     touchAction: 'none'
   };
 
-  const borderStyle = {
+  const borderStyle: React.CSSProperties = {
     borderRadius: `${element.style.borderRadius ?? 0}px`,
     borderWidth: `${element.style.strokeWidth ?? 0}px`,
     borderColor: element.style.strokeColor ?? '#000',
     borderStyle: element.style.strokePattern ?? 'solid',
-    overflow: 'hidden'
+    overflow: 'hidden',
+    clipPath: element.style.clipPath
   };
 
   const renderContent = () => {

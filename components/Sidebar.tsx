@@ -100,6 +100,18 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const SHAPES = [
+    { id: 'square', label: 'Square', icon: <div className="w-5 h-5 bg-white/20 rounded-sm" /> },
+    { id: 'circle', label: 'Circle', icon: <div className="w-5 h-5 bg-white/20 rounded-full" /> },
+    { id: 'pill', label: 'Pill', icon: <div className="w-8 h-4 bg-white/20 rounded-full" /> },
+    { id: 'triangle', label: 'Triangle', icon: <div className="w-5 h-5 bg-white/20" style={{ clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }} /> },
+    { id: 'diamond', label: 'Diamond', icon: <div className="w-5 h-5 bg-white/20" style={{ clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} /> },
+    { id: 'pentagon', label: 'Pentagon', icon: <div className="w-5 h-5 bg-white/20" style={{ clipPath: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)' }} /> },
+    { id: 'hexagon', label: 'Hexagon', icon: <div className="w-5 h-5 bg-white/20" style={{ clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)' }} /> },
+    { id: 'star', label: 'Star', icon: <div className="w-5 h-5 bg-white/20" style={{ clipPath: 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)' }} /> },
+    { id: 'parallelogram', label: 'Para', icon: <div className="w-5 h-5 bg-white/20" style={{ clipPath: 'polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%)' }} /> },
+  ];
+
   return (
     <div className={`${isMobile ? 'w-full' : 'w-[380px]'} h-full bg-[#111] ${isMobile ? '' : 'border-l'} border-white/10 flex flex-col select-none overflow-hidden`}>
       <input 
@@ -114,7 +126,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="p-5 flex items-center justify-between border-b border-white/10">
           <div className="flex items-center gap-2">
             <Icons.Layout className="w-5 h-5 text-lime-400" />
-            <h1 className="font-semibold text-lg">Mockingjay Editor</h1>
+            <h1 className="font-semibold text-lg italic tracking-tight">Mockingjay</h1>
           </div>
         </div>
       )}
@@ -135,21 +147,32 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <Section title="Add Assets" id="image" icon={<Icons.Plus className="w-4 h-4" />} isOpen={openSections.image} onToggle={toggleSection}>
-           <div className="grid grid-cols-2 gap-2 mb-4">
+           <div className="space-y-4">
               <button 
                 onClick={() => imageUploadRef.current?.click()} 
-                className="bg-zinc-800 p-2 py-4 rounded-xl text-xs flex flex-col items-center gap-1 hover:bg-zinc-700 transition-colors active:scale-95"
+                className="w-full bg-zinc-800 p-4 rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-zinc-700 transition-colors active:scale-95 border border-white/5"
               >
                  <Icons.ImageIcon className="w-5 h-5 text-lime-400"/> Device Image
               </button>
-              <button onClick={() => onAddShape('square')} className="bg-zinc-800 p-2 py-4 rounded-xl text-xs flex flex-col items-center gap-1 hover:bg-zinc-700 transition-colors active:scale-95">
-                 <Icons.Square className="w-5 h-5 text-lime-400"/> Add Shape
-              </button>
-           </div>
-           <div className="space-y-2">
-              <button onClick={() => onAddText('Header')} className="w-full h-10 bg-zinc-800 rounded-lg text-sm font-bold border border-white/5 hover:border-white/20 active:scale-[0.98]">Add Header</button>
-              <button onClick={() => onAddText('Subheader')} className="w-full h-10 bg-zinc-800 rounded-lg text-sm font-medium border border-white/5 hover:border-white/20 active:scale-[0.98]">Add Subheader</button>
-              <button onClick={() => onAddText('Paragraph')} className="w-full h-10 bg-zinc-800 rounded-lg text-xs border border-white/5 hover:border-white/20 active:scale-[0.98]">Add Paragraph</button>
+              
+              <div className="grid grid-cols-3 gap-2">
+                {SHAPES.map(shape => (
+                  <button 
+                    key={shape.id}
+                    onClick={() => { triggerHaptic(5); onAddShape(shape.id); }}
+                    className="bg-zinc-800/50 p-3 rounded-xl flex flex-col items-center gap-2 hover:bg-zinc-700 transition-colors active:scale-90 border border-white/5"
+                  >
+                    {shape.icon}
+                    <span className="text-[9px] uppercase font-bold text-white/40">{shape.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-2 pt-2">
+                  <button onClick={() => onAddText('Header')} className="w-full h-10 bg-zinc-800 rounded-lg text-sm font-bold border border-white/5 hover:border-white/20 active:scale-[0.98]">Add Header</button>
+                  <button onClick={() => onAddText('Subheader')} className="w-full h-10 bg-zinc-800 rounded-lg text-sm font-medium border border-white/5 hover:border-white/20 active:scale-[0.98]">Add Subheader</button>
+                  <button onClick={() => onAddText('Paragraph')} className="w-full h-10 bg-zinc-800 rounded-lg text-xs border border-white/5 hover:border-white/20 active:scale-[0.98]">Add Paragraph</button>
+              </div>
            </div>
         </Section>
 
@@ -158,7 +181,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <Section title="Edit Content" id="text" icon={<Icons.Type className="w-4 h-4" />} isOpen={openSections.text} onToggle={toggleSection}>
                <div className="space-y-4">
                   {selectedElement.type === 'text' && (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {/* Pill Font Selector */}
                       <div className="relative">
                         <div className="flex bg-zinc-900 rounded-full border border-white/10 h-11 overflow-hidden">
@@ -210,14 +233,51 @@ const Sidebar: React.FC<SidebarProps> = ({
                         />
                       </div>
 
+                      {/* Size and Alignment Control Row */}
+                      <div className="flex items-end gap-3">
+                         <div className="flex-1 space-y-2">
+                           <div className="flex justify-between text-[10px] text-white/40 uppercase"><span>Size</span><span>{selectedElement.style.fontSize}</span></div>
+                           <input type="range" min="8" max="200" step="1" value={selectedElement.style.fontSize ?? 24} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, fontSize: parseInt(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
+                         </div>
+                         <div className="flex bg-zinc-900 rounded-lg p-1 border border-white/10">
+                            {['left', 'center', 'right'].map((align) => (
+                              <button 
+                                key={align} 
+                                onClick={() => { triggerHaptic(2); updateElement(selectedElement.id, { style: { ...selectedElement.style, textAlign: align as any } }); }}
+                                className={`p-2 rounded-md transition-all ${selectedElement.style.textAlign === align ? 'bg-lime-400 text-black' : 'text-white/40 hover:text-white'}`}
+                              >
+                                {align === 'left' && <Icons.MoreHorizontal className="w-4 h-4 rotate-180" />}
+                                {align === 'center' && <Icons.MoreHorizontal className="w-4 h-4" />}
+                                {align === 'right' && <Icons.MoreHorizontal className="w-4 h-4" />}
+                              </button>
+                            ))}
+                         </div>
+                      </div>
+
+                      {/* Weight Selector */}
+                      <div className="space-y-2">
+                          <div className="text-[10px] text-white/40 uppercase"><span>Font Weight</span></div>
+                          <div className="flex gap-2">
+                            {['300', '400', '600', '700', '900'].map(weight => (
+                              <button 
+                                key={weight}
+                                onClick={() => { triggerHaptic(2); updateElement(selectedElement.id, { style: { ...selectedElement.style, fontWeight: weight } }); }}
+                                className={`flex-1 h-9 rounded-lg border text-xs font-bold ${selectedElement.style.fontWeight === weight ? 'bg-lime-400 border-lime-400 text-black' : 'bg-zinc-900 border-white/10 text-white/40'}`}
+                              >
+                                {weight}
+                              </button>
+                            ))}
+                          </div>
+                      </div>
+
                       {/* Line Height & Letter Spacing */}
-                      <div className="space-y-4 pt-2">
+                      <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">
-                          <div className="flex justify-between text-[10px] text-white/40 uppercase"><span>Line Height</span><span>{selectedElement.style.lineHeight?.toFixed(1) || '1.0'}</span></div>
+                          <div className="flex justify-between text-[10px] text-white/40 uppercase"><span>Line</span><span>{selectedElement.style.lineHeight?.toFixed(1) || '1.0'}</span></div>
                           <input type="range" min="0.5" max="3" step="0.1" value={selectedElement.style.lineHeight ?? 1.2} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, lineHeight: parseFloat(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
                         </div>
                         <div className="space-y-2">
-                          <div className="flex justify-between text-[10px] text-white/40 uppercase"><span>Spacing</span><span>{selectedElement.style.letterSpacing ?? 0}px</span></div>
+                          <div className="flex justify-between text-[10px] text-white/40 uppercase"><span>Space</span><span>{selectedElement.style.letterSpacing ?? 0}</span></div>
                           <input type="range" min="-5" max="30" step="1" value={selectedElement.style.letterSpacing ?? 0} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, letterSpacing: parseInt(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
                         </div>
                       </div>
@@ -284,9 +344,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {!isMobile && (
         <div className="p-5 border-t border-white/10 space-y-3">
-           <button className="w-full bg-white text-black h-12 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-zinc-200 transition-all active:scale-95 shadow-lg">
+           <button 
+             onClick={() => (window as any).dispatchEvent(new CustomEvent('open-export-modal'))}
+             className="w-full bg-lime-400 text-black h-12 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-lime-300 transition-all active:scale-95 shadow-lg italic"
+           >
               <Icons.Download className="w-5 h-5" />
-              Export Template
+              EXPORT WORK
            </button>
         </div>
       )}

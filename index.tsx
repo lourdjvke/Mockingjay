@@ -14,3 +14,11 @@ root.render(
     <App />
   </React.StrictMode>
 );
+
+// Global event listener for modal control
+window.addEventListener('open-export-modal', () => {
+  // This is handled via state inside App.tsx, but we can use this 
+  // as a backup if we want components to trigger it.
+  // In our case, we passed it through App.tsx's internal state mechanism 
+  // and direct function props.
+});

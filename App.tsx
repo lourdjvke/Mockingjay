@@ -6,6 +6,7 @@ import { generateId, downloadTemplate } from './utils.ts';
 import Sidebar from './components/Sidebar.tsx';
 import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
+import * as htmlToImage from 'html-to-image';
 
 interface SnapLine {
   type: 'vertical' | 'horizontal';
@@ -20,6 +21,9 @@ const App: React.FC = () => {
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [scale, setScale] = useState(1);
   const [snapLines, setSnapLines] = useState<SnapLine[]>([]);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(false);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -68,7 +72,13 @@ const App: React.FC = () => {
     setState(prev => {
       const newPages = [...prev.pages];
       const page = newPages[prev.currentPageIndex];
-      page.elements = page.elements.map(el => el.id === id ? { ...el, ...updates, style: { ...el.style, ...updates.style } } : el);
+      page.elements = page.elements.map(el => {
+        if (el.id === id) {
+          const newStyle = updates.style ? { ...el.style, ...updates.style } : el.style;
+          return { ...el, ...updates, style: newStyle };
+        }
+        return el;
+      });
       return { ...prev, pages: newPages };
     });
   }, []);
@@ -104,7 +114,21 @@ const App: React.FC = () => {
       type: (element.type as any) || 'shape',
       box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 200, rotation: 0 },
       content: '',
-      style: { backgroundColor: '#FFFFFF', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: FONTS[0].value },
+      style: { 
+        backgroundColor: '#FFFFFF', 
+        color: '#000000', 
+        borderRadius: 0, 
+        opacity: 1, 
+        strokeWidth: 0, 
+        strokePattern: 'solid', 
+        strokeColor: '#000000', 
+        letterSpacing: 0, 
+        lineHeight: 1.2, 
+        fontFamily: FONTS[0].value,
+        fontSize: 24,
+        fontWeight: '400',
+        textAlign: 'center'
+      },
       visible: true,
       locked: false,
       ...element
@@ -115,6 +139,45 @@ const App: React.FC = () => {
       return { ...prev, pages: newPages, selectedElementId: newElement.id };
     });
     triggerHaptic(15);
+  };
+
+  const onAddShape = (shape: string) => {
+    let style: any = { backgroundColor: '#E85D3D', opacity: 1 };
+    let box = { x: (CANVAS_WIDTH - 150) / 2, y: (CANVAS_HEIGHT - 150) / 2, width: 150, height: 150, rotation: 0 };
+
+    switch(shape) {
+      case 'circle':
+        style.borderRadius = 1000;
+        break;
+      case 'pill':
+        style.borderRadius = 1000;
+        box.width = 200;
+        box.height = 80;
+        break;
+      case 'triangle':
+        style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)';
+        break;
+      case 'diamond':
+        style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
+        break;
+      case 'pentagon':
+        style.clipPath = 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)';
+        break;
+      case 'hexagon':
+        style.clipPath = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)';
+        break;
+      case 'star':
+        style.clipPath = 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)';
+        break;
+      case 'parallelogram':
+        style.clipPath = 'polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%)';
+        break;
+      case 'rhombus':
+        style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
+        break;
+    }
+    addElement({ type: 'shape', name: shape, style, box });
+    if (isMobile) setIsBottomSheetOpen(false);
   };
 
   const handlePointerMove = useCallback((e: PointerEvent) => {
@@ -231,6 +294,55 @@ const App: React.FC = () => {
     reader.readAsText(file);
   };
 
+  const handleExportPng = async () => {
+    if (!canvasRef.current) return;
+    setIsExporting(true);
+    triggerHaptic(10);
+    
+    const originalSelectedId = state.selectedElementId;
+    deselectAll(); 
+    
+    // Ensure all fonts and images are fully loaded before capturing
+    await Promise.all([
+      (document as any).fonts?.ready,
+      new Promise(resolve => setTimeout(resolve, 500)) // Safety delay for re-rendering deselect
+    ]);
+
+    try {
+      const dataUrl = await htmlToImage.toPng(canvasRef.current, {
+        quality: 1,
+        pixelRatio: 4, // Ultra high resolution for "no mistakes"
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
+        cacheBust: true,
+        style: {
+          transform: 'none', 
+          left: '0',
+          top: '0',
+          margin: '0',
+          padding: '0',
+        }
+      });
+      
+      const link = document.createElement('a');
+      link.download = `mockingjay-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+      
+      triggerHaptic(25);
+      setExportSuccess(true);
+      setTimeout(() => setExportSuccess(false), 3000);
+    } catch (error) {
+      console.error('Failed to export image:', error);
+      alert('Export failed. Please check your internet connection or try a different browser.');
+    } finally {
+      setIsExporting(false);
+      setIsExportModalOpen(false);
+      // Restore selection if needed
+      if (originalSelectedId) setState(prev => ({ ...prev, selectedElementId: originalSelectedId }));
+    }
+  };
+
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
       <input 
@@ -244,12 +356,12 @@ const App: React.FC = () => {
       <div className="flex-1 flex flex-col relative canvas-container overflow-hidden">
         {/* Header Controls */}
         <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-6 bg-zinc-900/80 backdrop-blur-md px-6 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
-           <button className="p-1 hover:text-white/60 transition-colors"><Icons.ArrowLeft className="w-5 h-5"/></button>
+           <button className="p-1 hover:text-white/60 transition-colors" onClick={() => triggerHaptic(2)}><Icons.ArrowLeft className="w-5 h-5"/></button>
            <span className="text-xs font-bold text-white/40">{state.currentPageIndex + 1}/{state.pages.length}</span>
-           <button className="p-1 hover:text-white/60 transition-colors"><Icons.ArrowRight className="w-5 h-5"/></button>
+           <button className="p-1 hover:text-white/60 transition-colors" onClick={() => triggerHaptic(2)}><Icons.ArrowRight className="w-5 h-5"/></button>
            <div className="w-[1px] h-4 bg-white/10 mx-2" />
-           <button className="p-1 hover:text-lime-400 transition-colors" onClick={() => fileInputRef.current?.click()}><Icons.Plus className="w-5 h-5"/></button>
-           <button className="p-1 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
+           <button className="p-1 hover:text-lime-400 transition-colors" title="Import Template" onClick={() => fileInputRef.current?.click()}><Icons.Plus className="w-5 h-5"/></button>
+           <button className="p-1 hover:text-red-400 transition-colors" title="Delete Element" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
         </div>
 
         {/* Workspace */}
@@ -272,7 +384,7 @@ const App: React.FC = () => {
              id="design-canvas"
              ref={canvasRef}
              onPointerDown={deselectAll}
-             className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center"
+             className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center bg-zinc-800"
              style={{ 
                width: CANVAS_WIDTH, 
                height: CANVAS_HEIGHT, 
@@ -364,10 +476,10 @@ const App: React.FC = () => {
             <button className="text-white/40 hover:text-white" onClick={() => triggerHaptic(5)}><Icons.Redo2 className="w-5 h-5"/></button>
             <div className="w-[1px] h-6 bg-white/10" />
             <button 
-              onClick={() => downloadTemplate(state)}
-              className="flex items-center gap-2 bg-lime-400 text-black px-6 py-2 rounded-full font-bold hover:bg-lime-300 transition-all text-sm"
+              onClick={() => setIsExportModalOpen(true)}
+              className="flex items-center gap-2 bg-lime-400 text-black px-6 py-2 rounded-full font-bold hover:bg-lime-300 transition-all text-sm shadow-xl active:scale-95"
             >
-              <Icons.Download className="w-4 h-4" /> Export Template
+              <Icons.Download className="w-4 h-4" /> Export
             </button>
           </div>
         ) : (
@@ -379,22 +491,22 @@ const App: React.FC = () => {
                     <>
                       <button onClick={() => setIsBottomSheetOpen(true)} className="flex flex-col items-center gap-1 text-lime-400 p-2 min-w-[50px]">
                         <Icons.Sparkles className="w-5 h-5" />
-                        <span className="text-[10px] font-bold uppercase">Style</span>
+                        <span className="text-[10px] font-bold uppercase tracking-tight">Style</span>
                       </button>
                       <button onClick={() => setIsBottomSheetOpen(true)} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]">
                         <Icons.Layout className="w-5 h-5" />
-                        <span className="text-[10px] font-bold uppercase">Layer</span>
+                        <span className="text-[10px] font-bold uppercase tracking-tight">Layer</span>
                       </button>
                       <button onClick={() => deleteElement(selectedElement.id)} className="flex flex-col items-center gap-1 text-red-400 p-2 min-w-[50px]">
                         <Icons.Trash2 className="w-5 h-5" />
-                        <span className="text-[10px] font-bold uppercase">Delete</span>
+                        <span className="text-[10px] font-bold uppercase tracking-tight">Delete</span>
                       </button>
                     </>
                   ) : (
                     <>
                       <button onClick={() => setIsBottomSheetOpen(true)} className="flex flex-col items-center gap-1 text-lime-400 p-2 min-w-[50px]">
                         <Icons.Plus className="w-5 h-5" />
-                        <span className="text-[10px] font-bold uppercase">Add</span>
+                        <span className="text-[10px] font-bold uppercase tracking-tight">Add</span>
                       </button>
                       <div className="flex gap-2 items-center">
                          {state.themeColors.slice(0, 3).map(c => (
@@ -404,6 +516,9 @@ const App: React.FC = () => {
                     </>
                   )}
                 </div>
+                <button onClick={() => setIsExportModalOpen(true)} className="bg-lime-400 p-3 rounded-full shrink-0 shadow-lg active:scale-90">
+                  <Icons.Download className="w-6 h-6 text-black" />
+                </button>
                 <button onClick={() => setIsBottomSheetOpen(true)} className="bg-white/5 p-3 rounded-full shrink-0">
                   <Icons.ChevronUp className="w-6 h-6 text-white" />
                 </button>
@@ -441,36 +556,103 @@ const App: React.FC = () => {
                       type: 'text', 
                       name: type, 
                       content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), 
-                      style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0 }, 
+                      style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, 
                       box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } 
                     });
                     setIsBottomSheetOpen(false);
                   }}
-                  onAddShape={(shape) => {
-                    addElement({ type: 'shape', name: shape, style: { backgroundColor: '#E85D3D', borderRadius: shape === 'circle' ? 100 : 0 }, box: { x: 130, y: 250, width: 100, height: 100, rotation: 0 } });
-                    setIsBottomSheetOpen(false);
-                  }}
+                  onAddShape={onAddShape}
                   onAddImage={(src) => {
                     addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } });
                     setIsBottomSheetOpen(false);
                   }}
                 />
               </div>
-              <div className="p-5 bg-zinc-900 border-t border-white/10 grid grid-cols-2 gap-3">
-                 <button 
-                  onClick={() => downloadTemplate(state)} 
-                  className="bg-white/5 text-white h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2"
-                >
-                   <Icons.Download className="w-4 h-4"/> Template
-                 </button>
+              <div className="p-5 bg-zinc-900 border-t border-white/10 flex justify-end">
                  <button 
                   onClick={() => setIsBottomSheetOpen(false)} 
-                  className="bg-lime-400 text-black h-12 rounded-xl font-bold text-sm"
+                  className="w-full bg-lime-400 text-black h-12 rounded-xl font-bold text-sm"
                 >
                    Done
                  </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Export Modal */}
+        {isExportModalOpen && (
+          <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-6" onClick={() => !isExporting && setIsExportModalOpen(false)}>
+            <div className="bg-zinc-900 border border-white/10 rounded-[32px] w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+               <div className="p-8 space-y-6">
+                  <div className="text-center space-y-2">
+                    <h2 className="text-2xl font-black text-white italic tracking-tight uppercase">Export Design</h2>
+                    <p className="text-white/40 text-sm">Select format for high-res output</p>
+                  </div>
+                  
+                  <div className="grid gap-3">
+                    <button 
+                      onClick={handleExportPng}
+                      disabled={isExporting}
+                      className="group relative flex items-center gap-4 bg-lime-400 p-5 rounded-2xl text-black font-bold transition-all hover:bg-lime-300 disabled:opacity-50 active:scale-95"
+                    >
+                      <div className="w-12 h-12 bg-black/10 rounded-xl flex items-center justify-center">
+                        <Icons.ImageIcon className="w-6 h-6" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-lg">Download PNG</div>
+                        <div className="text-[10px] font-bold opacity-60 italic uppercase tracking-tighter">Ultra High Resolution (4K)</div>
+                      </div>
+                    </button>
+
+                    <button 
+                      onClick={() => { downloadTemplate(state); setIsExportModalOpen(false); triggerHaptic(15); }}
+                      disabled={isExporting}
+                      className="group relative flex items-center gap-4 bg-zinc-800 p-5 rounded-2xl text-white font-bold border border-white/5 transition-all hover:bg-zinc-700 disabled:opacity-50 active:scale-95"
+                    >
+                      <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center">
+                        <Icons.Layout className="w-6 h-6" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-lg">Export JSON</div>
+                        <div className="text-[10px] font-bold opacity-60 italic uppercase tracking-tighter">Mockingjay Raw Template</div>
+                      </div>
+                    </button>
+                  </div>
+               </div>
+               
+               <button 
+                onClick={() => setIsExportModalOpen(false)}
+                disabled={isExporting}
+                className="w-full py-5 text-white/30 text-xs font-bold uppercase tracking-widest border-t border-white/5 hover:text-white transition-colors"
+               >
+                 Cancel
+               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Global Loader Overlay */}
+        {isExporting && (
+          <div className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center gap-8 animate-in fade-in duration-300">
+            <div className="relative">
+              <div className="w-32 h-32 border-t-2 border-l-2 border-lime-400 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Icons.Sparkles className="w-12 h-12 text-lime-400 animate-pulse" />
+              </div>
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-3xl font-black italic tracking-tighter text-white uppercase animate-pulse">Downloading...</h3>
+              <p className="text-white/40 text-xs font-bold uppercase tracking-widest max-w-[200px] leading-relaxed">Encoding shapes and custom fonts for perfection</p>
+            </div>
+          </div>
+        )}
+
+        {/* Export Success Toast */}
+        {exportSuccess && (
+          <div className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[400] bg-lime-400 text-black px-6 py-3 rounded-full font-bold shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-10 fade-in duration-500">
+            <Icons.ThumbsUp className="w-5 h-5" />
+            <span>Success! Design downloaded.</span>
           </div>
         )}
       </div>
@@ -491,8 +673,8 @@ const App: React.FC = () => {
               updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } });
             }
           }}
-          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0 }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
-          onAddShape={(shape) => addElement({ type: 'shape', name: shape, style: { backgroundColor: '#E85D3D', borderRadius: shape === 'circle' ? 100 : 0 }, box: { x: 130, y: 250, width: 100, height: 100, rotation: 0 } })}
+          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
+          onAddShape={onAddShape}
           onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
         />
       )}

@@ -29,6 +29,7 @@ export interface DesignElement {
     strokePattern?: 'solid' | 'dashed' | 'dotted';
     letterSpacing?: number;
     lineHeight?: number;
+    clipPath?: string;
   };
   visible: boolean;
   locked: boolean;
