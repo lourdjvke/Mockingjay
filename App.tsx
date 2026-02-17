@@ -1,12 +1,12 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { EditorState, DesignElement, BoundingBox, Page } from './types.ts';
 import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
-import { generateId, downloadTemplate, FontStore } from './utils.ts';
+import { generateId, downloadTemplate, FontStore, MediaStore } from './utils.ts';
 import Sidebar from './components/Sidebar.tsx';
 import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
 import { domToPng } from 'modern-screenshot';
+import { GoogleGenAI } from "@google/genai";
 
 interface SnapLine {
   type: 'vertical' | 'horizontal';
@@ -21,11 +21,15 @@ const App: React.FC = () => {
   const [elementStartPos, setElementStartPos] = useState<BoundingBox | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const [scale, setScale] = useState(1);
   const [snapLines, setSnapLines] = useState<SnapLine[]>([]);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportStatus, setExportStatus] = useState<ExportStatus>('idle');
   const [userFonts, setUserFonts] = useState<{ name: string; value: string }[]>([]);
+  const [recentImages, setRecentImages] = useState<string[]>([]);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -33,7 +37,6 @@ const App: React.FC = () => {
 
   const allFonts = [...userFonts, ...BASE_FONTS];
 
-  // Helper to convert ArrayBuffer to Base64
   const bufferToBase64 = (buffer: ArrayBuffer): string => {
     let binary = '';
     const bytes = new Uint8Array(buffer);
@@ -44,52 +47,67 @@ const App: React.FC = () => {
     return window.btoa(binary);
   };
 
-  // Helper to inject @font-face as literal base64 in CSS
   const injectFontFace = (name: string, base64: string) => {
     const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
     document.getElementById(styleId)?.remove();
-    
     const style = document.createElement('style');
     style.id = styleId;
-    style.innerHTML = `
-      @font-face {
-        font-family: '${name}';
-        src: url(data:font/ttf;base64,${base64});
-        font-weight: normal;
-        font-style: normal;
-      }
-    `;
+    style.innerHTML = `@font-face { font-family: '${name}'; src: url(data:font/ttf;base64,${base64}); font-weight: normal; font-style: normal; }`;
     document.head.appendChild(style);
   };
 
-  // Load custom fonts from IndexedDB on startup
   useEffect(() => {
-    const loadCustomFonts = async () => {
+    const loadStoredData = async () => {
       try {
-        const stored = await FontStore.getFonts();
+        const storedFonts = await FontStore.getFonts();
         const loadedFonts: { name: string; value: string }[] = [];
-        
-        for (const font of stored) {
+        for (const font of storedFonts) {
           try {
             const base64 = bufferToBase64(font.data);
             injectFontFace(font.name, base64);
-            
-            // Still register with document.fonts for standard usage
             const fontFace = new FontFace(font.name, font.data);
             const loadedFace = await fontFace.load();
             document.fonts.add(loadedFace);
-            
             loadedFonts.push({ name: font.name, value: `'${font.name}', sans-serif` });
-          } catch (e) {
-            console.error(`Failed to initialize stored font ${font.name}:`, e);
-          }
+          } catch (e) { console.error(`Font init fail: ${font.name}`, e); }
         }
         setUserFonts(loadedFonts);
-      } catch (err) {
-        console.error("FontStore loading failed:", err);
-      }
+        const storedImages = await MediaStore.getImages();
+        setRecentImages(storedImages.map(img => img.data));
+      } catch (err) { console.error("IndexedDB loading failed:", err); }
     };
-    loadCustomFonts();
+    loadStoredData();
+  }, []);
+
+  // Added handleAddCustomFont to fix missing name error
+  const handleAddCustomFont = useCallback(async (name: string, data: ArrayBuffer) => {
+    try {
+      await FontStore.saveFont(name, data);
+      const base64 = bufferToBase64(data);
+      injectFontFace(name, base64);
+      
+      const fontFace = new FontFace(name, data);
+      const loadedFace = await fontFace.load();
+      document.fonts.add(loadedFace);
+      
+      setUserFonts(prev => [...prev, { name, value: `'${name}', sans-serif` }]);
+      if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(20);
+    } catch (err) {
+      console.error("Font save failed:", err);
+    }
+  }, []);
+
+  // Added handleDeleteCustomFont to fix missing name error
+  const handleDeleteCustomFont = useCallback(async (name: string) => {
+    try {
+      await FontStore.deleteFont(name);
+      const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
+      document.getElementById(styleId)?.remove();
+      setUserFonts(prev => prev.filter(f => f.name !== name));
+      if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(5);
+    } catch (err) {
+      console.error("Font delete failed:", err);
+    }
   }, []);
 
   useEffect(() => {
@@ -122,6 +140,72 @@ const App: React.FC = () => {
       window.navigator.vibrate(intensity);
     }
   }, []);
+
+  const handleAiRefine = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsAiLoading(true);
+    triggerHaptic(30);
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      
+      const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer. 
+      Your task is to transform user prompts into high-fidelity design structures. 
+      Don't just change colors; build a complete composition.
+
+      COMPOSITION GUIDELINES:
+      - Ads: Use an Unsplash background image, a semi-transparent shape 'backing plate', a massive headline, a tagline, and a CTA button.
+      - Hierarchy: Headers (fontSize 40-70) must be bold. Subheaders (fontSize 24-30). Body (fontSize 14-18).
+      - Spacing: Elements must feel balanced. Use 20px margins.
+      - Canvas: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}.
+
+      CAPABILITIES:
+      - Create New Pages: If asked for a "new page" or "another design", append a full Page object to 'pages'.
+      - Images: Use type "image". Use high-res Unsplash URLs.
+      - Shapes: Use type "shape" with 'clipPath' for complex icons/designs (stars, ribbons).
+      - Fonts: Use available fonts: ${allFonts.map(f => f.value).join(', ')}.
+
+      LOGIC:
+      - If user asks for a theme (e.g. "Noodle Brand"), replace 'themeColors' with a palette like ["#E11D48", "#FBCC14", "#FFFFFF", "#000000"] and use them in the elements.
+      - If creating a brand ad, include: 1. Main visual image, 2. Text headline, 3. Tagline text, 4. A shape with 'CTA' text on top.
+
+      Return ONLY the COMPLETE absolute final EditorState JSON object. No markdown.`;
+
+      const userPrompt = `Current Editor State: ${JSON.stringify(state)}.
+      User Request: ${aiPrompt}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: userPrompt,
+        config: { 
+          systemInstruction,
+          responseMimeType: "application/json" 
+        }
+      });
+
+      const responseText = response.text || "{}";
+      const newState = JSON.parse(responseText);
+      
+      if (newState.pages && Array.isArray(newState.pages)) {
+        // Handle Auto-Switching to new pages if the model added one
+        const pageAdded = newState.pages.length > state.pages.length;
+        const targetPageIndex = pageAdded ? newState.pages.length - 1 : newState.currentPageIndex;
+
+        setState({
+          ...newState,
+          currentPageIndex: targetPageIndex
+        });
+        setIsAiModalOpen(false);
+        setAiPrompt("");
+        triggerHaptic(50);
+      }
+    } catch (err) {
+      console.error("Design Engine Fail:", err);
+      alert("AI was unable to fulfill that request. Please try a more specific design prompt.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
   const deleteElement = (id: string) => {
     setState(prev => {
@@ -156,11 +240,8 @@ const App: React.FC = () => {
 
   const handleSelect = useCallback((id: string, e: React.PointerEvent) => {
     e.stopPropagation();
-    if (state.selectedElementId !== id) {
-      triggerHaptic(5);
-    }
+    if (state.selectedElementId !== id) triggerHaptic(5);
     setState(prev => ({ ...prev, selectedElementId: id }));
-    
     const element = currentPage.elements.find(el => el.id === id);
     if (element && !element.locked) {
       setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
@@ -170,7 +251,7 @@ const App: React.FC = () => {
 
   const deselectAll = () => setState(prev => ({ ...prev, selectedElementId: null }));
 
-  const addElement = (element: Partial<DesignElement>) => {
+  const addElement = useCallback((element: Partial<DesignElement>) => {
     const defaultFont = allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif";
     const newElement: DesignElement = {
       id: generateId(),
@@ -178,21 +259,7 @@ const App: React.FC = () => {
       type: (element.type as any) || 'shape',
       box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 200, rotation: 0 },
       content: '',
-      style: { 
-        backgroundColor: '#FFFFFF', 
-        color: '#000000', 
-        borderRadius: 0, 
-        opacity: 1, 
-        strokeWidth: 0, 
-        strokePattern: 'solid', 
-        strokeColor: '#000000', 
-        letterSpacing: 0, 
-        lineHeight: 1.2, 
-        fontFamily: defaultFont,
-        fontSize: 24,
-        fontWeight: '400',
-        textAlign: 'center'
-      },
+      style: { backgroundColor: '#FFFFFF', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: '400', textAlign: 'center' },
       visible: true,
       locked: false,
       ...element
@@ -202,109 +269,94 @@ const App: React.FC = () => {
       newPages[prev.currentPageIndex].elements.push(newElement);
       return { ...prev, pages: newPages, selectedElementId: newElement.id };
     });
+    if (element.type === 'image' && element.content) {
+      MediaStore.saveImage(element.content).then(() => {
+        MediaStore.getImages().then(imgs => setRecentImages(imgs.map(i => i.data)));
+      });
+    }
     triggerHaptic(15);
-  };
+  }, [allFonts, triggerHaptic]);
 
-  const handleAddCustomFont = async (name: string, data: ArrayBuffer) => {
-    if (!data || data.byteLength === 0) return;
-    try {
-      // 1. Base64 conversion
-      const base64 = bufferToBase64(data);
-      
-      // 2. Inject literal CSS
-      injectFontFace(name, base64);
-      
-      // 3. Register FontFace object
-      const fontFace = new FontFace(name, data);
-      const loadedFace = await fontFace.load();
-      document.fonts.add(loadedFace);
-      
-      // 4. Persistence
-      await FontStore.saveFont(name, data);
-      
-      setUserFonts(prev => [{ name, value: `'${name}', sans-serif` }, ...prev]);
-      triggerHaptic(20);
-    } catch (err) {
-      console.error("Font upload failed:", err);
-    }
-  };
+  const onAddShape = useCallback((type: string) => {
+    let clipPath = undefined;
+    let borderRadius = 0;
+    let width = 200;
+    let height = 200;
+    if (type === 'circle') borderRadius = 999;
+    if (type === 'pill') { borderRadius = 999; height = 100; }
+    if (type === 'triangle') clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)';
+    if (type === 'diamond') clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
+    if (type === 'pentagon') clipPath = 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)';
+    if (type === 'hexagon') clipPath = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)';
+    if (type === 'star') clipPath = 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)';
+    if (type === 'parallelogram') clipPath = 'polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%)';
 
-  const handleDeleteCustomFont = async (name: string) => {
-    await FontStore.deleteFont(name);
-    const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
-    document.getElementById(styleId)?.remove();
-    setUserFonts(prev => prev.filter(f => f.name !== name));
-    triggerHaptic(10);
-  };
+    addElement({
+      type: 'shape',
+      name: type.charAt(0).toUpperCase() + type.slice(1),
+      style: { backgroundColor: state.themeColors[0] || '#FFFFFF', borderRadius, clipPath },
+      box: { x: (CANVAS_WIDTH - width) / 2, y: (CANVAS_HEIGHT - height) / 2, width, height, rotation: 0 }
+    });
+  }, [addElement, state.themeColors]);
 
-  const onAddShape = (shape: string) => {
-    let style: any = { backgroundColor: '#E85D3D', opacity: 1 };
-    let box = { x: (CANVAS_WIDTH - 150) / 2, y: (CANVAS_HEIGHT - 150) / 2, width: 150, height: 150, rotation: 0 };
-    switch(shape) {
-      case 'circle': style.borderRadius = 1000; break;
-      case 'pill': style.borderRadius = 1000; box.width = 200; box.height = 80; break;
-      case 'triangle': style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)'; break;
-      case 'diamond': style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'; break;
-      case 'pentagon': style.clipPath = 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)'; break;
-      case 'hexagon': style.clipPath = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)'; break;
-      case 'star': style.clipPath = 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)'; break;
-      case 'parallelogram': style.clipPath = 'polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%)'; break;
-      case 'rhombus': style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'; break;
-    }
-    addElement({ type: 'shape', name: shape, style, box });
-    if (isMobile) setIsBottomSheetOpen(false);
-  };
+  const onReorder = useCallback((id: string, direction: 'up' | 'down') => {
+    setState(prev => {
+      const newPages = [...prev.pages];
+      const page = { ...newPages[prev.currentPageIndex] };
+      const index = page.elements.findIndex(el => el.id === id);
+      if (index === -1) return prev;
+      const newElements = [...page.elements];
+      if (direction === 'up') {
+        if (index < newElements.length - 1) [newElements[index], newElements[index + 1]] = [newElements[index + 1], newElements[index]];
+      } else {
+        if (index > 0) [newElements[index], newElements[index - 1]] = [newElements[index - 1], newElements[index]];
+      }
+      page.elements = newElements;
+      newPages[prev.currentPageIndex] = page;
+      return { ...prev, pages: newPages };
+    });
+    triggerHaptic(5);
+  }, [triggerHaptic]);
 
   const handlePointerMove = useCallback((e: PointerEvent) => {
     if (!dragStart || !elementStartPos || !state.selectedElementId) return;
     const dx = (e.clientX - dragStart.x) / scale;
     const dy = (e.clientY - dragStart.y) / scale;
     if (dragStart.type === 'move') {
-      let nextX = elementStartPos.x + dx;
-      let nextY = elementStartPos.y + dy;
-      const centerX = nextX + elementStartPos.width / 2;
-      const centerY = nextY + elementStartPos.height / 2;
-      const activeLines: SnapLine[] = [];
-      const threshold = 5;
-      if (Math.abs(centerX - CANVAS_WIDTH / 2) < threshold) {
-        nextX = CANVAS_WIDTH / 2 - elementStartPos.width / 2;
-        activeLines.push({ type: 'vertical', position: CANVAS_WIDTH / 2 });
-      }
-      if (Math.abs(centerY - CANVAS_HEIGHT / 2) < threshold) {
-        nextY = CANVAS_HEIGHT / 2 - elementStartPos.height / 2;
-        activeLines.push({ type: 'horizontal', position: CANVAS_HEIGHT / 2 });
-      }
-      if (activeLines.length > snapLines.length) triggerHaptic(8);
-      setSnapLines(activeLines);
-      updateElement(state.selectedElementId, { box: { ...elementStartPos, x: nextX, y: nextY } });
+      const newX = elementStartPos.x + dx;
+      const newY = elementStartPos.y + dy;
+      const centerX = CANVAS_WIDTH / 2 - elementStartPos.width / 2;
+      const centerY = CANVAS_HEIGHT / 2 - elementStartPos.height / 2;
+      const isSnappedX = Math.abs(newX - centerX) < 5;
+      const isSnappedY = Math.abs(newY - centerY) < 5;
+      const snappedX = isSnappedX ? centerX : newX;
+      const snappedY = isSnappedY ? centerY : newY;
+      const lines: SnapLine[] = [];
+      if (isSnappedX) lines.push({ type: 'vertical', position: CANVAS_WIDTH / 2 });
+      if (isSnappedY) lines.push({ type: 'horizontal', position: CANVAS_HEIGHT / 2 });
+      setSnapLines(lines);
+      updateElement(state.selectedElementId, { box: { ...elementStartPos, x: snappedX, y: snappedY } });
     } else if (dragStart.type === 'resize' && dragStart.handle) {
+      const h = dragStart.handle;
       let { x, y, width, height } = elementStartPos;
-      if (dragStart.handle.includes('e')) width += dx;
-      if (dragStart.handle.includes('s')) height += dy;
-      if (dragStart.handle.includes('w')) { x += dx; width -= dx; }
-      if (dragStart.handle.includes('n')) { y += dy; height -= dy; }
+      if (h.includes('e')) width += dx;
+      if (h.includes('w')) { width -= dx; x += dx; }
+      if (h.includes('s')) height += dy;
+      if (h.includes('n')) { height -= dy; y += dy; }
       width = Math.max(10, width);
       height = Math.max(10, height);
       updateElement(state.selectedElementId, { box: { ...elementStartPos, x, y, width, height } });
     } else if (dragStart.type === 'rotate') {
-        const rect = canvasRef.current?.getBoundingClientRect();
-        if (!rect) return;
-        const centerX = rect.left + (elementStartPos.x + elementStartPos.width / 2) * scale;
-        const centerY = rect.top + (elementStartPos.y + elementStartPos.height / 2) * scale;
-        const currentAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
-        const initialPointerAngle = dragStart.initialAngle ?? 0;
-        const deltaAngle = currentAngle - initialPointerAngle;
-        let newRotation = elementStartPos.rotation + deltaAngle;
-        if (Math.abs(newRotation % 45) < 3 || Math.abs(newRotation % 45) > 42) {
-          const snapped = Math.round(newRotation / 45) * 45;
-          if (snapped !== Math.round(state.pages[state.currentPageIndex].elements.find(el => el.id === state.selectedElementId)?.box.rotation)) {
-            triggerHaptic(5);
-          }
-          newRotation = snapped;
-        }
-        updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation: newRotation } });
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const cX = rect.left + (elementStartPos.x + elementStartPos.width / 2) * scale;
+      const cY = rect.top + (elementStartPos.y + elementStartPos.height / 2) * scale;
+      const currentAngle = Math.atan2(e.clientY - cY, e.clientX - cX) * (180 / Math.PI);
+      let rotation = elementStartPos.rotation + (currentAngle - (dragStart.initialAngle || 0));
+      if (Math.abs(rotation % 45) < 5) rotation = Math.round(rotation / 45) * 45;
+      updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation } });
     }
-  }, [dragStart, elementStartPos, state, updateElement, scale, snapLines.length, triggerHaptic]);
+  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement]);
 
   const handlePointerUp = useCallback(() => {
     setDragStart(null);
@@ -321,107 +373,74 @@ const App: React.FC = () => {
     };
   }, [handlePointerMove, handlePointerUp]);
 
-  const onReorder = (id: string, direction: 'up' | 'down') => {
-    setState(prev => {
-      const newPages = [...prev.pages];
-      const elements = [...newPages[prev.currentPageIndex].elements];
-      const index = elements.findIndex(el => el.id === id);
-      if (index === -1) return prev;
-      const newIndex = direction === 'up' ? index + 1 : index - 1;
-      if (newIndex < 0 || newIndex >= elements.length) return prev;
-      const [moved] = elements.splice(index, 1);
-      elements.splice(newIndex, 0, moved);
-      newPages[prev.currentPageIndex].elements = elements;
-      return { ...prev, pages: newPages };
-    });
-    triggerHaptic(5);
-  };
-
-  const handleImportTemplate = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const content = event.target?.result as string;
-        const importedState = JSON.parse(content);
-        if (importedState.pages) {
-          setState(importedState);
-          triggerHaptic(20);
-        }
-      } catch (err) { console.error("Import error:", err); }
-    };
-    reader.readAsText(file);
-  };
-
   const handleExportPng = async () => {
     if (!canvasRef.current) return;
     setExportStatus('processing');
-    triggerHaptic(10);
-    
-    const originalSelectedId = state.selectedElementId;
-    deselectAll(); 
-    setIsExportModalOpen(false);
-
+    triggerHaptic(20);
     try {
-      // 1. Literal Wait for Font Rendering
-      if (document.fonts) {
-        await document.fonts.ready;
-      }
-      
-      // 2. Extra settlement time for high-fidelity literal snapshot
-      await new Promise(resolve => setTimeout(resolve, 1500)); 
-
-      // 3. Take literal snapshot of the container
       const dataUrl = await domToPng(canvasRef.current, {
-        scale: 4, 
-        backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : '#FFFFFF',
-        width: CANVAS_WIDTH,
-        height: CANVAS_HEIGHT,
-        style: { 
-          transform: 'none',
-          boxShadow: 'none'
-        }
+        scale: 3,
+        backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : '#000000',
       });
-      
       const link = document.createElement('a');
-      link.download = `mockingjay-snapshot-${Date.now()}.png`;
+      link.download = `mockingjay-${Date.now()}.png`;
       link.href = dataUrl;
       link.click();
-      
-      triggerHaptic(25);
       setExportStatus('success');
-      setTimeout(() => setExportStatus('idle'), 3500);
-    } catch (error) {
-      console.error('Export error:', error);
+      triggerHaptic(40);
+      setTimeout(() => setExportStatus('idle'), 3000);
+      setIsExportModalOpen(false);
+    } catch (err) {
+      console.error("Export failed:", err);
       setExportStatus('error');
       setTimeout(() => setExportStatus('idle'), 3000);
-    } finally {
-      if (originalSelectedId) setState(prev => ({ ...prev, selectedElementId: originalSelectedId }));
     }
   };
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
-      <input type="file" ref={fileInputRef} className="hidden" accept="application/json" onChange={handleImportTemplate} />
+      <input type="file" ref={fileInputRef} className="hidden" accept="application/json" onChange={(e) => {
+        const file = e.target.files?.[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => { try { const s = JSON.parse(ev.target?.result as string); if (s.pages) setState(s); } catch (er) { console.error(er); } };
+        reader.readAsText(file);
+      }} />
 
       <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === 'success' ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-12 scale-90'}`}>
         <div className="bg-zinc-900/90 backdrop-blur-3xl border border-white/10 px-6 py-3 rounded-full flex items-center gap-4 shadow-[0_12px_48px_rgba(0,0,0,0.6)]">
-           <div className="w-6 h-6 bg-[#F5E6D3] text-[#4A3F35] rounded-full flex items-center justify-center shadow-inner">
+           <div className="w-6 h-6 bg-lime-400 text-black rounded-full flex items-center justify-center shadow-inner">
              <Icons.Sparkles className="w-3.5 h-3.5" />
            </div>
-           <span className="text-[13px] font-bold tracking-tight text-[#F5E6D3] uppercase italic">Masterpiece Exported</span>
+           <span className="text-[13px] font-bold tracking-tight text-white uppercase italic">Design Finalized</span>
         </div>
       </div>
       
       <div className="flex-1 flex flex-col relative canvas-container overflow-hidden">
-        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-6 bg-zinc-900/80 backdrop-blur-md px-6 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
-           <button className="p-1 hover:text-white/60 transition-colors" onClick={() => triggerHaptic(2)}><Icons.ArrowLeft className="w-5 h-5"/></button>
-           <span className="text-xs font-bold text-white/40">{state.currentPageIndex + 1}/{state.pages.length}</span>
-           <button className="p-1 hover:text-white/60 transition-colors" onClick={() => triggerHaptic(2)}><Icons.ArrowRight className="w-5 h-5"/></button>
-           <div className="w-[1px] h-4 bg-white/10 mx-2" />
-           <button className="p-1 hover:text-lime-400 transition-colors" onClick={() => fileInputRef.current?.click()}><Icons.Plus className="w-5 h-5"/></button>
-           <button className="p-1 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
+        {/* DESIGN ENGINE THINKING STATE */}
+        {isAiLoading && (
+          <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-xl flex flex-col items-center justify-center gap-8 animate-in fade-in duration-500">
+             <div className="relative">
+                <div className="w-32 h-32 border-2 border-lime-400/20 rounded-full animate-ping absolute inset-0"></div>
+                <div className="w-32 h-32 border-4 border-lime-400 border-t-transparent rounded-full animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                   <Icons.Wand2 className="w-10 h-10 text-lime-400 animate-pulse" />
+                </div>
+             </div>
+             <div className="text-center space-y-2">
+                <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white">Synthesizing Masterpiece</h2>
+                <p className="text-lime-400/60 text-[10px] font-bold uppercase tracking-[0.4em] animate-pulse">Mockingjay Engine Active</p>
+             </div>
+          </div>
+        )}
+
+        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
+           <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) })); triggerHaptic(2); }}><Icons.ArrowLeft className="w-5 h-5"/></button>
+           <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">{state.currentPageIndex + 1}/{state.pages.length}</span>
+           <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) })); triggerHaptic(2); }}><Icons.ArrowRight className="w-5 h-5"/></button>
+           <div className="w-[1px] h-4 bg-white/10 mx-1" />
+           <button className="p-1 text-lime-400 hover:scale-125 transition-transform" onClick={() => fileInputRef.current?.click()}><Icons.Plus className="w-5 h-5"/></button>
+           <button className="p-1.5 bg-gradient-to-tr from-lime-600 to-lime-400 rounded-full text-black hover:rotate-12 transition-all shadow-[0_0_15px_rgba(163,230,53,0.4)]" onClick={() => { setIsAiModalOpen(true); triggerHaptic(10); }}><Icons.Wand2 className="w-4 h-4" /></button>
+           <button className="p-1 text-red-400/60 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
         </div>
 
         <div ref={workspaceRef} className="flex-1 flex items-center justify-center relative overflow-hidden">
@@ -436,7 +455,7 @@ const App: React.FC = () => {
              />
            ))}
 
-           <div id="design-canvas" ref={canvasRef} onPointerDown={deselectAll} className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center bg-zinc-800"
+           <div id="design-canvas" ref={canvasRef} onPointerDown={deselectAll} className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center bg-zinc-800 overflow-hidden"
              style={{ 
                width: CANVAS_WIDTH, height: CANVAS_HEIGHT, transform: `scale(${scale})`,
                backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : undefined,
@@ -447,7 +466,7 @@ const App: React.FC = () => {
               {currentPage.elements.map(el => (
                 <div key={el.id}>
                   <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleSelect} />
-                  {state.selectedElementId === el.id && (
+                  {state.selectedElementId === el.id && !el.locked && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
                       {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
                         let s: React.CSSProperties = {};
@@ -477,7 +496,43 @@ const App: React.FC = () => {
            </div>
         </div>
 
-        {!isMobile ? (
+        {isAiModalOpen && (
+          <div className="absolute inset-x-0 bottom-0 z-[200] p-4 animate-in slide-in-from-bottom duration-500">
+             <div className="bg-lime-900/40 backdrop-blur-3xl border border-lime-400/30 rounded-[32px] p-8 shadow-[0_40px_100px_rgba(0,0,0,0.9)]">
+                <div className="flex items-center gap-3 mb-6">
+                   <div className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.4)]">
+                      <Icons.Wand2 className="w-5 h-5 text-black" />
+                   </div>
+                   <div className="space-y-0.5">
+                      <h3 className="text-sm font-black uppercase tracking-widest text-white italic">Mockingjay Intelligence</h3>
+                      <p className="text-white/40 text-[9px] font-bold uppercase tracking-widest">Global Design Engine v3.1</p>
+                   </div>
+                </div>
+                <div className="relative">
+                  <input 
+                    autoFocus
+                    placeholder="e.g., 'Advertise my noodle brand', 'Create a new coffee flyer'"
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAiRefine()}
+                    disabled={isAiLoading}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl h-16 px-6 text-sm focus:outline-none focus:border-lime-400 transition-all pr-14 placeholder:text-white/20"
+                  />
+                  <button onClick={handleAiRefine} disabled={isAiLoading} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-zinc-800' : 'bg-lime-400 text-black active:scale-90 hover:shadow-[0_0_15px_rgba(163,230,53,0.5)]'}`}>
+                    {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
+                  </button>
+                </div>
+                <div className="mt-6 flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                   {["Advertise my noodle brand", "Create a new page with coffee ad", "Cyberpunk flyer", "Minimalist layout", "Bold brand poster"].map(s => (
+                     <button key={s} onClick={() => setAiPrompt(s)} className="shrink-0 bg-white/5 border border-white/5 px-5 py-2.5 rounded-full text-[10px] font-bold uppercase hover:bg-white/10 hover:border-white/20 transition-all text-white/60 hover:text-white">{s}</button>
+                   ))}
+                </div>
+                <button onClick={() => setIsAiModalOpen(false)} className="w-full mt-8 text-[10px] font-black uppercase text-white/20 hover:text-white/60 transition-colors tracking-[0.4em]">Abort Engine Session</button>
+             </div>
+          </div>
+        )}
+
+        {!isMobile && (
           <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-4 bg-zinc-900/90 backdrop-blur rounded-3xl border border-white/10 shadow-2xl">
             <button className="text-white/40 hover:text-white" onClick={() => triggerHaptic(5)}><Icons.Undo2 className="w-5 h-5"/></button>
             <button className="text-white/40 hover:text-white" onClick={() => triggerHaptic(5)}><Icons.Redo2 className="w-5 h-5"/></button>
@@ -486,7 +541,9 @@ const App: React.FC = () => {
               <Icons.Download className="w-4 h-4" /> Export
             </button>
           </div>
-        ) : (
+        )}
+
+        {isMobile && !isAiModalOpen && (
           <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? 'translate-y-full' : 'translate-y-0'}`}>
             <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl p-4">
               <div className="flex items-center justify-between gap-4">
@@ -528,6 +585,7 @@ const App: React.FC = () => {
                   updateElement={updateElement} 
                   updatePage={updatePage} 
                   onReorder={onReorder} 
+                  recentImages={recentImages}
                   isMobile={true}
                   availableFonts={allFonts}
                   onAddCustomFont={handleAddCustomFont}
@@ -536,6 +594,7 @@ const App: React.FC = () => {
                   onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                   onAddShape={onAddShape}
                   onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); setIsBottomSheetOpen(false); }}
+                  onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
                 />
               </div>
               <div className="p-5 bg-zinc-900 border-t border-white/10 flex justify-end">
@@ -547,7 +606,7 @@ const App: React.FC = () => {
 
         {isExportModalOpen && exportStatus === 'idle' && (
           <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-6" onClick={() => setIsExportModalOpen(false)}>
-            <div className="bg-zinc-900 border border-white/10 rounded-[32px] w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+            <div className="bg-zinc-900 border border-white/10 rounded-[32px] w-full max-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                <div className="p-8 space-y-6">
                   <div className="text-center space-y-2">
                     <h2 className="text-2xl font-black text-white italic tracking-tight uppercase">Export Design</h2>
@@ -608,6 +667,7 @@ const App: React.FC = () => {
           updateElement={updateElement} 
           updatePage={updatePage} 
           onReorder={onReorder} 
+          recentImages={recentImages}
           isMobile={false}
           availableFonts={allFonts}
           onAddCustomFont={handleAddCustomFont}
@@ -616,6 +676,7 @@ const App: React.FC = () => {
           onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
           onAddShape={onAddShape}
           onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
+          onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
         />
       )}
     </div>
