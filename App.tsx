@@ -13,17 +13,36 @@ const App: React.FC = () => {
   const [elementStartPos, setElementStartPos] = useState<BoundingBox | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
+  // Moved scale state declaration to the top to avoid 'used before declaration' error
+  const [scale, setScale] = useState(1);
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
-
-  const currentPage = state.pages[state.currentPageIndex];
-  const selectedElement = currentPage.elements.find(e => e.id === state.selectedElementId) || null;
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Update scale effect moved up to be near the state declaration
+  useEffect(() => {
+    const updateScale = () => {
+      if (!workspaceRef.current) return;
+      const ws = workspaceRef.current;
+      const padding = isMobile ? 40 : 120;
+      const availableWidth = ws.clientWidth - padding;
+      const availableHeight = ws.clientHeight - padding;
+      const sx = availableWidth / CANVAS_WIDTH;
+      const sy = availableHeight / CANVAS_HEIGHT;
+      setScale(Math.min(sx, sy, 1));
+    };
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, [isMobile]);
+
+  const currentPage = state.pages[state.currentPageIndex];
+  const selectedElement = currentPage.elements.find(e => e.id === state.selectedElementId) || null;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -80,7 +99,7 @@ const App: React.FC = () => {
     });
   };
 
-  const handleSelect = useCallback((id: string, e: React.MouseEvent) => {
+  const handleSelect = useCallback((id: string, e: React.PointerEvent) => {
     e.stopPropagation();
     setState(prev => ({ ...prev, selectedElementId: id }));
     
@@ -112,11 +131,13 @@ const App: React.FC = () => {
     });
   };
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
+  // Fixed: scale is now declared before handlePointerMove
+  const handlePointerMove = useCallback((e: PointerEvent) => {
     if (!dragStart || !elementStartPos || !state.selectedElementId) return;
 
-    const dx = e.clientX - dragStart.x;
-    const dy = e.clientY - dragStart.y;
+    // Correct for canvas scale
+    const dx = (e.clientX - dragStart.x) / scale;
+    const dy = (e.clientY - dragStart.y) / scale;
 
     if (dragStart.type === 'move') {
       updateElement(state.selectedElementId, { 
@@ -124,51 +145,40 @@ const App: React.FC = () => {
       });
     } else if (dragStart.type === 'resize' && dragStart.handle) {
       let { x, y, width, height } = elementStartPos;
+      
       if (dragStart.handle.includes('e')) width += dx;
       if (dragStart.handle.includes('s')) height += dy;
       if (dragStart.handle.includes('w')) { x += dx; width -= dx; }
       if (dragStart.handle.includes('n')) { y += dy; height -= dy; }
+      
+      // Minimum sizes
+      width = Math.max(10, width);
+      height = Math.max(10, height);
+
       updateElement(state.selectedElementId, { box: { ...elementStartPos, x, y, width, height } });
     } else if (dragStart.type === 'rotate') {
         const rect = canvasRef.current?.getBoundingClientRect();
         if (!rect) return;
-        const centerX = rect.left + (elementStartPos.x + elementStartPos.width / 2) * (rect.width / CANVAS_WIDTH);
-        const centerY = rect.top + (elementStartPos.y + elementStartPos.height / 2) * (rect.height / CANVAS_HEIGHT);
+        const centerX = rect.left + (elementStartPos.x + elementStartPos.width / 2) * scale;
+        const centerY = rect.top + (elementStartPos.y + elementStartPos.height / 2) * scale;
         const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI) + 90;
         updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation: angle } });
     }
-  }, [dragStart, elementStartPos, state.selectedElementId, updateElement]);
+  }, [dragStart, elementStartPos, state.selectedElementId, updateElement, scale]);
 
-  const handleMouseUp = useCallback(() => {
+  const handlePointerUp = useCallback(() => {
     setDragStart(null);
     setElementStartPos(null);
   }, []);
 
   useEffect(() => {
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [handleMouseMove, handleMouseUp]);
-
-  const [scale, setScale] = useState(1);
-  useEffect(() => {
-    const updateScale = () => {
-      if (!workspaceRef.current) return;
-      const ws = workspaceRef.current;
-      const padding = isMobile ? 40 : 120;
-      const availableWidth = ws.clientWidth - padding;
-      const availableHeight = ws.clientHeight - padding;
-      const sx = availableWidth / CANVAS_WIDTH;
-      const sy = availableHeight / CANVAS_HEIGHT;
-      setScale(Math.min(sx, sy, 1));
-    };
-    updateScale();
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, [isMobile]);
+  }, [handlePointerMove, handlePointerUp]);
 
   const renderSidebarContent = () => (
     <Sidebar 
@@ -225,6 +235,20 @@ const App: React.FC = () => {
     />
   );
 
+  const getResizeCursor = (handle: string) => {
+    switch(handle) {
+      case 'nw': return 'nwse-resize';
+      case 'ne': return 'nesw-resize';
+      case 'sw': return 'nesw-resize';
+      case 'se': return 'nwse-resize';
+      case 'n': return 'ns-resize';
+      case 's': return 'ns-resize';
+      case 'e': return 'ew-resize';
+      case 'w': return 'ew-resize';
+      default: return 'move';
+    }
+  };
+
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
       <div className="flex-1 flex flex-col relative canvas-container overflow-hidden">
@@ -240,7 +264,7 @@ const App: React.FC = () => {
         <div ref={workspaceRef} className="flex-1 flex items-center justify-center relative overflow-hidden">
            <div 
              ref={canvasRef}
-             onMouseDown={deselectAll}
+             onPointerDown={deselectAll}
              className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center"
              style={{ 
                width: CANVAS_WIDTH, 
@@ -268,21 +292,48 @@ const App: React.FC = () => {
                         border: '2px solid #bef264'
                       }}
                     >
-                      {['nw', 'ne', 'sw', 'se'].map(h => (
-                        <div 
-                          key={h}
-                          onMouseDown={(e) => { e.stopPropagation(); setDragStart({ x: e.clientX, y: e.clientY, type: 'resize', handle: h }); setElementStartPos({...el.box}); }}
-                          className={`absolute w-3 h-3 bg-white border-2 border-lime-400 pointer-events-auto rounded-full ${h === 'nw' ? '-top-1.5 -left-1.5 cursor-nw-resize' : h === 'ne' ? '-top-1.5 -right-1.5 cursor-ne-resize' : h === 'sw' ? '-bottom-1.5 -left-1.5 cursor-sw-resize' : '-bottom-1.5 -right-1.5 cursor-se-resize'}`}
-                        />
-                      ))}
+                      {/* Interaction Handles (Corners and Mid-points) */}
+                      {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
+                        let positionStyles: React.CSSProperties = {};
+                        if (h === 'nw') positionStyles = { top: '-6px', left: '-6px' };
+                        if (h === 'ne') positionStyles = { top: '-6px', right: '-6px' };
+                        if (h === 'sw') positionStyles = { bottom: '-6px', left: '-6px' };
+                        if (h === 'se') positionStyles = { bottom: '-6px', right: '-6px' };
+                        if (h === 'n') positionStyles = { top: '-6px', left: '50%', transform: 'translateX(-50%)' };
+                        if (h === 's') positionStyles = { bottom: '-6px', left: '50%', transform: 'translateX(-50%)' };
+                        if (h === 'e') positionStyles = { right: '-6px', top: '50%', transform: 'translateY(-50%)' };
+                        if (h === 'w') positionStyles = { left: '-6px', top: '50%', transform: 'translateY(-50%)' };
+
+                        const isCorner = h.length === 2;
+
+                        return (
+                          <div 
+                            key={h}
+                            onPointerDown={(e) => { 
+                              e.stopPropagation(); 
+                              setDragStart({ x: e.clientX, y: e.clientY, type: 'resize', handle: h }); 
+                              setElementStartPos({...el.box}); 
+                            }}
+                            style={positionStyles}
+                            className={`absolute bg-white border-2 border-lime-400 pointer-events-auto shadow-lg ${isCorner ? 'w-4 h-4 rounded-full' : 'w-6 h-2 rounded-sm'} z-50`}
+                          />
+                        );
+                      })}
+
+                      {/* Rotation Handle */}
                       <div 
-                        onMouseDown={(e) => { e.stopPropagation(); setDragStart({ x: e.clientX, y: e.clientY, type: 'rotate' }); setElementStartPos({...el.box}); }}
-                        className="absolute -bottom-12 left-1/2 -translate-x-1/2 w-8 h-8 bg-zinc-900 border border-white/20 rounded-full flex items-center justify-center pointer-events-auto cursor-pointer hover:bg-zinc-800 transition-colors shadow-xl"
+                        onPointerDown={(e) => { e.stopPropagation(); setDragStart({ x: e.clientX, y: e.clientY, type: 'rotate' }); setElementStartPos({...el.box}); }}
+                        className="absolute -bottom-16 left-1/2 -translate-x-1/2 w-10 h-10 bg-zinc-900 border border-white/20 rounded-full flex items-center justify-center pointer-events-auto cursor-pointer hover:bg-zinc-800 transition-colors shadow-xl"
                       >
-                         <Icons.RotateCw className="w-4 h-4 text-lime-400" />
+                         <Icons.RotateCw className="w-5 h-5 text-lime-400" />
                       </div>
-                      <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-lime-400 px-3 py-1 rounded-full flex items-center gap-1 text-[10px] text-black font-bold uppercase tracking-widest shadow-lg animate-bounce pointer-events-auto cursor-grab">
-                         <Icons.Move className="w-3 h-3" /> Drag
+
+                      {/* Drag Handle Tag */}
+                      <div 
+                        onPointerDown={(e) => handleSelect(el.id, e)}
+                        className="absolute -top-16 left-1/2 -translate-x-1/2 bg-lime-400 px-4 py-1.5 rounded-full flex items-center gap-2 text-[10px] text-black font-bold uppercase tracking-widest shadow-lg animate-bounce pointer-events-auto cursor-grab active:cursor-grabbing"
+                      >
+                         <Icons.Move className="w-4 h-4" /> Move
                       </div>
                     </div>
                   )}

@@ -1,11 +1,11 @@
 
 import React from 'react';
-import { DesignElement } from '../types';
+import { DesignElement } from '../types.ts';
 
 interface Props {
   element: DesignElement;
   isSelected: boolean;
-  onSelect: (id: string, e: React.MouseEvent) => void;
+  onSelect: (id: string, e: React.PointerEvent) => void;
 }
 
 const ElementRenderer: React.FC<Props> = ({ element, isSelected, onSelect }) => {
@@ -22,6 +22,7 @@ const ElementRenderer: React.FC<Props> = ({ element, isSelected, onSelect }) => 
     cursor: 'move',
     zIndex: isSelected ? 50 : 10,
     userSelect: 'none',
+    touchAction: 'none'
   };
 
   const borderStyle = {
@@ -81,6 +82,7 @@ const ElementRenderer: React.FC<Props> = ({ element, isSelected, onSelect }) => 
                 height: '100%',
                 objectFit: 'cover'
               }}
+              draggable={false}
             />
           </div>
         );
@@ -99,7 +101,7 @@ const ElementRenderer: React.FC<Props> = ({ element, isSelected, onSelect }) => 
   return (
     <div 
       style={style} 
-      onMouseDown={(e) => onSelect(element.id, e)}
+      onPointerDown={(e) => onSelect(element.id, e)}
       className="group"
     >
       {renderContent()}
