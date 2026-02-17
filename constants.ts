@@ -5,6 +5,7 @@ export const CANVAS_WIDTH = 360;
 export const CANVAS_HEIGHT = 640;
 
 export const FONTS = [
+  { name: 'Debrosee', value: "'Debrosee', sans-serif" },
   { name: 'Inter', value: "'Inter', sans-serif" },
   { name: 'Mozza', value: "'Playfair Display', serif" },
   { name: 'Montserrat', value: "'Montserrat', sans-serif" },
