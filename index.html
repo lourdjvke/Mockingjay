@@ -17,8 +17,6 @@
       color: white;
       touch-action: none;
     }
-    .font-mozza { font-family: 'Playfair Display', serif; }
-    .font-montserrat { font-family: 'Montserrat', sans-serif; }
     
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -37,28 +35,16 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
-    }
-    .no-scrollbar {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    .animate-spin-slow {
-      animation: spin 3s linear infinite;
-    }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .animate-spin-custom { animation: spin 2s linear infinite; }
 
-    @keyframes bounce-subtle {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-4px); }
-    }
-    .animate-bounce-subtle {
-      animation: bounce-subtle 2s infinite ease-in-out;
+    /* Force canvas elements to be visible during capture */
+    #design-canvas * {
+      transform-style: preserve-3d;
+      backface-visibility: hidden;
     }
   </style>
   <script type="importmap">
