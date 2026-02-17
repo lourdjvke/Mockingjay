@@ -7,14 +7,20 @@ import Sidebar from './components/Sidebar.tsx';
 import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
 
+interface SnapLine {
+  type: 'vertical' | 'horizontal';
+  position: number;
+}
+
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>(INITIAL_STATE);
-  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: 'move' | 'resize' | 'rotate', handle?: string } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: 'move' | 'resize' | 'rotate', handle?: string, initialAngle?: number } | null>(null);
   const [elementStartPos, setElementStartPos] = useState<BoundingBox | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
-  // Moved scale state declaration to the top to avoid 'used before declaration' error
   const [scale, setScale] = useState(1);
+  const [snapLines, setSnapLines] = useState<SnapLine[]>([]);
+  
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -24,7 +30,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Update scale effect moved up to be near the state declaration
   useEffect(() => {
     const updateScale = () => {
       if (!workspaceRef.current) return;
@@ -44,18 +49,11 @@ const App: React.FC = () => {
   const currentPage = state.pages[state.currentPageIndex];
   const selectedElement = currentPage.elements.find(e => e.id === state.selectedElementId) || null;
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x' && state.selectedElementId) {
-        deleteElement(state.selectedElementId);
-      }
-      if (e.key === 'Delete' && state.selectedElementId) {
-        deleteElement(state.selectedElementId);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.selectedElementId]);
+  const triggerHaptic = useCallback((intensity = 10) => {
+    if (window.navigator && window.navigator.vibrate) {
+      window.navigator.vibrate(intensity);
+    }
+  }, []);
 
   const deleteElement = (id: string) => {
     setState(prev => {
@@ -82,25 +80,11 @@ const App: React.FC = () => {
     });
   };
 
-  const onReorder = (id: string, direction: 'up' | 'down') => {
-    setState(prev => {
-      const newPages = [...prev.pages];
-      const elements = [...newPages[prev.currentPageIndex].elements];
-      const index = elements.findIndex(el => el.id === id);
-      if (index === -1) return prev;
-      
-      const newIndex = direction === 'up' ? index + 1 : index - 1;
-      if (newIndex < 0 || newIndex >= elements.length) return prev;
-      
-      const [moved] = elements.splice(index, 1);
-      elements.splice(newIndex, 0, moved);
-      newPages[prev.currentPageIndex].elements = elements;
-      return { ...prev, pages: newPages };
-    });
-  };
-
   const handleSelect = useCallback((id: string, e: React.PointerEvent) => {
     e.stopPropagation();
+    if (state.selectedElementId !== id) {
+      triggerHaptic(5);
+    }
     setState(prev => ({ ...prev, selectedElementId: id }));
     
     const element = currentPage.elements.find(el => el.id === id);
@@ -108,7 +92,7 @@ const App: React.FC = () => {
       setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
       setElementStartPos({ ...element.box });
     }
-  }, [currentPage.elements]);
+  }, [currentPage.elements, state.selectedElementId, triggerHaptic]);
 
   const deselectAll = () => setState(prev => ({ ...prev, selectedElementId: null }));
 
@@ -129,46 +113,79 @@ const App: React.FC = () => {
       newPages[prev.currentPageIndex].elements.push(newElement);
       return { ...prev, pages: newPages, selectedElementId: newElement.id };
     });
+    triggerHaptic(15);
   };
 
-  // Fixed: scale is now declared before handlePointerMove
   const handlePointerMove = useCallback((e: PointerEvent) => {
     if (!dragStart || !elementStartPos || !state.selectedElementId) return;
 
-    // Correct for canvas scale
     const dx = (e.clientX - dragStart.x) / scale;
     const dy = (e.clientY - dragStart.y) / scale;
 
     if (dragStart.type === 'move') {
+      let nextX = elementStartPos.x + dx;
+      let nextY = elementStartPos.y + dy;
+      
+      const centerX = nextX + elementStartPos.width / 2;
+      const centerY = nextY + elementStartPos.height / 2;
+      
+      const activeLines: SnapLine[] = [];
+      const threshold = 5;
+
+      // Snap to Canvas Center
+      if (Math.abs(centerX - CANVAS_WIDTH / 2) < threshold) {
+        nextX = CANVAS_WIDTH / 2 - elementStartPos.width / 2;
+        activeLines.push({ type: 'vertical', position: CANVAS_WIDTH / 2 });
+      }
+      if (Math.abs(centerY - CANVAS_HEIGHT / 2) < threshold) {
+        nextY = CANVAS_HEIGHT / 2 - elementStartPos.height / 2;
+        activeLines.push({ type: 'horizontal', position: CANVAS_HEIGHT / 2 });
+      }
+
+      if (activeLines.length > snapLines.length) triggerHaptic(8);
+      setSnapLines(activeLines);
+
       updateElement(state.selectedElementId, { 
-        box: { ...elementStartPos, x: elementStartPos.x + dx, y: elementStartPos.y + dy } 
+        box: { ...elementStartPos, x: nextX, y: nextY } 
       });
     } else if (dragStart.type === 'resize' && dragStart.handle) {
       let { x, y, width, height } = elementStartPos;
-      
       if (dragStart.handle.includes('e')) width += dx;
       if (dragStart.handle.includes('s')) height += dy;
       if (dragStart.handle.includes('w')) { x += dx; width -= dx; }
       if (dragStart.handle.includes('n')) { y += dy; height -= dy; }
-      
-      // Minimum sizes
       width = Math.max(10, width);
       height = Math.max(10, height);
-
       updateElement(state.selectedElementId, { box: { ...elementStartPos, x, y, width, height } });
     } else if (dragStart.type === 'rotate') {
         const rect = canvasRef.current?.getBoundingClientRect();
         if (!rect) return;
         const centerX = rect.left + (elementStartPos.x + elementStartPos.width / 2) * scale;
         const centerY = rect.top + (elementStartPos.y + elementStartPos.height / 2) * scale;
-        const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI) + 90;
-        updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation: angle } });
+        
+        const currentAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
+        const initialPointerAngle = dragStart.initialAngle ?? 0;
+        const deltaAngle = currentAngle - initialPointerAngle;
+        
+        let newRotation = elementStartPos.rotation + deltaAngle;
+        
+        // Snap to 45 degree increments
+        if (Math.abs(newRotation % 45) < 3 || Math.abs(newRotation % 45) > 42) {
+          const snapped = Math.round(newRotation / 45) * 45;
+          if (snapped !== Math.round(state.pages[state.currentPageIndex].elements.find(el => el.id === state.selectedElementId)?.box.rotation)) {
+            triggerHaptic(5);
+          }
+          newRotation = snapped;
+        }
+
+        updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation: newRotation } });
     }
-  }, [dragStart, elementStartPos, state.selectedElementId, updateElement, scale]);
+  }, [dragStart, elementStartPos, state, updateElement, scale, snapLines.length, triggerHaptic]);
 
   const handlePointerUp = useCallback(() => {
     setDragStart(null);
     setElementStartPos(null);
+    setSnapLines([]);
   }, []);
 
   useEffect(() => {
@@ -180,78 +197,26 @@ const App: React.FC = () => {
     };
   }, [handlePointerMove, handlePointerUp]);
 
-  const renderSidebarContent = () => (
-    <Sidebar 
-      selectedElement={selectedElement}
-      themeColors={state.themeColors}
-      pages={state.pages}
-      currentPageIndex={state.currentPageIndex}
-      updateElement={updateElement}
-      updatePage={updatePage}
-      onReorder={onReorder}
-      isMobile={isMobile}
-      onColorChange={(color) => {
-        if (selectedElement) {
-          const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor';
-          updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } });
-        }
-      }}
-      onAddText={(type) => {
-        addElement({
-          type: 'text',
-          name: type,
-          content: type === 'Header' ? 'LOREM IPSUM' : (type === 'Subheader' ? 'Subheader text' : 'Add your paragraph text here.'),
-          style: { 
-            fontSize: type === 'Header' ? 42 : (type === 'Subheader' ? 24 : 14), 
-            fontFamily: type === 'Header' ? FONTS[1].value : FONTS[2].value,
-            color: '#FFFFFF',
-            fontWeight: type === 'Header' ? '900' : 'normal',
-            textAlign: 'center',
-            opacity: 1
-          },
-          box: { x: 30, y: 150, width: 300, height: type === 'Header' ? 60 : 100, rotation: 0 }
-        });
-        if (isMobile) setIsBottomSheetOpen(false);
-      }}
-      onAddShape={(shape) => {
-        addElement({
-          type: 'shape',
-          name: shape,
-          style: { backgroundColor: '#E85D3D', borderRadius: shape === 'circle' ? 100 : (shape === 'pill' ? 50 : 0), opacity: 1 },
-          box: { x: 130, y: 250, width: 100, height: shape === 'pill' ? 40 : 100, rotation: 0 }
-        });
-        if (isMobile) setIsBottomSheetOpen(false);
-      }}
-      onAddImage={(src) => {
-        addElement({
-          type: 'image',
-          name: 'Image',
-          content: src,
-          style: { borderRadius: 24, opacity: 1, strokeWidth: 0 },
-          box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 }
-        });
-        if (isMobile) setIsBottomSheetOpen(false);
-      }}
-    />
-  );
-
-  const getResizeCursor = (handle: string) => {
-    switch(handle) {
-      case 'nw': return 'nwse-resize';
-      case 'ne': return 'nesw-resize';
-      case 'sw': return 'nesw-resize';
-      case 'se': return 'nwse-resize';
-      case 'n': return 'ns-resize';
-      case 's': return 'ns-resize';
-      case 'e': return 'ew-resize';
-      case 'w': return 'ew-resize';
-      default: return 'move';
-    }
+  const onReorder = (id: string, direction: 'up' | 'down') => {
+    setState(prev => {
+      const newPages = [...prev.pages];
+      const elements = [...newPages[prev.currentPageIndex].elements];
+      const index = elements.findIndex(el => el.id === id);
+      if (index === -1) return prev;
+      const newIndex = direction === 'up' ? index + 1 : index - 1;
+      if (newIndex < 0 || newIndex >= elements.length) return prev;
+      const [moved] = elements.splice(index, 1);
+      elements.splice(newIndex, 0, moved);
+      newPages[prev.currentPageIndex].elements = elements;
+      return { ...prev, pages: newPages };
+    });
+    triggerHaptic(5);
   };
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
       <div className="flex-1 flex flex-col relative canvas-container overflow-hidden">
+        {/* Header Controls */}
         <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-6 bg-zinc-900/80 backdrop-blur-md px-6 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
            <button className="p-1 hover:text-white/60 transition-colors"><Icons.ArrowLeft className="w-5 h-5"/></button>
            <span className="text-xs font-bold text-white/40">{state.currentPageIndex + 1}/{state.pages.length}</span>
@@ -261,7 +226,23 @@ const App: React.FC = () => {
            <button className="p-1 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
         </div>
 
+        {/* Workspace */}
         <div ref={workspaceRef} className="flex-1 flex items-center justify-center relative overflow-hidden">
+           {/* Alignment Guide Lines */}
+           {snapLines.map((line, i) => (
+             <div 
+               key={i}
+               className="absolute bg-lime-400 z-[100] pointer-events-none"
+               style={{
+                 left: line.type === 'vertical' ? `calc(50% + (${line.position - CANVAS_WIDTH / 2}px * ${scale}))` : 0,
+                 top: line.type === 'horizontal' ? `calc(50% + (${line.position - CANVAS_HEIGHT / 2}px * ${scale}))` : 0,
+                 width: line.type === 'vertical' ? '1px' : '100%',
+                 height: line.type === 'horizontal' ? '1px' : '100%',
+                 opacity: 0.6
+               }}
+             />
+           ))}
+
            <div 
              ref={canvasRef}
              onPointerDown={deselectAll}
@@ -295,17 +276,16 @@ const App: React.FC = () => {
                       {/* Interaction Handles (Corners and Mid-points) */}
                       {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
                         let positionStyles: React.CSSProperties = {};
-                        if (h === 'nw') positionStyles = { top: '-6px', left: '-6px' };
-                        if (h === 'ne') positionStyles = { top: '-6px', right: '-6px' };
-                        if (h === 'sw') positionStyles = { bottom: '-6px', left: '-6px' };
-                        if (h === 'se') positionStyles = { bottom: '-6px', right: '-6px' };
-                        if (h === 'n') positionStyles = { top: '-6px', left: '50%', transform: 'translateX(-50%)' };
-                        if (h === 's') positionStyles = { bottom: '-6px', left: '50%', transform: 'translateX(-50%)' };
-                        if (h === 'e') positionStyles = { right: '-6px', top: '50%', transform: 'translateY(-50%)' };
-                        if (h === 'w') positionStyles = { left: '-6px', top: '50%', transform: 'translateY(-50%)' };
+                        if (h === 'nw') positionStyles = { top: '-12px', left: '-12px' };
+                        if (h === 'ne') positionStyles = { top: '-12px', right: '-12px' };
+                        if (h === 'sw') positionStyles = { bottom: '-12px', left: '-12px' };
+                        if (h === 'se') positionStyles = { bottom: '-12px', right: '-12px' };
+                        if (h === 'n') positionStyles = { top: '-12px', left: '50%', transform: 'translateX(-50%)' };
+                        if (h === 's') positionStyles = { bottom: '-12px', left: '50%', transform: 'translateX(-50%)' };
+                        if (h === 'e') positionStyles = { right: '-12px', top: '50%', transform: 'translateY(-50%)' };
+                        if (h === 'w') positionStyles = { left: '-12px', top: '50%', transform: 'translateY(-50%)' };
 
                         const isCorner = h.length === 2;
-
                         return (
                           <div 
                             key={h}
@@ -313,27 +293,39 @@ const App: React.FC = () => {
                               e.stopPropagation(); 
                               setDragStart({ x: e.clientX, y: e.clientY, type: 'resize', handle: h }); 
                               setElementStartPos({...el.box}); 
+                              triggerHaptic(5);
                             }}
                             style={positionStyles}
-                            className={`absolute bg-white border-2 border-lime-400 pointer-events-auto shadow-lg ${isCorner ? 'w-4 h-4 rounded-full' : 'w-6 h-2 rounded-sm'} z-50`}
+                            className={`absolute bg-white border-2 border-lime-400 pointer-events-auto shadow-lg ${isCorner ? 'w-6 h-6 rounded-full' : 'w-10 h-3 rounded-sm'} z-50 hover:scale-110 active:scale-95 transition-transform`}
                           />
                         );
                       })}
 
                       {/* Rotation Handle */}
                       <div 
-                        onPointerDown={(e) => { e.stopPropagation(); setDragStart({ x: e.clientX, y: e.clientY, type: 'rotate' }); setElementStartPos({...el.box}); }}
-                        className="absolute -bottom-16 left-1/2 -translate-x-1/2 w-10 h-10 bg-zinc-900 border border-white/20 rounded-full flex items-center justify-center pointer-events-auto cursor-pointer hover:bg-zinc-800 transition-colors shadow-xl"
+                        onPointerDown={(e) => { 
+                          e.stopPropagation(); 
+                          const rect = canvasRef.current?.getBoundingClientRect();
+                          if (!rect) return;
+                          const centerX = rect.left + (el.box.x + el.box.width / 2) * scale;
+                          const centerY = rect.top + (el.box.y + el.box.height / 2) * scale;
+                          const initialAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
+                          
+                          setDragStart({ x: e.clientX, y: e.clientY, type: 'rotate', initialAngle }); 
+                          setElementStartPos({...el.box}); 
+                          triggerHaptic(10);
+                        }}
+                        className="absolute -bottom-24 left-1/2 -translate-x-1/2 w-14 h-14 bg-zinc-900 border border-white/20 rounded-full flex items-center justify-center pointer-events-auto cursor-pointer hover:bg-zinc-800 active:scale-90 transition-all shadow-2xl"
                       >
-                         <Icons.RotateCw className="w-5 h-5 text-lime-400" />
+                         <Icons.RotateCw className="w-7 h-7 text-lime-400" />
                       </div>
 
                       {/* Drag Handle Tag */}
                       <div 
                         onPointerDown={(e) => handleSelect(el.id, e)}
-                        className="absolute -top-16 left-1/2 -translate-x-1/2 bg-lime-400 px-4 py-1.5 rounded-full flex items-center gap-2 text-[10px] text-black font-bold uppercase tracking-widest shadow-lg animate-bounce pointer-events-auto cursor-grab active:cursor-grabbing"
+                        className="absolute -top-24 left-1/2 -translate-x-1/2 bg-lime-400 px-6 py-2.5 rounded-full flex items-center gap-3 text-[12px] text-black font-bold uppercase tracking-widest shadow-xl animate-bounce pointer-events-auto cursor-grab active:cursor-grabbing"
                       >
-                         <Icons.Move className="w-4 h-4" /> Move
+                         <Icons.Move className="w-5 h-5" /> Move
                       </div>
                     </div>
                   )}
@@ -342,6 +334,7 @@ const App: React.FC = () => {
            </div>
         </div>
 
+        {/* Footer Navigation / Bottom Sheet Trigger */}
         {!isMobile ? (
           <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-4 bg-zinc-900/90 backdrop-blur rounded-3xl border border-white/10 shadow-2xl">
             <button className="text-white/40 hover:text-white"><Icons.Undo2 className="w-5 h-5"/></button>
@@ -393,6 +386,7 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* Mobile Bottom Sheet Sidebar */}
         {isMobile && isBottomSheetOpen && (
           <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm" onClick={() => setIsBottomSheetOpen(false)}>
             <div 
@@ -401,7 +395,34 @@ const App: React.FC = () => {
             >
               <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mt-4 mb-2 shrink-0" />
               <div className="flex-1 overflow-y-auto">
-                {renderSidebarContent()}
+                <Sidebar 
+                  selectedElement={selectedElement}
+                  themeColors={state.themeColors}
+                  pages={state.pages}
+                  currentPageIndex={state.currentPageIndex}
+                  updateElement={updateElement}
+                  updatePage={updatePage}
+                  onReorder={onReorder}
+                  isMobile={true}
+                  onColorChange={(color) => {
+                    if (selectedElement) {
+                      const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor';
+                      updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } });
+                    }
+                  }}
+                  onAddText={(type) => {
+                    addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[1].value, color: '#FFF', textAlign: 'center' }, box: { x: 30, y: 150, width: 300, height: 60, rotation: 0 } });
+                    setIsBottomSheetOpen(false);
+                  }}
+                  onAddShape={(shape) => {
+                    addElement({ type: 'shape', name: shape, style: { backgroundColor: '#E85D3D', borderRadius: shape === 'circle' ? 100 : 0 }, box: { x: 130, y: 250, width: 100, height: 100, rotation: 0 } });
+                    setIsBottomSheetOpen(false);
+                  }}
+                  onAddImage={(src) => {
+                    addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } });
+                    setIsBottomSheetOpen(false);
+                  }}
+                />
               </div>
               <div className="p-5 bg-zinc-900/50 border-t border-white/5">
                  <button onClick={() => setIsBottomSheetOpen(false)} className="w-full bg-white text-black h-12 rounded-xl font-bold">Done</button>
@@ -411,7 +432,27 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {!isMobile && renderSidebarContent()}
+      {!isMobile && (
+        <Sidebar 
+          selectedElement={selectedElement}
+          themeColors={state.themeColors}
+          pages={state.pages}
+          currentPageIndex={state.currentPageIndex}
+          updateElement={updateElement}
+          updatePage={updatePage}
+          onReorder={onReorder}
+          isMobile={false}
+          onColorChange={(color) => {
+            if (selectedElement) {
+              const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor';
+              updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } });
+            }
+          }}
+          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[1].value, color: '#FFF', textAlign: 'center' }, box: { x: 30, y: 150, width: 300, height: 60, rotation: 0 } })}
+          onAddShape={(shape) => addElement({ type: 'shape', name: shape, style: { backgroundColor: '#E85D3D', borderRadius: shape === 'circle' ? 100 : 0 }, box: { x: 130, y: 250, width: 100, height: 100, rotation: 0 } })}
+          onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
+        />
+      )}
     </div>
   );
 };
