@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Icons } from './IconLibrary.tsx';
 import { DesignElement, Page } from '../types.ts';
 import { FONTS } from '../constants.ts';
@@ -69,6 +69,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     layers: false,
     elements: isMobile
   });
+  const [showFontList, setShowFontList] = useState(false);
+  const imageUploadRef = useRef<HTMLInputElement>(null);
 
   const triggerHaptic = (intensity = 10) => {
     if (window.navigator && window.navigator.vibrate) {
@@ -87,8 +89,27 @@ const Sidebar: React.FC<SidebarProps> = ({
     onColorChange(color);
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        onAddImage(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   return (
     <div className={`${isMobile ? 'w-full' : 'w-[380px]'} h-full bg-[#111] ${isMobile ? '' : 'border-l'} border-white/10 flex flex-col select-none overflow-hidden`}>
+      <input 
+        type="file" 
+        ref={imageUploadRef} 
+        className="hidden" 
+        accept="image/*" 
+        onChange={handleImageUpload} 
+      />
+
       {!isMobile && (
         <div className="p-5 flex items-center justify-between border-b border-white/10">
           <div className="flex items-center gap-2">
@@ -115,11 +136,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         <Section title="Add Assets" id="image" icon={<Icons.Plus className="w-4 h-4" />} isOpen={openSections.image} onToggle={toggleSection}>
            <div className="grid grid-cols-2 gap-2 mb-4">
-              <button onClick={() => onAddImage('https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400')} className="bg-zinc-800 p-2 rounded-xl text-xs flex flex-col items-center gap-1 hover:bg-zinc-700 transition-colors active:scale-95">
-                 <Icons.ImageIcon className="w-4 h-4 text-lime-400"/> Add Image
+              <button 
+                onClick={() => imageUploadRef.current?.click()} 
+                className="bg-zinc-800 p-2 py-4 rounded-xl text-xs flex flex-col items-center gap-1 hover:bg-zinc-700 transition-colors active:scale-95"
+              >
+                 <Icons.ImageIcon className="w-5 h-5 text-lime-400"/> Device Image
               </button>
-              <button onClick={() => onAddShape('square')} className="bg-zinc-800 p-2 rounded-xl text-xs flex flex-col items-center gap-1 hover:bg-zinc-700 transition-colors active:scale-95">
-                 <Icons.Square className="w-4 h-4 text-lime-400"/> Add Shape
+              <button onClick={() => onAddShape('square')} className="bg-zinc-800 p-2 py-4 rounded-xl text-xs flex flex-col items-center gap-1 hover:bg-zinc-700 transition-colors active:scale-95">
+                 <Icons.Square className="w-5 h-5 text-lime-400"/> Add Shape
               </button>
            </div>
            <div className="space-y-2">
@@ -134,15 +158,69 @@ const Sidebar: React.FC<SidebarProps> = ({
             <Section title="Edit Content" id="text" icon={<Icons.Type className="w-4 h-4" />} isOpen={openSections.text} onToggle={toggleSection}>
                <div className="space-y-4">
                   {selectedElement.type === 'text' && (
-                    <div className="w-full bg-zinc-900 border border-white/10 rounded-xl p-3 focus-within:border-lime-400/50 transition-colors">
-                      <textarea 
-                        key={`text-edit-${selectedElement.id}`}
-                        defaultValue={selectedElement.content} 
-                        onBlur={(e) => updateElement(selectedElement.id, { content: e.target.value })}
-                        onChange={(e) => updateElement(selectedElement.id, { content: e.target.value })}
-                        className="bg-transparent border-none outline-none w-full text-sm font-medium resize-none h-20 text-white"
-                        placeholder="Type something..."
-                      />
+                    <div className="space-y-3">
+                      {/* Pill Font Selector */}
+                      <div className="relative">
+                        <div className="flex bg-zinc-900 rounded-full border border-white/10 h-11 overflow-hidden">
+                           <button 
+                            className="flex-1 flex items-center justify-center px-4 hover:bg-white/5 border-r border-white/10 transition-colors"
+                            onClick={() => setShowFontList(!showFontList)}
+                           >
+                             <span style={{ fontFamily: selectedElement.style.fontFamily }} className="truncate text-sm">
+                               {FONTS.find(f => f.value === selectedElement.style.fontFamily)?.name || 'Default Font'}
+                             </span>
+                           </button>
+                           <button 
+                            className="w-12 flex items-center justify-center hover:bg-white/5 transition-colors"
+                            onClick={() => setShowFontList(!showFontList)}
+                           >
+                             <Icons.ChevronDown className={`w-4 h-4 transition-transform ${showFontList ? 'rotate-180' : ''}`} />
+                           </button>
+                        </div>
+                        
+                        {showFontList && (
+                          <div className="absolute z-[200] top-full mt-2 left-0 right-0 max-h-64 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl overflow-y-auto no-scrollbar py-2">
+                             {FONTS.map(font => (
+                               <button 
+                                 key={font.value}
+                                 onClick={() => {
+                                   updateElement(selectedElement.id, { style: { ...selectedElement.style, fontFamily: font.value } });
+                                   setShowFontList(false);
+                                   triggerHaptic(5);
+                                 }}
+                                 className={`w-full px-5 py-3 text-left hover:bg-white/5 transition-colors ${selectedElement.style.fontFamily === font.value ? 'bg-lime-400/10 text-lime-400' : ''}`}
+                                 style={{ fontFamily: font.value }}
+                               >
+                                 {font.name}
+                               </button>
+                             ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Text Input */}
+                      <div className="w-full bg-zinc-900 border border-white/10 rounded-xl p-3 focus-within:border-lime-400/50 transition-colors">
+                        <textarea 
+                          key={`text-edit-${selectedElement.id}`}
+                          defaultValue={selectedElement.content} 
+                          onBlur={(e) => updateElement(selectedElement.id, { content: e.target.value })}
+                          onChange={(e) => updateElement(selectedElement.id, { content: e.target.value })}
+                          className="bg-transparent border-none outline-none w-full text-sm font-medium resize-none h-20 text-white"
+                          placeholder="Type something..."
+                        />
+                      </div>
+
+                      {/* Line Height & Letter Spacing */}
+                      <div className="space-y-4 pt-2">
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-[10px] text-white/40 uppercase"><span>Line Height</span><span>{selectedElement.style.lineHeight?.toFixed(1) || '1.0'}</span></div>
+                          <input type="range" min="0.5" max="3" step="0.1" value={selectedElement.style.lineHeight ?? 1.2} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, lineHeight: parseFloat(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-[10px] text-white/40 uppercase"><span>Spacing</span><span>{selectedElement.style.letterSpacing ?? 0}px</span></div>
+                          <input type="range" min="-5" max="30" step="1" value={selectedElement.style.letterSpacing ?? 0} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, letterSpacing: parseInt(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
+                        </div>
+                      </div>
                     </div>
                   )}
                   

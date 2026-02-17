@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { EditorState, DesignElement, BoundingBox, Page } from './types.ts';
 import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS } from './constants.ts';
-import { generateId } from './utils.ts';
+import { generateId, downloadTemplate } from './utils.ts';
 import Sidebar from './components/Sidebar.tsx';
 import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
@@ -23,6 +23,7 @@ const App: React.FC = () => {
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -67,7 +68,7 @@ const App: React.FC = () => {
     setState(prev => {
       const newPages = [...prev.pages];
       const page = newPages[prev.currentPageIndex];
-      page.elements = page.elements.map(el => el.id === id ? { ...el, ...updates } : el);
+      page.elements = page.elements.map(el => el.id === id ? { ...el, ...updates, style: { ...el.style, ...updates.style } } : el);
       return { ...prev, pages: newPages };
     });
   }, []);
@@ -103,7 +104,7 @@ const App: React.FC = () => {
       type: (element.type as any) || 'shape',
       box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 200, rotation: 0 },
       content: '',
-      style: { backgroundColor: '#FFFFFF', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000' },
+      style: { backgroundColor: '#FFFFFF', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: FONTS[0].value },
       visible: true,
       locked: false,
       ...element
@@ -132,7 +133,6 @@ const App: React.FC = () => {
       const activeLines: SnapLine[] = [];
       const threshold = 5;
 
-      // Snap to Canvas Center
       if (Math.abs(centerX - CANVAS_WIDTH / 2) < threshold) {
         nextX = CANVAS_WIDTH / 2 - elementStartPos.width / 2;
         activeLines.push({ type: 'vertical', position: CANVAS_WIDTH / 2 });
@@ -169,7 +169,6 @@ const App: React.FC = () => {
         
         let newRotation = elementStartPos.rotation + deltaAngle;
         
-        // Snap to 45 degree increments
         if (Math.abs(newRotation % 45) < 3 || Math.abs(newRotation % 45) > 42) {
           const snapped = Math.round(newRotation / 45) * 45;
           if (snapped !== Math.round(state.pages[state.currentPageIndex].elements.find(el => el.id === state.selectedElementId)?.box.rotation)) {
@@ -213,8 +212,35 @@ const App: React.FC = () => {
     triggerHaptic(5);
   };
 
+  const handleImportTemplate = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        const importedState = JSON.parse(content);
+        if (importedState.pages) {
+          setState(importedState);
+          triggerHaptic(20);
+        }
+      } catch (err) {
+        console.error("Failed to import template:", err);
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        className="hidden" 
+        accept="application/json" 
+        onChange={handleImportTemplate} 
+      />
+      
       <div className="flex-1 flex flex-col relative canvas-container overflow-hidden">
         {/* Header Controls */}
         <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-6 bg-zinc-900/80 backdrop-blur-md px-6 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
@@ -222,13 +248,12 @@ const App: React.FC = () => {
            <span className="text-xs font-bold text-white/40">{state.currentPageIndex + 1}/{state.pages.length}</span>
            <button className="p-1 hover:text-white/60 transition-colors"><Icons.ArrowRight className="w-5 h-5"/></button>
            <div className="w-[1px] h-4 bg-white/10 mx-2" />
-           <button className="p-1 hover:text-lime-400 transition-colors"><Icons.Sparkles className="w-5 h-5"/></button>
+           <button className="p-1 hover:text-lime-400 transition-colors" onClick={() => fileInputRef.current?.click()}><Icons.Plus className="w-5 h-5"/></button>
            <button className="p-1 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
         </div>
 
         {/* Workspace */}
         <div ref={workspaceRef} className="flex-1 flex items-center justify-center relative overflow-hidden">
-           {/* Alignment Guide Lines */}
            {snapLines.map((line, i) => (
              <div 
                key={i}
@@ -244,6 +269,7 @@ const App: React.FC = () => {
            ))}
 
            <div 
+             id="design-canvas"
              ref={canvasRef}
              onPointerDown={deselectAll}
              className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center"
@@ -273,7 +299,6 @@ const App: React.FC = () => {
                         border: '2px solid #bef264'
                       }}
                     >
-                      {/* Interaction Handles (Corners and Mid-points) */}
                       {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
                         let positionStyles: React.CSSProperties = {};
                         if (h === 'nw') positionStyles = { top: '-12px', left: '-12px' };
@@ -301,7 +326,6 @@ const App: React.FC = () => {
                         );
                       })}
 
-                      {/* Rotation Handle */}
                       <div 
                         onPointerDown={(e) => { 
                           e.stopPropagation(); 
@@ -320,7 +344,6 @@ const App: React.FC = () => {
                          <Icons.RotateCw className="w-7 h-7 text-lime-400" />
                       </div>
 
-                      {/* Drag Handle Tag */}
                       <div 
                         onPointerDown={(e) => handleSelect(el.id, e)}
                         className="absolute -top-24 left-1/2 -translate-x-1/2 bg-lime-400 px-6 py-2.5 rounded-full flex items-center gap-3 text-[12px] text-black font-bold uppercase tracking-widest shadow-xl animate-bounce pointer-events-auto cursor-grab active:cursor-grabbing"
@@ -337,11 +360,14 @@ const App: React.FC = () => {
         {/* Footer Navigation / Bottom Sheet Trigger */}
         {!isMobile ? (
           <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-4 bg-zinc-900/90 backdrop-blur rounded-3xl border border-white/10 shadow-2xl">
-            <button className="text-white/40 hover:text-white"><Icons.Undo2 className="w-5 h-5"/></button>
-            <button className="text-white/40 hover:text-white"><Icons.Redo2 className="w-5 h-5"/></button>
+            <button className="text-white/40 hover:text-white" onClick={() => triggerHaptic(5)}><Icons.Undo2 className="w-5 h-5"/></button>
+            <button className="text-white/40 hover:text-white" onClick={() => triggerHaptic(5)}><Icons.Redo2 className="w-5 h-5"/></button>
             <div className="w-[1px] h-6 bg-white/10" />
-            <button className="flex items-center gap-2 bg-lime-400 text-black px-6 py-2 rounded-full font-bold hover:bg-lime-300 transition-all text-sm">
-              <Icons.Download className="w-4 h-4" /> Export
+            <button 
+              onClick={() => downloadTemplate(state)}
+              className="flex items-center gap-2 bg-lime-400 text-black px-6 py-2 rounded-full font-bold hover:bg-lime-300 transition-all text-sm"
+            >
+              <Icons.Download className="w-4 h-4" /> Export Template
             </button>
           </div>
         ) : (
@@ -390,7 +416,7 @@ const App: React.FC = () => {
         {isMobile && isBottomSheetOpen && (
           <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm" onClick={() => setIsBottomSheetOpen(false)}>
             <div 
-              className="absolute bottom-0 left-0 right-0 h-[75vh] bg-[#111] rounded-t-[32px] overflow-hidden bottom-sheet-transition flex flex-col"
+              className="absolute bottom-0 left-0 right-0 h-[85vh] bg-[#111] rounded-t-[32px] overflow-hidden bottom-sheet-transition flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mt-4 mb-2 shrink-0" />
@@ -411,7 +437,13 @@ const App: React.FC = () => {
                     }
                   }}
                   onAddText={(type) => {
-                    addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[1].value, color: '#FFF', textAlign: 'center' }, box: { x: 30, y: 150, width: 300, height: 60, rotation: 0 } });
+                    addElement({ 
+                      type: 'text', 
+                      name: type, 
+                      content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), 
+                      style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0 }, 
+                      box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } 
+                    });
                     setIsBottomSheetOpen(false);
                   }}
                   onAddShape={(shape) => {
@@ -424,8 +456,19 @@ const App: React.FC = () => {
                   }}
                 />
               </div>
-              <div className="p-5 bg-zinc-900/50 border-t border-white/5">
-                 <button onClick={() => setIsBottomSheetOpen(false)} className="w-full bg-white text-black h-12 rounded-xl font-bold">Done</button>
+              <div className="p-5 bg-zinc-900 border-t border-white/10 grid grid-cols-2 gap-3">
+                 <button 
+                  onClick={() => downloadTemplate(state)} 
+                  className="bg-white/5 text-white h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2"
+                >
+                   <Icons.Download className="w-4 h-4"/> Template
+                 </button>
+                 <button 
+                  onClick={() => setIsBottomSheetOpen(false)} 
+                  className="bg-lime-400 text-black h-12 rounded-xl font-bold text-sm"
+                >
+                   Done
+                 </button>
               </div>
             </div>
           </div>
@@ -448,7 +491,7 @@ const App: React.FC = () => {
               updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } });
             }
           }}
-          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[1].value, color: '#FFF', textAlign: 'center' }, box: { x: 30, y: 150, width: 300, height: 60, rotation: 0 } })}
+          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0 }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
           onAddShape={(shape) => addElement({ type: 'shape', name: shape, style: { backgroundColor: '#E85D3D', borderRadius: shape === 'circle' ? 100 : 0 }, box: { x: 130, y: 250, width: 100, height: 100, rotation: 0 } })}
           onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
         />

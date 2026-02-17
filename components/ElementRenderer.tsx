@@ -46,6 +46,7 @@ const ElementRenderer: React.FC<Props> = ({ element, isSelected, onSelect }) => 
               fontWeight: element.style.fontWeight,
               textAlign: element.style.textAlign,
               lineHeight: element.style.lineHeight,
+              letterSpacing: `${element.style.letterSpacing ?? 0}px`,
               width: '100%',
               height: '100%',
               display: 'flex',
