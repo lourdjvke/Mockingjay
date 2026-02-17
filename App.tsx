@@ -146,35 +146,15 @@ const App: React.FC = () => {
     let box = { x: (CANVAS_WIDTH - 150) / 2, y: (CANVAS_HEIGHT - 150) / 2, width: 150, height: 150, rotation: 0 };
 
     switch(shape) {
-      case 'circle':
-        style.borderRadius = 1000;
-        break;
-      case 'pill':
-        style.borderRadius = 1000;
-        box.width = 200;
-        box.height = 80;
-        break;
-      case 'triangle':
-        style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)';
-        break;
-      case 'diamond':
-        style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
-        break;
-      case 'pentagon':
-        style.clipPath = 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)';
-        break;
-      case 'hexagon':
-        style.clipPath = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)';
-        break;
-      case 'star':
-        style.clipPath = 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)';
-        break;
-      case 'parallelogram':
-        style.clipPath = 'polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%)';
-        break;
-      case 'rhombus':
-        style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
-        break;
+      case 'circle': style.borderRadius = 1000; break;
+      case 'pill': style.borderRadius = 1000; box.width = 200; box.height = 80; break;
+      case 'triangle': style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)'; break;
+      case 'diamond': style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'; break;
+      case 'pentagon': style.clipPath = 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)'; break;
+      case 'hexagon': style.clipPath = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)'; break;
+      case 'star': style.clipPath = 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)'; break;
+      case 'parallelogram': style.clipPath = 'polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%)'; break;
+      case 'rhombus': style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'; break;
     }
     addElement({ type: 'shape', name: shape, style, box });
     if (isMobile) setIsBottomSheetOpen(false);
@@ -302,26 +282,20 @@ const App: React.FC = () => {
     const originalSelectedId = state.selectedElementId;
     deselectAll(); 
     
-    // Ensure all fonts and images are fully loaded before capturing
-    await Promise.all([
-      (document as any).fonts?.ready,
-      new Promise(resolve => setTimeout(resolve, 500)) // Safety delay for re-rendering deselect
-    ]);
+    // Safety delay for deselect UI and font stability
+    await new Promise(resolve => setTimeout(resolve, 800));
 
     try {
+      // html-to-image with font embedding options
       const dataUrl = await htmlToImage.toPng(canvasRef.current, {
         quality: 1,
-        pixelRatio: 4, // Ultra high resolution for "no mistakes"
+        pixelRatio: 4, 
         width: CANVAS_WIDTH,
         height: CANVAS_HEIGHT,
         cacheBust: true,
-        style: {
-          transform: 'none', 
-          left: '0',
-          top: '0',
-          margin: '0',
-          padding: '0',
-        }
+        style: { transform: 'none', left: '0', top: '0' },
+        fontEmbedCSS: undefined, // Will attempt to capture all computed fonts
+        skipAutoScale: true
       });
       
       const link = document.createElement('a');
@@ -334,11 +308,10 @@ const App: React.FC = () => {
       setTimeout(() => setExportSuccess(false), 3000);
     } catch (error) {
       console.error('Failed to export image:', error);
-      alert('Export failed. Please check your internet connection or try a different browser.');
+      alert('Export failed. Please check font loading or try again.');
     } finally {
       setIsExporting(false);
       setIsExportModalOpen(false);
-      // Restore selection if needed
       if (originalSelectedId) setState(prev => ({ ...prev, selectedElementId: originalSelectedId }));
     }
   };
@@ -352,6 +325,16 @@ const App: React.FC = () => {
         accept="application/json" 
         onChange={handleImportTemplate} 
       />
+
+      {/* Dynamic Island Success Notification */}
+      <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[500] pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportSuccess ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-8 scale-90'}`}>
+        <div className="bg-zinc-900/95 backdrop-blur-xl border border-white/10 px-6 py-2.5 rounded-full flex items-center gap-3 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+           <div className="w-5 h-5 bg-white text-black rounded-full flex items-center justify-center">
+             <Icons.ThumbsUp className="w-3 h-3" />
+           </div>
+           <span className="text-[13px] font-medium tracking-tight text-white">Design Saved</span>
+        </div>
+      </div>
       
       <div className="flex-1 flex flex-col relative canvas-container overflow-hidden">
         {/* Header Controls */}
@@ -360,8 +343,8 @@ const App: React.FC = () => {
            <span className="text-xs font-bold text-white/40">{state.currentPageIndex + 1}/{state.pages.length}</span>
            <button className="p-1 hover:text-white/60 transition-colors" onClick={() => triggerHaptic(2)}><Icons.ArrowRight className="w-5 h-5"/></button>
            <div className="w-[1px] h-4 bg-white/10 mx-2" />
-           <button className="p-1 hover:text-lime-400 transition-colors" title="Import Template" onClick={() => fileInputRef.current?.click()}><Icons.Plus className="w-5 h-5"/></button>
-           <button className="p-1 hover:text-red-400 transition-colors" title="Delete Element" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
+           <button className="p-1 hover:text-lime-400 transition-colors" title="Import" onClick={() => fileInputRef.current?.click()}><Icons.Plus className="w-5 h-5"/></button>
+           <button className="p-1 hover:text-red-400 transition-colors" title="Delete" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
         </div>
 
         {/* Workspace */}
@@ -446,7 +429,6 @@ const App: React.FC = () => {
                           const centerX = rect.left + (el.box.x + el.box.width / 2) * scale;
                           const centerY = rect.top + (el.box.y + el.box.height / 2) * scale;
                           const initialAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
-                          
                           setDragStart({ x: e.clientX, y: e.clientY, type: 'rotate', initialAngle }); 
                           setElementStartPos({...el.box}); 
                           triggerHaptic(10);
@@ -469,7 +451,7 @@ const App: React.FC = () => {
            </div>
         </div>
 
-        {/* Footer Navigation / Bottom Sheet Trigger */}
+        {/* Footer Navigation */}
         {!isMobile ? (
           <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-4 bg-zinc-900/90 backdrop-blur rounded-3xl border border-white/10 shadow-2xl">
             <button className="text-white/40 hover:text-white" onClick={() => triggerHaptic(5)}><Icons.Undo2 className="w-5 h-5"/></button>
@@ -527,7 +509,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Mobile Bottom Sheet Sidebar */}
+        {/* Sidebar/Bottom Sheet Content */}
         {isMobile && isBottomSheetOpen && (
           <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm" onClick={() => setIsBottomSheetOpen(false)}>
             <div 
@@ -553,9 +535,7 @@ const App: React.FC = () => {
                   }}
                   onAddText={(type) => {
                     addElement({ 
-                      type: 'text', 
-                      name: type, 
-                      content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), 
+                      type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), 
                       style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, 
                       box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } 
                     });
@@ -569,90 +549,58 @@ const App: React.FC = () => {
                 />
               </div>
               <div className="p-5 bg-zinc-900 border-t border-white/10 flex justify-end">
-                 <button 
-                  onClick={() => setIsBottomSheetOpen(false)} 
-                  className="w-full bg-lime-400 text-black h-12 rounded-xl font-bold text-sm"
-                >
-                   Done
-                 </button>
+                 <button onClick={() => setIsBottomSheetOpen(false)} className="w-full bg-lime-400 text-black h-12 rounded-xl font-bold text-sm">Done</button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Export Modal */}
-        {isExportModalOpen && (
-          <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-6" onClick={() => !isExporting && setIsExportModalOpen(false)}>
+        {/* Export Choice Modal */}
+        {isExportModalOpen && !isExporting && (
+          <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-6" onClick={() => setIsExportModalOpen(false)}>
             <div className="bg-zinc-900 border border-white/10 rounded-[32px] w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                <div className="p-8 space-y-6">
                   <div className="text-center space-y-2">
                     <h2 className="text-2xl font-black text-white italic tracking-tight uppercase">Export Design</h2>
                     <p className="text-white/40 text-sm">Select format for high-res output</p>
                   </div>
-                  
                   <div className="grid gap-3">
                     <button 
                       onClick={handleExportPng}
-                      disabled={isExporting}
-                      className="group relative flex items-center gap-4 bg-lime-400 p-5 rounded-2xl text-black font-bold transition-all hover:bg-lime-300 disabled:opacity-50 active:scale-95"
+                      className="group relative flex items-center gap-4 bg-lime-400 p-5 rounded-2xl text-black font-bold transition-all hover:bg-lime-300 active:scale-95"
                     >
-                      <div className="w-12 h-12 bg-black/10 rounded-xl flex items-center justify-center">
-                        <Icons.ImageIcon className="w-6 h-6" />
-                      </div>
-                      <div className="text-left">
-                        <div className="text-lg">Download PNG</div>
-                        <div className="text-[10px] font-bold opacity-60 italic uppercase tracking-tighter">Ultra High Resolution (4K)</div>
-                      </div>
+                      <div className="w-12 h-12 bg-black/10 rounded-xl flex items-center justify-center"><Icons.ImageIcon className="w-6 h-6" /></div>
+                      <div className="text-left"><div className="text-lg">Download PNG</div><div className="text-[10px] font-bold opacity-60 italic uppercase tracking-tighter tracking-widest">Ultra High Resolution</div></div>
                     </button>
-
                     <button 
                       onClick={() => { downloadTemplate(state); setIsExportModalOpen(false); triggerHaptic(15); }}
-                      disabled={isExporting}
-                      className="group relative flex items-center gap-4 bg-zinc-800 p-5 rounded-2xl text-white font-bold border border-white/5 transition-all hover:bg-zinc-700 disabled:opacity-50 active:scale-95"
+                      className="group relative flex items-center gap-4 bg-zinc-800 p-5 rounded-2xl text-white font-bold border border-white/5 transition-all hover:bg-zinc-700 active:scale-95"
                     >
-                      <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center">
-                        <Icons.Layout className="w-6 h-6" />
-                      </div>
-                      <div className="text-left">
-                        <div className="text-lg">Export JSON</div>
-                        <div className="text-[10px] font-bold opacity-60 italic uppercase tracking-tighter">Mockingjay Raw Template</div>
-                      </div>
+                      <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center"><Icons.Layout className="w-6 h-6" /></div>
+                      <div className="text-left"><div className="text-lg">Export JSON</div><div className="text-[10px] font-bold opacity-60 italic uppercase tracking-tighter tracking-widest">Mockingjay Raw File</div></div>
                     </button>
                   </div>
                </div>
-               
-               <button 
-                onClick={() => setIsExportModalOpen(false)}
-                disabled={isExporting}
-                className="w-full py-5 text-white/30 text-xs font-bold uppercase tracking-widest border-t border-white/5 hover:text-white transition-colors"
-               >
-                 Cancel
-               </button>
+               <button onClick={() => setIsExportModalOpen(false)} className="w-full py-5 text-white/30 text-xs font-bold uppercase tracking-widest border-t border-white/5 hover:text-white transition-colors">Cancel</button>
             </div>
           </div>
         )}
 
-        {/* Global Loader Overlay */}
+        {/* Redesigned Beige Bottom Sheet Loader */}
         {isExporting && (
-          <div className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center gap-8 animate-in fade-in duration-300">
-            <div className="relative">
-              <div className="w-32 h-32 border-t-2 border-l-2 border-lime-400 rounded-full animate-spin"></div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Icons.Sparkles className="w-12 h-12 text-lime-400 animate-pulse" />
-              </div>
+          <div className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-sm animate-in fade-in duration-500">
+            <div className="absolute bottom-0 left-0 right-0 h-[35vh] bg-[#F5E6D3] rounded-t-[48px] shadow-[0_-20px_60px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center gap-6 animate-in slide-in-from-bottom-full duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] p-8">
+               <div className="relative">
+                 <div className="w-20 h-20 border-[3px] border-[#4A3F35]/10 border-t-[#4A3F35] rounded-full animate-spin"></div>
+                 <div className="absolute inset-0 flex items-center justify-center text-[#4A3F35]">
+                   <Icons.Download className="w-8 h-8 animate-bounce" />
+                 </div>
+               </div>
+               <div className="text-center space-y-1">
+                 <h3 className="text-2xl font-light tracking-tight text-[#4A3F35] italic">Downloading...</h3>
+                 <p className="text-[#4A3F35]/40 text-[11px] font-bold uppercase tracking-[0.2em]">Preparing your custom assets</p>
+               </div>
             </div>
-            <div className="text-center space-y-2">
-              <h3 className="text-3xl font-black italic tracking-tighter text-white uppercase animate-pulse">Downloading...</h3>
-              <p className="text-white/40 text-xs font-bold uppercase tracking-widest max-w-[200px] leading-relaxed">Encoding shapes and custom fonts for perfection</p>
-            </div>
-          </div>
-        )}
-
-        {/* Export Success Toast */}
-        {exportSuccess && (
-          <div className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[400] bg-lime-400 text-black px-6 py-3 rounded-full font-bold shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-10 fade-in duration-500">
-            <Icons.ThumbsUp className="w-5 h-5" />
-            <span>Success! Design downloaded.</span>
           </div>
         )}
       </div>

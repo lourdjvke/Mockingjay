@@ -45,13 +45,20 @@
       scrollbar-width: none;
     }
     
-    /* Animations */
     @keyframes spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
     .animate-spin-slow {
       animation: spin 3s linear infinite;
+    }
+
+    @keyframes bounce-subtle {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+    .animate-bounce-subtle {
+      animation: bounce-subtle 2s infinite ease-in-out;
     }
   </style>
   <script type="importmap">
