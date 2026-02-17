@@ -8,7 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Montserrat:wght@400;700;900&family=Bangers&family=Lobster&family=Permanent+Marker&family=Sacramento&family=Press+Start+2P&family=Monoton&family=Alfa+Slab+One&family=Cinzel+Decorative:wght@400;700;900&family=Faster+One&family=Righteous&family=Fredoka+One&family=Orbitron:wght@400;700;900&family=Special+Elite&family=Cookie&family=Satisfy&family=Kaushan+Script&family=Pinyon+Script&family=Rochester&family=Abril+Fatface&family=Comfortaa:wght@300;700&family=UnifrakturMaguntia&family=Creepster&family=Nosifer&family=Bungee+Shade&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Montserrat:wght@400;700;900&family=Bangers&family=Lobster&family=Permanent+Marker&family=Sacramento&family=Press+Start+2P&family=Monoton&family=Alfa+Slab+One&family=Cinzel+Decorative:wght@400;700;900&family=Faster+One&family=Righteous&family=Fredoka+One&family=Orbitron:wght@400;700;900&family=Special+Elite&family=Cookie&family=Satisfy&family=Kaushan+Script&family=Pinyon+Script&family=Rochester&family=Abril+Fatface&family=Comfortaa:wght@300;700&family=UnifrakturMaguntia&family=Creepster&family=Nosifer&family=Bungee+Shade&display=swap" rel="stylesheet" crossorigin="anonymous">
   <style>
     body {
       font-family: 'Inter', sans-serif;
@@ -41,10 +41,14 @@
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .animate-spin-custom { animation: spin 2s linear infinite; }
 
-    /* Force canvas elements to be visible during capture */
-    #design-canvas * {
-      transform-style: preserve-3d;
+    /* Fix for modern-screenshot canvas rendering */
+    #design-canvas {
+      image-rendering: -webkit-optimize-contrast;
       backface-visibility: hidden;
+    }
+    
+    .dynamic-island {
+      transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     }
   </style>
   <script type="importmap">
@@ -57,7 +61,7 @@
       "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
       "react/jsx-runtime": "https://esm.sh/react@19.0.0/jsx-runtime",
       "lucide-react": "https://esm.sh/lucide-react@0.460.0",
-      "html-to-image": "https://esm.sh/html-to-image@1.11.11"
+      "modern-screenshot": "https://esm.sh/modern-screenshot@4.4.40"
     }
   }
   </script>
