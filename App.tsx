@@ -269,20 +269,18 @@ const App: React.FC = () => {
     setIsExportModalOpen(false);
 
     try {
-      // modern-screenshot is highly reliable for fonts
-      // We ensure fonts are fully available before triggering the screenshot
-      if ((document as any).fonts) await (document as any).fonts.ready;
-      await new Promise(resolve => setTimeout(resolve, 600)); 
+      // Wait for fonts to be ready
+      if (document.fonts) await document.fonts.ready;
+      
+      // Mandatory wait for paint completion
+      await new Promise(resolve => setTimeout(resolve, 800)); 
 
       const dataUrl = await domToPng(canvasRef.current, {
-        scale: 3, // High fidelity
-        quality: 1,
+        scale: 4, // 4x for high-res output
         backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : '#FFFFFF',
-        style: {
-          transform: 'none',
-          left: '0',
-          top: '0'
-        }
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
+        style: { transform: 'none' }
       });
       
       const link = document.createElement('a');
@@ -294,7 +292,7 @@ const App: React.FC = () => {
       setExportStatus('success');
       setTimeout(() => setExportStatus('idle'), 3500);
     } catch (error) {
-      console.error('High-fidelity export failed:', error);
+      console.error('Export error:', error);
       setExportStatus('error');
       setTimeout(() => setExportStatus('idle'), 3000);
     } finally {
@@ -306,13 +304,13 @@ const App: React.FC = () => {
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
       <input type="file" ref={fileInputRef} className="hidden" accept="application/json" onChange={handleImportTemplate} />
 
-      {/* Dynamic Island Notification (Neutral Beige Theme) */}
-      <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none dynamic-island ${exportStatus === 'success' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-12 scale-90'}`}>
-        <div className="bg-zinc-900/90 backdrop-blur-3xl border border-white/10 px-6 py-2.5 rounded-full flex items-center gap-4 shadow-[0_12px_48px_rgba(0,0,0,0.6)]">
-           <div className="w-5 h-5 bg-[#F5E6D3] text-[#4A3F35] rounded-full flex items-center justify-center shadow-inner">
-             <Icons.ThumbsUp className="w-2.5 h-2.5" />
+      {/* Dynamic Island Notification (Neutral/Beige Theme) */}
+      <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === 'success' ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-12 scale-90'}`}>
+        <div className="bg-zinc-900/90 backdrop-blur-3xl border border-white/10 px-6 py-3 rounded-full flex items-center gap-4 shadow-[0_12px_48px_rgba(0,0,0,0.6)]">
+           <div className="w-6 h-6 bg-[#F5E6D3] text-[#4A3F35] rounded-full flex items-center justify-center shadow-inner">
+             <Icons.Sparkles className="w-3.5 h-3.5" />
            </div>
-           <span className="text-[12px] font-medium tracking-tight text-[#F5E6D3] uppercase tracking-widest italic">Mockingjay Exported</span>
+           <span className="text-[13px] font-bold tracking-tight text-[#F5E6D3] uppercase italic">Masterpiece Exported</span>
         </div>
       </div>
       
@@ -420,7 +418,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Sidebar Content (Mobile) */}
+        {/* Sidebar/Bottom Sheet Content */}
         {isMobile && isBottomSheetOpen && (
           <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm" onClick={() => setIsBottomSheetOpen(false)}>
             <div className="absolute bottom-0 left-0 right-0 h-[85vh] bg-[#111] rounded-t-[32px] overflow-hidden bottom-sheet-transition flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -440,23 +438,23 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Export Modal Choice */}
+        {/* Export Selection Modal */}
         {isExportModalOpen && exportStatus === 'idle' && (
           <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-6" onClick={() => setIsExportModalOpen(false)}>
             <div className="bg-zinc-900 border border-white/10 rounded-[32px] w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                <div className="p-8 space-y-6">
                   <div className="text-center space-y-2">
                     <h2 className="text-2xl font-black text-white italic tracking-tight uppercase">Export Design</h2>
-                    <p className="text-white/40 text-sm">Choose high-res PNG or JSON</p>
+                    <p className="text-white/40 text-sm">Select format for high-res output</p>
                   </div>
                   <div className="grid gap-3">
                     <button onClick={handleExportPng} className="group flex items-center gap-4 bg-lime-400 p-5 rounded-2xl text-black font-bold transition-all hover:bg-lime-300 active:scale-95">
                       <div className="w-12 h-12 bg-black/10 rounded-xl flex items-center justify-center"><Icons.ImageIcon className="w-6 h-6" /></div>
-                      <div className="text-left"><div className="text-lg">Download PNG</div><div className="text-[10px] font-bold opacity-60 italic uppercase tracking-widest">High Fidelity Output</div></div>
+                      <div className="text-left"><div className="text-lg">Download PNG</div><div className="text-[10px] font-bold opacity-60 italic uppercase tracking-widest">Ultra High Fidelity</div></div>
                     </button>
                     <button onClick={() => { downloadTemplate(state); setIsExportModalOpen(false); triggerHaptic(15); }} className="group flex items-center gap-4 bg-zinc-800 p-5 rounded-2xl text-white font-bold border border-white/5 transition-all hover:bg-zinc-700 active:scale-95">
                       <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center"><Icons.Layout className="w-6 h-6" /></div>
-                      <div className="text-left"><div className="text-lg">Export JSON</div><div className="text-[10px] font-bold opacity-60 italic uppercase tracking-widest">Editable Template</div></div>
+                      <div className="text-left"><div className="text-lg">Export JSON</div><div className="text-[10px] font-bold opacity-60 italic uppercase tracking-widest">Mockingjay Raw File</div></div>
                     </button>
                   </div>
                </div>
@@ -468,27 +466,27 @@ const App: React.FC = () => {
         {/* Redesigned Beige Bottom Sheet Loader (35vh) */}
         {(exportStatus === 'processing' || exportStatus === 'success') && (
           <div className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-sm animate-in fade-in duration-500">
-            <div className={`absolute bottom-0 left-0 right-0 h-[35vh] rounded-t-[48px] shadow-[0_-20px_60px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center gap-8 p-8 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === 'processing' ? 'bg-[#F5F2ED] translate-y-0' : 'bg-[#EAE2D6] translate-y-0'}`}>
+            <div className={`absolute bottom-0 left-0 right-0 h-[35vh] rounded-t-[48px] shadow-[0_-20px_60px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center gap-6 p-8 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === 'processing' ? 'bg-[#F5E6D3] translate-y-0' : 'bg-[#EAE2D6] translate-y-0'}`}>
                <div className="relative">
                  {exportStatus === 'processing' ? (
                    <>
-                     <div className="w-20 h-20 border-[2px] border-[#4A3F35]/10 border-t-[#4A3F35] rounded-full animate-spin"></div>
+                     <div className="w-20 h-20 border-[3px] border-[#4A3F35]/10 border-t-[#4A3F35] rounded-full animate-spin"></div>
                      <div className="absolute inset-0 flex items-center justify-center text-[#4A3F35]">
                        <Icons.Download className="w-8 h-8 animate-bounce" />
                      </div>
                    </>
                  ) : (
-                   <div className="w-20 h-20 bg-[#4A3F35] text-[#F5F2ED] rounded-full flex items-center justify-center shadow-lg animate-in zoom-in duration-500">
+                   <div className="w-20 h-20 bg-[#4A3F35] text-[#F5E6D3] rounded-full flex items-center justify-center shadow-lg animate-in zoom-in duration-500">
                      <Icons.ThumbsUp className="w-10 h-10" />
                    </div>
                  )}
                </div>
-               <div className="text-center space-y-1.5">
+               <div className="text-center space-y-1">
                  <h3 className="text-2xl font-light tracking-tight text-[#4A3F35] italic">
                    {exportStatus === 'processing' ? 'Downloading...' : 'Complete!'}
                  </h3>
-                 <p className="text-[#4A3F35]/40 text-[10px] font-bold uppercase tracking-[0.25em]">
-                   {exportStatus === 'processing' ? 'High-fidelity font capture' : 'Successfully saved to device'}
+                 <p className="text-[#4A3F35]/40 text-[11px] font-bold uppercase tracking-[0.2em]">
+                   {exportStatus === 'processing' ? 'Encoding custom design assets' : 'Your file has been saved'}
                  </p>
                </div>
             </div>
