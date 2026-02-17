@@ -1,0 +1,7 @@
+{
+  "name": "Mockingjay Design Editor",
+  "description": "A high-fidelity visual design editor with Canva-like interactions, multi-page support, and precise element manipulation.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
