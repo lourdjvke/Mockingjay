@@ -6,6 +6,7 @@ export const CANVAS_HEIGHT = 640;
 
 export const FONTS = [
   { name: 'Debrosee', value: "'Debrosee', sans-serif" },
+  { name: 'Pirate One', value: "'Pirate One', cursive" },
   { name: 'Inter', value: "'Inter', sans-serif" },
   { name: 'Mozza', value: "'Playfair Display', serif" },
   { name: 'Montserrat', value: "'Montserrat', sans-serif" },
