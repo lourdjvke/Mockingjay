@@ -1,8 +1,8 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { EditorState, DesignElement, BoundingBox, Page } from './types.ts';
-import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS } from './constants.ts';
-import { generateId, downloadTemplate } from './utils.ts';
+import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
+import { generateId, downloadTemplate, FontStore } from './utils.ts';
 import Sidebar from './components/Sidebar.tsx';
 import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
@@ -25,10 +25,72 @@ const App: React.FC = () => {
   const [snapLines, setSnapLines] = useState<SnapLine[]>([]);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportStatus, setExportStatus] = useState<ExportStatus>('idle');
+  const [userFonts, setUserFonts] = useState<{ name: string; value: string }[]>([]);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const allFonts = [...userFonts, ...BASE_FONTS];
+
+  // Helper to convert ArrayBuffer to Base64
+  const bufferToBase64 = (buffer: ArrayBuffer): string => {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+  };
+
+  // Helper to inject @font-face as literal base64 in CSS
+  const injectFontFace = (name: string, base64: string) => {
+    const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
+    document.getElementById(styleId)?.remove();
+    
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.innerHTML = `
+      @font-face {
+        font-family: '${name}';
+        src: url(data:font/ttf;base64,${base64});
+        font-weight: normal;
+        font-style: normal;
+      }
+    `;
+    document.head.appendChild(style);
+  };
+
+  // Load custom fonts from IndexedDB on startup
+  useEffect(() => {
+    const loadCustomFonts = async () => {
+      try {
+        const stored = await FontStore.getFonts();
+        const loadedFonts: { name: string; value: string }[] = [];
+        
+        for (const font of stored) {
+          try {
+            const base64 = bufferToBase64(font.data);
+            injectFontFace(font.name, base64);
+            
+            // Still register with document.fonts for standard usage
+            const fontFace = new FontFace(font.name, font.data);
+            const loadedFace = await fontFace.load();
+            document.fonts.add(loadedFace);
+            
+            loadedFonts.push({ name: font.name, value: `'${font.name}', sans-serif` });
+          } catch (e) {
+            console.error(`Failed to initialize stored font ${font.name}:`, e);
+          }
+        }
+        setUserFonts(loadedFonts);
+      } catch (err) {
+        console.error("FontStore loading failed:", err);
+      }
+    };
+    loadCustomFonts();
+  }, []);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -109,6 +171,7 @@ const App: React.FC = () => {
   const deselectAll = () => setState(prev => ({ ...prev, selectedElementId: null }));
 
   const addElement = (element: Partial<DesignElement>) => {
+    const defaultFont = allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif";
     const newElement: DesignElement = {
       id: generateId(),
       name: element.name || (element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : 'Element'),
@@ -125,7 +188,7 @@ const App: React.FC = () => {
         strokeColor: '#000000', 
         letterSpacing: 0, 
         lineHeight: 1.2, 
-        fontFamily: FONTS[0].value,
+        fontFamily: defaultFont,
         fontSize: 24,
         fontWeight: '400',
         textAlign: 'center'
@@ -140,6 +203,38 @@ const App: React.FC = () => {
       return { ...prev, pages: newPages, selectedElementId: newElement.id };
     });
     triggerHaptic(15);
+  };
+
+  const handleAddCustomFont = async (name: string, data: ArrayBuffer) => {
+    if (!data || data.byteLength === 0) return;
+    try {
+      // 1. Base64 conversion
+      const base64 = bufferToBase64(data);
+      
+      // 2. Inject literal CSS
+      injectFontFace(name, base64);
+      
+      // 3. Register FontFace object
+      const fontFace = new FontFace(name, data);
+      const loadedFace = await fontFace.load();
+      document.fonts.add(loadedFace);
+      
+      // 4. Persistence
+      await FontStore.saveFont(name, data);
+      
+      setUserFonts(prev => [{ name, value: `'${name}', sans-serif` }, ...prev]);
+      triggerHaptic(20);
+    } catch (err) {
+      console.error("Font upload failed:", err);
+    }
+  };
+
+  const handleDeleteCustomFont = async (name: string) => {
+    await FontStore.deleteFont(name);
+    const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
+    document.getElementById(styleId)?.remove();
+    setUserFonts(prev => prev.filter(f => f.name !== name));
+    triggerHaptic(10);
   };
 
   const onAddShape = (shape: string) => {
@@ -269,22 +364,28 @@ const App: React.FC = () => {
     setIsExportModalOpen(false);
 
     try {
-      // Wait for fonts to be ready
-      if (document.fonts) await document.fonts.ready;
+      // 1. Literal Wait for Font Rendering
+      if (document.fonts) {
+        await document.fonts.ready;
+      }
       
-      // Mandatory wait for paint completion
-      await new Promise(resolve => setTimeout(resolve, 800)); 
+      // 2. Extra settlement time for high-fidelity literal snapshot
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
 
+      // 3. Take literal snapshot of the container
       const dataUrl = await domToPng(canvasRef.current, {
-        scale: 4, // 4x for high-res output
+        scale: 4, 
         backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : '#FFFFFF',
         width: CANVAS_WIDTH,
         height: CANVAS_HEIGHT,
-        style: { transform: 'none' }
+        style: { 
+          transform: 'none',
+          boxShadow: 'none'
+        }
       });
       
       const link = document.createElement('a');
-      link.download = `mockingjay-${Date.now()}.png`;
+      link.download = `mockingjay-snapshot-${Date.now()}.png`;
       link.href = dataUrl;
       link.click();
       
@@ -304,7 +405,6 @@ const App: React.FC = () => {
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
       <input type="file" ref={fileInputRef} className="hidden" accept="application/json" onChange={handleImportTemplate} />
 
-      {/* Dynamic Island Notification (Neutral/Beige Theme) */}
       <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === 'success' ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-12 scale-90'}`}>
         <div className="bg-zinc-900/90 backdrop-blur-3xl border border-white/10 px-6 py-3 rounded-full flex items-center gap-4 shadow-[0_12px_48px_rgba(0,0,0,0.6)]">
            <div className="w-6 h-6 bg-[#F5E6D3] text-[#4A3F35] rounded-full flex items-center justify-center shadow-inner">
@@ -315,7 +415,6 @@ const App: React.FC = () => {
       </div>
       
       <div className="flex-1 flex flex-col relative canvas-container overflow-hidden">
-        {/* Header UI */}
         <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-6 bg-zinc-900/80 backdrop-blur-md px-6 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
            <button className="p-1 hover:text-white/60 transition-colors" onClick={() => triggerHaptic(2)}><Icons.ArrowLeft className="w-5 h-5"/></button>
            <span className="text-xs font-bold text-white/40">{state.currentPageIndex + 1}/{state.pages.length}</span>
@@ -325,7 +424,6 @@ const App: React.FC = () => {
            <button className="p-1 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
         </div>
 
-        {/* Workspace */}
         <div ref={workspaceRef} className="flex-1 flex items-center justify-center relative overflow-hidden">
            {snapLines.map((line, i) => (
              <div key={i} className="absolute bg-lime-400 z-[100] pointer-events-none" style={{
@@ -379,7 +477,6 @@ const App: React.FC = () => {
            </div>
         </div>
 
-        {/* Footer Navigation */}
         {!isMobile ? (
           <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-4 bg-zinc-900/90 backdrop-blur rounded-3xl border border-white/10 shadow-2xl">
             <button className="text-white/40 hover:text-white" onClick={() => triggerHaptic(5)}><Icons.Undo2 className="w-5 h-5"/></button>
@@ -418,15 +515,25 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Sidebar/Bottom Sheet Content */}
         {isMobile && isBottomSheetOpen && (
           <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm" onClick={() => setIsBottomSheetOpen(false)}>
             <div className="absolute bottom-0 left-0 right-0 h-[85vh] bg-[#111] rounded-t-[32px] overflow-hidden bottom-sheet-transition flex flex-col" onClick={(e) => e.stopPropagation()}>
               <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mt-4 mb-2 shrink-0" />
               <div className="flex-1 overflow-y-auto">
-                <Sidebar selectedElement={selectedElement} themeColors={state.themeColors} pages={state.pages} currentPageIndex={state.currentPageIndex} updateElement={updateElement} updatePage={updatePage} onReorder={onReorder} isMobile={true}
+                <Sidebar 
+                  selectedElement={selectedElement} 
+                  themeColors={state.themeColors} 
+                  pages={state.pages} 
+                  currentPageIndex={state.currentPageIndex} 
+                  updateElement={updateElement} 
+                  updatePage={updatePage} 
+                  onReorder={onReorder} 
+                  isMobile={true}
+                  availableFonts={allFonts}
+                  onAddCustomFont={handleAddCustomFont}
+                  onDeleteCustomFont={handleDeleteCustomFont}
                   onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
-                  onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
+                  onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                   onAddShape={onAddShape}
                   onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                 />
@@ -438,7 +545,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Export Selection Modal */}
         {isExportModalOpen && exportStatus === 'idle' && (
           <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-6" onClick={() => setIsExportModalOpen(false)}>
             <div className="bg-zinc-900 border border-white/10 rounded-[32px] w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
@@ -463,7 +569,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Redesigned Beige Bottom Sheet Loader (35vh) */}
         {(exportStatus === 'processing' || exportStatus === 'success') && (
           <div className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-sm animate-in fade-in duration-500">
             <div className={`absolute bottom-0 left-0 right-0 h-[35vh] rounded-t-[48px] shadow-[0_-20px_60px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center gap-6 p-8 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === 'processing' ? 'bg-[#F5E6D3] translate-y-0' : 'bg-[#EAE2D6] translate-y-0'}`}>
@@ -486,7 +591,7 @@ const App: React.FC = () => {
                    {exportStatus === 'processing' ? 'Downloading...' : 'Complete!'}
                  </h3>
                  <p className="text-[#4A3F35]/40 text-[11px] font-bold uppercase tracking-[0.2em]">
-                   {exportStatus === 'processing' ? 'Encoding custom design assets' : 'Your file has been saved'}
+                   {exportStatus === 'processing' ? 'Encoding literal snapshot assets' : 'Your file has been saved'}
                  </p>
                </div>
             </div>
@@ -495,9 +600,20 @@ const App: React.FC = () => {
       </div>
 
       {!isMobile && (
-        <Sidebar selectedElement={selectedElement} themeColors={state.themeColors} pages={state.pages} currentPageIndex={state.currentPageIndex} updateElement={updateElement} updatePage={updatePage} onReorder={onReorder} isMobile={false}
+        <Sidebar 
+          selectedElement={selectedElement} 
+          themeColors={state.themeColors} 
+          pages={state.pages} 
+          currentPageIndex={state.currentPageIndex} 
+          updateElement={updateElement} 
+          updatePage={updatePage} 
+          onReorder={onReorder} 
+          isMobile={false}
+          availableFonts={allFonts}
+          onAddCustomFont={handleAddCustomFont}
+          onDeleteCustomFont={handleDeleteCustomFont}
           onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
-          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: FONTS[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
+          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
           onAddShape={onAddShape}
           onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
         />
