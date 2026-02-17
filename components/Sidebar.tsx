@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { Icons } from './IconLibrary';
-import { DesignElement, Page } from '../types';
-import { FONTS } from '../constants';
+import { Icons } from './IconLibrary.tsx';
+import { DesignElement, Page } from '../types.ts';
+import { FONTS } from '../constants.ts';
 
 interface Props {
   selectedElement: DesignElement | null;
@@ -79,7 +79,6 @@ const Sidebar: React.FC<Props> = ({
       )}
 
       <div className="flex-1 overflow-y-auto">
-        {/* Background Control */}
         <div className="px-5 py-4 border-b border-white/10">
            <span className="text-[10px] text-white/40 uppercase tracking-widest block mb-2">Canvas Background</span>
            <div className="flex gap-2 flex-wrap">
@@ -125,7 +124,7 @@ const Sidebar: React.FC<Props> = ({
                   )}
                   
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 flex gap-1 bg-zinc-900 p-1 rounded-full border border-white/5 overflow-x-auto">
+                    <div className="flex-1 flex gap-1 bg-zinc-900 p-1 rounded-full border border-white/5 overflow-x-auto no-scrollbar">
                       {themeColors.map(color => (
                         <button 
                           key={color}

@@ -1,11 +1,11 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { EditorState, DesignElement, BoundingBox, Page } from './types';
-import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS } from './constants';
-import { generateId } from './utils';
-import Sidebar from './components/Sidebar';
-import ElementRenderer from './components/ElementRenderer';
-import { Icons } from './components/IconLibrary';
+import { EditorState, DesignElement, BoundingBox, Page } from './types.ts';
+import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS } from './constants.ts';
+import { generateId } from './utils.ts';
+import Sidebar from './components/Sidebar.tsx';
+import ElementRenderer from './components/ElementRenderer.tsx';
+import { Icons } from './components/IconLibrary.tsx';
 
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>(INITIAL_STATE);
@@ -19,14 +19,12 @@ const App: React.FC = () => {
   const currentPage = state.pages[state.currentPageIndex];
   const selectedElement = currentPage.elements.find(e => e.id === state.selectedElementId) || null;
 
-  // Track window size for responsiveness
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x' && state.selectedElementId) {
@@ -98,8 +96,8 @@ const App: React.FC = () => {
   const addElement = (element: Partial<DesignElement>) => {
     const newElement: DesignElement = {
       id: generateId(),
-      name: element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : 'Element',
-      type: 'shape',
+      name: element.name || (element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : 'Element'),
+      type: (element.type as any) || 'shape',
       box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 200, rotation: 0 },
       content: '',
       style: { backgroundColor: '#FFFFFF', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000' },
@@ -155,13 +153,12 @@ const App: React.FC = () => {
     };
   }, [handleMouseMove, handleMouseUp]);
 
-  // Dynamic scaling for canvas on mobile
   const [scale, setScale] = useState(1);
   useEffect(() => {
     const updateScale = () => {
       if (!workspaceRef.current) return;
       const ws = workspaceRef.current;
-      const padding = isMobile ? 40 : 100;
+      const padding = isMobile ? 40 : 120;
       const availableWidth = ws.clientWidth - padding;
       const availableHeight = ws.clientHeight - padding;
       const sx = availableWidth / CANVAS_WIDTH;
@@ -192,7 +189,8 @@ const App: React.FC = () => {
       onAddText={(type) => {
         addElement({
           type: 'text',
-          content: type === 'Header' ? 'LOREM IPSUM' : (type === 'Subheader' ? 'Subheader text here' : 'This is a paragraph for your design.'),
+          name: type,
+          content: type === 'Header' ? 'LOREM IPSUM' : (type === 'Subheader' ? 'Subheader text' : 'Add your paragraph text here.'),
           style: { 
             fontSize: type === 'Header' ? 42 : (type === 'Subheader' ? 24 : 14), 
             fontFamily: type === 'Header' ? FONTS[1].value : FONTS[2].value,
@@ -208,6 +206,7 @@ const App: React.FC = () => {
       onAddShape={(shape) => {
         addElement({
           type: 'shape',
+          name: shape,
           style: { backgroundColor: '#E85D3D', borderRadius: shape === 'circle' ? 100 : (shape === 'pill' ? 50 : 0), opacity: 1 },
           box: { x: 130, y: 250, width: 100, height: shape === 'pill' ? 40 : 100, rotation: 0 }
         });
@@ -216,6 +215,7 @@ const App: React.FC = () => {
       onAddImage={(src) => {
         addElement({
           type: 'image',
+          name: 'Image',
           content: src,
           style: { borderRadius: 24, opacity: 1, strokeWidth: 0 },
           box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 }
@@ -228,8 +228,7 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
       <div className="flex-1 flex flex-col relative canvas-container overflow-hidden">
-        {/* Navigation Toolbar (Hidden on Mobile if sheet open) */}
-        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-6 bg-zinc-900/80 backdrop-blur-md px-6 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-6 bg-zinc-900/80 backdrop-blur-md px-6 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
            <button className="p-1 hover:text-white/60 transition-colors"><Icons.ArrowLeft className="w-5 h-5"/></button>
            <span className="text-xs font-bold text-white/40">{state.currentPageIndex + 1}/{state.pages.length}</span>
            <button className="p-1 hover:text-white/60 transition-colors"><Icons.ArrowRight className="w-5 h-5"/></button>
@@ -238,7 +237,6 @@ const App: React.FC = () => {
            <button className="p-1 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
         </div>
 
-        {/* Workspace */}
         <div ref={workspaceRef} className="flex-1 flex items-center justify-center relative overflow-hidden">
            <div 
              ref={canvasRef}
@@ -250,7 +248,8 @@ const App: React.FC = () => {
                transform: `scale(${scale})`,
                backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : undefined,
                backgroundImage: !currentPage.background.startsWith('#') ? `url(${currentPage.background})` : undefined,
-               backgroundSize: 'cover'
+               backgroundSize: 'cover',
+               backgroundPosition: 'center'
              }}
            >
               {currentPage.elements.map(el => (
@@ -269,7 +268,6 @@ const App: React.FC = () => {
                         border: '2px solid #bef264'
                       }}
                     >
-                      {/* Interaction Handles */}
                       {['nw', 'ne', 'sw', 'se'].map(h => (
                         <div 
                           key={h}
@@ -277,16 +275,14 @@ const App: React.FC = () => {
                           className={`absolute w-3 h-3 bg-white border-2 border-lime-400 pointer-events-auto rounded-full ${h === 'nw' ? '-top-1.5 -left-1.5 cursor-nw-resize' : h === 'ne' ? '-top-1.5 -right-1.5 cursor-ne-resize' : h === 'sw' ? '-bottom-1.5 -left-1.5 cursor-sw-resize' : '-bottom-1.5 -right-1.5 cursor-se-resize'}`}
                         />
                       ))}
-                      {/* Rotation Handle */}
                       <div 
                         onMouseDown={(e) => { e.stopPropagation(); setDragStart({ x: e.clientX, y: e.clientY, type: 'rotate' }); setElementStartPos({...el.box}); }}
-                        className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-8 h-8 bg-zinc-900 border border-white/20 rounded-full flex items-center justify-center pointer-events-auto cursor-pointer hover:bg-zinc-800 transition-colors"
+                        className="absolute -bottom-12 left-1/2 -translate-x-1/2 w-8 h-8 bg-zinc-900 border border-white/20 rounded-full flex items-center justify-center pointer-events-auto cursor-pointer hover:bg-zinc-800 transition-colors shadow-xl"
                       >
                          <Icons.RotateCw className="w-4 h-4 text-lime-400" />
                       </div>
-                      {/* Drag Handle */}
-                      <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-lime-400 px-3 py-1 rounded-full flex items-center gap-1 text-[10px] text-black font-bold uppercase tracking-widest shadow-lg animate-bounce">
-                         <Icons.Move className="w-3 h-3" /> Move
+                      <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-lime-400 px-3 py-1 rounded-full flex items-center gap-1 text-[10px] text-black font-bold uppercase tracking-widest shadow-lg animate-bounce pointer-events-auto cursor-grab">
+                         <Icons.Move className="w-3 h-3" /> Drag
                       </div>
                     </div>
                   )}
@@ -295,7 +291,6 @@ const App: React.FC = () => {
            </div>
         </div>
 
-        {/* Bottom Bar / Context Controls */}
         {!isMobile ? (
           <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-4 bg-zinc-900/90 backdrop-blur rounded-3xl border border-white/10 shadow-2xl">
             <button className="text-white/40 hover:text-white"><Icons.Undo2 className="w-5 h-5"/></button>
@@ -306,7 +301,6 @@ const App: React.FC = () => {
             </button>
           </div>
         ) : (
-          /* Mobile Bottom Highlights */
           <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? 'translate-y-full' : 'translate-y-0'}`}>
             <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl p-4">
               <div className="flex items-center justify-between gap-4">
@@ -332,15 +326,15 @@ const App: React.FC = () => {
                         <Icons.Plus className="w-5 h-5" />
                         <span className="text-[10px] font-bold uppercase">Add</span>
                       </button>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 items-center">
                          {state.themeColors.slice(0, 3).map(c => (
-                           <button key={c} onClick={() => updatePage({ background: c })} className="w-8 h-8 rounded-full border border-white/20" style={{ backgroundColor: c }} />
+                           <button key={c} onClick={() => updatePage({ background: c })} className={`w-8 h-8 rounded-full border ${currentPage.background === c ? 'border-white' : 'border-white/20'}`} style={{ backgroundColor: c }} />
                          ))}
                       </div>
                     </>
                   )}
                 </div>
-                <button onClick={() => setIsBottomSheetOpen(true)} className="bg-white/5 p-3 rounded-full">
+                <button onClick={() => setIsBottomSheetOpen(true)} className="bg-white/5 p-3 rounded-full shrink-0">
                   <Icons.ChevronUp className="w-6 h-6 text-white" />
                 </button>
               </div>
@@ -348,7 +342,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Mobile Bottom Sheet Overlay */}
         {isMobile && isBottomSheetOpen && (
           <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm" onClick={() => setIsBottomSheetOpen(false)}>
             <div 
@@ -367,7 +360,6 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Desktop Sidebar Panel */}
       {!isMobile && renderSidebarContent()}
     </div>
   );
