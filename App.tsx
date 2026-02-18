@@ -602,7 +602,12 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
     const canvasNode = canvasRef.current;
     const originalBoxShadow = canvasNode.style.boxShadow;
+    const originalTransform = canvasNode.style.transform;
+    const originalTransition = canvasNode.style.transition;
+    
     canvasNode.style.boxShadow = 'none';
+    canvasNode.style.transform = 'none';
+    canvasNode.style.transition = 'none';
 
     let fontStyleEl: HTMLStyleElement | null = null;
     try {
@@ -633,7 +638,17 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
       const dataUrl = await domToPng(canvasNode, {
         scale: 3,
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
         backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : 'transparent',
+        style: {
+          transform: 'none',
+          left: '0',
+          top: '0',
+          position: 'relative',
+          margin: '0',
+          padding: '0',
+        }
       });
       const link = document.createElement('a');
       link.download = `mockingjay-${Date.now()}.png`;
@@ -648,8 +663,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       setExportStatus('error');
       setTimeout(() => setExportStatus('idle'), 3000);
     } finally {
-      // Restore box shadow
+      // Restore styles
       canvasNode.style.boxShadow = originalBoxShadow;
+      canvasNode.style.transform = originalTransform;
+      canvasNode.style.transition = originalTransition;
       // Clean up injected font style element
       if (fontStyleEl && fontStyleEl.parentNode) {
         fontStyleEl.parentNode.removeChild(fontStyleEl);
