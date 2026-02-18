@@ -234,7 +234,7 @@ const App: React.FC = () => {
     triggerHaptic(30);
 
     try {
-      const apiKey = "AIzaSyDijEmI8NYHPcHzXpDT8ll2oxztOKfUAqY";
+      const apiKey = "AIzaSyC8OAZN6qdzsSKXLO2tV7stx-p5hFifhKM";
       const modelName = "gemini-2.5-flash";
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
