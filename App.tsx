@@ -146,11 +146,7 @@ const App: React.FC = () => {
     triggerHaptic(30);
 
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-      if (!apiKey) {
-        throw new Error('Gemini API key not configured');
-      }
+      const apiKey = "AIzaSyDijEmI8NYHPcHzXpDT8ll2oxztOKfUAqY";
 
       const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer.
       Your task is to transform user prompts into high-fidelity design structures.
