@@ -1,22 +1,36 @@
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { DesignElement } from '../types.ts';
 
 interface Props {
   element: DesignElement;
   isSelected: boolean;
   onSelect: (id: string, e: React.PointerEvent) => void;
+  onAutoResize?: (id: string, newHeight: number) => void;
 }
 
-const ElementRenderer: React.FC<Props> = ({ element, isSelected, onSelect }) => {
+const ElementRenderer: React.FC<Props> = ({ element, isSelected, onSelect, onAutoResize }) => {
+  const textRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (element.type === 'text' && textRef.current && onAutoResize) {
+      const scrollH = textRef.current.scrollHeight;
+      if (scrollH > element.box.height + 2) {
+        onAutoResize(element.id, scrollH);
+      }
+    }
+  }, [element.content, element.style.fontSize, element.style.fontFamily, element.style.lineHeight, element.style.letterSpacing, element.box.width]);
+
   if (!element.visible) return null;
 
+  const isText = element.type === 'text';
   const style: React.CSSProperties = {
     position: 'absolute',
     left: element.box.x,
     top: element.box.y,
     width: element.box.width,
-    height: element.box.height,
+    height: isText ? undefined : element.box.height,
+    minHeight: isText ? element.box.height : undefined,
     transform: `rotate(${element.box.rotation}deg)`,
     opacity: element.style.opacity ?? 1,
     cursor: 'move',
@@ -39,6 +53,7 @@ const ElementRenderer: React.FC<Props> = ({ element, isSelected, onSelect }) => 
       case 'text':
         return (
           <div
+            ref={textRef}
             style={{
               ...borderStyle,
               color: element.style.color,
@@ -49,7 +64,7 @@ const ElementRenderer: React.FC<Props> = ({ element, isSelected, onSelect }) => 
               lineHeight: element.style.lineHeight,
               letterSpacing: `${element.style.letterSpacing ?? 0}px`,
               width: '100%',
-              height: '100%',
+              minHeight: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: element.style.textAlign === 'center' ? 'center' : (element.style.textAlign === 'right' ? 'flex-end' : 'flex-start'),

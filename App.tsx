@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { EditorState, DesignElement, BoundingBox, Page } from './types.ts';
 import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
-import { generateId, downloadTemplate, FontStore, MediaStore } from './utils.ts';
+import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, embedGoogleFonts } from './utils.ts';
 import Sidebar from './components/Sidebar.tsx';
 import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
@@ -29,10 +29,14 @@ const App: React.FC = () => {
   const [exportStatus, setExportStatus] = useState<ExportStatus>('idle');
   const [userFonts, setUserFonts] = useState<{ name: string; value: string }[]>([]);
   const [recentImages, setRecentImages] = useState<string[]>([]);
+  const [aiAttachedImages, setAiAttachedImages] = useState<string[]>([]);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isPwaInstalled, setIsPwaInstalled] = useState(false);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const aiImageInputRef = useRef<HTMLInputElement>(null);
 
   const allFonts = [...userFonts, ...BASE_FONTS];
 
@@ -115,6 +119,31 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // PWA install prompt handling
+  useEffect(() => {
+    // Check if already installed as PWA
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || (window.navigator as any).standalone === true;
+    setIsPwaInstalled(isStandalone);
+
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    const handleAppInstalled = () => {
+      setIsPwaInstalled(true);
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
   useEffect(() => {
     const updateScale = () => {
       if (!workspaceRef.current) return;
@@ -139,6 +168,40 @@ const App: React.FC = () => {
       window.navigator.vibrate(intensity);
     }
   }, []);
+
+  const handlePwaInstall = useCallback(async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setIsPwaInstalled(true);
+    }
+    setDeferredPrompt(null);
+  }, [deferredPrompt]);
+
+  const handleAiImageAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const maxImages = 4;
+    const remaining = maxImages - aiAttachedImages.length;
+    const toProcess = Array.from(files).slice(0, remaining);
+
+    toProcess.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        if (dataUrl) {
+          setAiAttachedImages(prev => {
+            if (prev.length >= maxImages) return prev;
+            return [...prev, dataUrl];
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    // Reset input so same files can be re-selected
+    e.target.value = '';
+  };
 
   const fetchWithRetry = async (url: string, payload: any, retries = 5): Promise<any> => {
     for (let i = 0; i < retries; i++) {
@@ -179,12 +242,17 @@ const App: React.FC = () => {
 Your task is to transform user prompts into complete, high-fidelity design structures.
 ALWAYS generate RICH content with multiple elements. Never generate empty or minimal designs.
 
+YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanation text before or after the JSON.
+Do NOT wrap in \`\`\`json code blocks. Return ONLY the raw JSON starting with { and ending with }.
+
 CRITICAL RULES:
 1. ALWAYS populate the current page with multiple elements (minimum 3-5 elements)
 2. NEVER return an empty page with only a background color
 3. Elements MUST have proper positioning, sizing, font families, colors, and spacing
 4. Apply the user's request (color theme, brand, style) throughout ALL elements
 5. Match the Canvas dimensions: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}
+6. When user asks for additional pages, append new pages to the pages array. Every page MUST have elements.
+7. Use reasonable borderRadius values (0-24px for rectangles, 999 for circles/pills). Do NOT use excessive values.
 
 AVAILABLE FONTS: ${allFonts.map(f => f.value).join(', ')}.
 
@@ -252,7 +320,15 @@ Return ONLY valid JSON matching this structure (NO markdown, NO code blocks):
   "themeColors": ["#color1", "#color2", "#color3", "#color4"]
 }
 
-REMEMBER: Never generate empty pages. Always fill pages with rich, varied content.`;
+REMEMBER: Never generate empty pages. Always fill pages with rich, varied content.${aiAttachedImages.length > 0 ? `
+
+USER HAS ATTACHED ${aiAttachedImages.length} IMAGE(S). You MUST include them in the design as image elements.
+For each attached image, create an image element with type "image" and set content to the placeholder:
+- First image: "ATTACHED_IMAGE_0"
+- Second image: "ATTACHED_IMAGE_1"
+- Third image: "ATTACHED_IMAGE_2"
+- Fourth image: "ATTACHED_IMAGE_3"
+Position them prominently in the design with good sizing (at least 200x200).` : ''}`;
 
       const payload = {
         contents: [
@@ -285,7 +361,8 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
 
       let newState;
       try {
-        newState = JSON.parse(textResponse);
+        const cleanedJson = sanitizeAiJson(textResponse);
+        newState = JSON.parse(cleanedJson);
       } catch (parseErr) {
         console.error("JSON parse error:", parseErr, "Raw response:", textResponse);
         throw new Error("Failed to parse AI response as JSON");
@@ -294,6 +371,23 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
       if (!newState.pages || !Array.isArray(newState.pages) || newState.pages.length === 0) {
         console.error("Invalid response structure:", newState);
         throw new Error("AI response missing pages array");
+      }
+
+      // Replace ATTACHED_IMAGE placeholders with actual data URLs
+      if (aiAttachedImages.length > 0) {
+        for (const page of newState.pages) {
+          if (page.elements) {
+            page.elements = page.elements.map((el: any) => {
+              if (typeof el.content === 'string' && el.content.startsWith('ATTACHED_IMAGE_')) {
+                const idx = parseInt(el.content.replace('ATTACHED_IMAGE_', ''), 10);
+                if (!isNaN(idx) && idx < aiAttachedImages.length) {
+                  return { ...el, content: aiAttachedImages[idx], type: 'image' };
+                }
+              }
+              return el;
+            });
+          }
+        }
       }
 
       const currentPage = newState.pages[newState.currentPageIndex || 0];
@@ -310,6 +404,7 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
       });
       setIsAiModalOpen(false);
       setAiPrompt("");
+      setAiAttachedImages([]);
       triggerHaptic(50);
     } catch (err: any) {
       console.error("Design Engine Fail:", err);
@@ -486,11 +581,52 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
     };
   }, [handlePointerMove, handlePointerUp]);
 
+  const handleAutoResize = useCallback((id: string, newHeight: number) => {
+    setState(prev => {
+      const newPages = [...prev.pages];
+      const page = newPages[prev.currentPageIndex];
+      page.elements = page.elements.map(el => {
+        if (el.id === id && newHeight > el.box.height) {
+          return { ...el, box: { ...el.box, height: newHeight } };
+        }
+        return el;
+      });
+      return { ...prev, pages: newPages };
+    });
+  }, []);
+
   const handleExportPng = async () => {
     if (!canvasRef.current) return;
     setExportStatus('processing');
     triggerHaptic(20);
+
+    let fontStyleEl: HTMLStyleElement | null = null;
     try {
+      // Embed Google Fonts as inline base64 @font-face rules
+      const googleFontsLink = document.querySelector('link[href*="fonts.googleapis.com"]') as HTMLLinkElement;
+      if (googleFontsLink) {
+        const inlineFontCss = await embedGoogleFonts(googleFontsLink.href);
+        if (inlineFontCss) {
+          fontStyleEl = document.createElement('style');
+          fontStyleEl.setAttribute('data-export-fonts', 'true');
+          fontStyleEl.textContent = inlineFontCss;
+          canvasRef.current.prepend(fontStyleEl);
+        }
+      }
+
+      // Also collect user-uploaded font @font-face rules already in <head>
+      const userFontStyles = document.querySelectorAll('style[id^="font-face-"]');
+      let userFontCss = '';
+      userFontStyles.forEach(el => { userFontCss += el.textContent + '\n'; });
+      if (userFontCss && fontStyleEl) {
+        fontStyleEl.textContent += '\n' + userFontCss;
+      } else if (userFontCss && !fontStyleEl) {
+        fontStyleEl = document.createElement('style');
+        fontStyleEl.setAttribute('data-export-fonts', 'true');
+        fontStyleEl.textContent = userFontCss;
+        canvasRef.current.prepend(fontStyleEl);
+      }
+
       const dataUrl = await domToPng(canvasRef.current, {
         scale: 3,
         backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : '#000000',
@@ -507,6 +643,11 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
       console.error("Export failed:", err);
       setExportStatus('error');
       setTimeout(() => setExportStatus('idle'), 3000);
+    } finally {
+      // Clean up injected font style element
+      if (fontStyleEl && fontStyleEl.parentNode) {
+        fontStyleEl.parentNode.removeChild(fontStyleEl);
+      }
     }
   };
 
@@ -540,8 +681,8 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
                 </div>
              </div>
              <div className="text-center space-y-2">
-                <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white">Synthesizing Masterpiece</h2>
-                <p className="text-lime-400/60 text-[10px] font-bold uppercase tracking-[0.4em] animate-pulse">Mockingjay Engine Active</p>
+                <h2 className="text-lg md:text-2xl font-black italic uppercase tracking-tighter text-white">Creating Design</h2>
+                <p className="text-lime-400/60 text-[10px] font-bold uppercase tracking-[0.4em] animate-pulse">Hang on tight</p>
              </div>
           </div>
         )}
@@ -578,7 +719,7 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
            >
               {currentPage.elements.map(el => (
                 <div key={el.id}>
-                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleSelect} />
+                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleSelect} onAutoResize={handleAutoResize} />
                   {state.selectedElementId === el.id && !el.locked && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
                       {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
@@ -611,16 +752,17 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
 
         {isAiModalOpen && (
           <div className="absolute inset-x-0 bottom-0 z-[200] p-4 animate-in slide-in-from-bottom duration-500">
-             <div className="bg-lime-900/40 backdrop-blur-3xl border border-lime-400/30 rounded-[32px] p-8 shadow-[0_40px_100px_rgba(0,0,0,0.9)]">
+             <div className="bg-lime-900/40 backdrop-blur-3xl border border-lime-400/30 rounded-[24px] p-6 md:p-8 shadow-[0_40px_100px_rgba(0,0,0,0.9)]">
                 <div className="flex items-center gap-3 mb-6">
                    <div className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.4)]">
                       <Icons.Wand2 className="w-5 h-5 text-black" />
                    </div>
                    <div className="space-y-0.5">
-                      <h3 className="text-sm font-black uppercase tracking-widest text-white italic">Mockingjay Intelligence</h3>
-                      <p className="text-white/40 text-[9px] font-bold uppercase tracking-widest">Global Design Engine v3.1</p>
+                      <h3 className="text-xs md:text-sm font-black uppercase tracking-widest text-white italic">Mockingjay Intelligence</h3>
+                      <p className="text-white/40 text-[8px] md:text-[9px] font-bold uppercase tracking-widest">Global Design Engine v3.1</p>
                    </div>
                 </div>
+                <input type="file" ref={aiImageInputRef} className="hidden" accept="image/*" multiple onChange={handleAiImageAttach} />
                 <div className="relative">
                   <input 
                     autoFocus
@@ -629,18 +771,38 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
                     onChange={(e) => setAiPrompt(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAiRefine()}
                     disabled={isAiLoading}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl h-16 px-6 text-sm focus:outline-none focus:border-lime-400 transition-all pr-14 placeholder:text-white/20"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl h-16 pl-12 pr-14 text-sm focus:outline-none focus:border-lime-400 transition-all placeholder:text-white/20"
                   />
+                  <button onClick={() => aiImageInputRef.current?.click()} disabled={aiAttachedImages.length >= 4} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors disabled:opacity-30">
+                    <Icons.Paperclip className="w-5 h-5" />
+                  </button>
                   <button onClick={handleAiRefine} disabled={isAiLoading} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-zinc-800' : 'bg-lime-400 text-black active:scale-90 hover:shadow-[0_0_15px_rgba(163,230,53,0.5)]'}`}>
                     {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
                   </button>
                 </div>
+                {aiAttachedImages.length > 0 && (
+                  <div className="flex gap-2 mt-3">
+                    {aiAttachedImages.map((img, i) => (
+                      <div key={i} className="relative w-14 h-14 rounded-xl overflow-hidden border border-white/10 group">
+                        <img src={img} alt={`Attachment ${i + 1}`} className="w-full h-full object-cover" />
+                        <button onClick={() => setAiAttachedImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Icons.X className="w-4 h-4 text-white" />
+                        </button>
+                      </div>
+                    ))}
+                    {aiAttachedImages.length < 4 && (
+                      <button onClick={() => aiImageInputRef.current?.click()} className="w-14 h-14 rounded-xl border border-dashed border-white/10 flex items-center justify-center text-white/20 hover:text-white/40 hover:border-white/20 transition-colors">
+                        <Icons.Plus className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className="mt-6 flex gap-2 overflow-x-auto no-scrollbar pb-2">
                    {["Advertise my noodle brand", "Create a new page with coffee ad", "Cyberpunk flyer", "Minimalist layout", "Bold brand poster"].map(s => (
                      <button key={s} onClick={() => setAiPrompt(s)} className="shrink-0 bg-white/5 border border-white/5 px-5 py-2.5 rounded-full text-[10px] font-bold uppercase hover:bg-white/10 hover:border-white/20 transition-all text-white/60 hover:text-white">{s}</button>
                    ))}
                 </div>
-                <button onClick={() => setIsAiModalOpen(false)} className="w-full mt-8 text-[10px] font-black uppercase text-white/20 hover:text-white/60 transition-colors tracking-[0.4em]">Abort Engine Session</button>
+                <button onClick={() => { setIsAiModalOpen(false); setAiAttachedImages([]); }} className="w-full mt-8 text-[10px] font-black uppercase text-white/20 hover:text-white/60 transition-colors tracking-[0.4em]">Abort Engine Session</button>
              </div>
           </div>
         )}
@@ -656,7 +818,24 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
           </div>
         )}
 
-        {isMobile && !isAiModalOpen && (
+        {isMobile && !isAiModalOpen && !isPwaInstalled && deferredPrompt && (
+          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? 'translate-y-full' : 'translate-y-0'}`}>
+            <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-lime-400/20 rounded-2xl shadow-2xl p-4">
+              <button onClick={handlePwaInstall} className="w-full flex items-center gap-4">
+                <div className="w-12 h-12 bg-lime-400 rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(163,230,53,0.3)]">
+                  <Icons.Download className="w-6 h-6 text-black" />
+                </div>
+                <div className="text-left flex-1">
+                  <div className="text-sm font-bold text-white">Install Mockingjay</div>
+                  <div className="text-[10px] text-white/40 font-medium uppercase tracking-wider">Add to Home Screen for the best experience</div>
+                </div>
+                <Icons.ArrowRight className="w-5 h-5 text-lime-400 shrink-0" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isMobile && !isAiModalOpen && (isPwaInstalled || !deferredPrompt) && (
           <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? 'translate-y-full' : 'translate-y-0'}`}>
             <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl p-4">
               <div className="flex items-center justify-between gap-4">
@@ -687,7 +866,7 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
 
         {isMobile && isBottomSheetOpen && (
           <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm" onClick={() => setIsBottomSheetOpen(false)}>
-            <div className="absolute bottom-0 left-0 right-0 h-[85vh] bg-[#111] rounded-t-[32px] overflow-hidden bottom-sheet-transition flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute bottom-0 left-0 right-0 h-[85vh] bg-[#111] rounded-t-[20px] overflow-hidden bottom-sheet-transition flex flex-col" onClick={(e) => e.stopPropagation()}>
               <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mt-4 mb-2 shrink-0" />
               <div className="flex-1 overflow-y-auto">
                 <Sidebar 
@@ -719,10 +898,10 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
 
         {isExportModalOpen && exportStatus === 'idle' && (
           <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-6" onClick={() => setIsExportModalOpen(false)}>
-            <div className="bg-zinc-900 border border-white/10 rounded-[32px] w-full max-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+            <div className="bg-zinc-900 border border-white/10 rounded-[24px] w-full max-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                <div className="p-8 space-y-6">
                   <div className="text-center space-y-2">
-                    <h2 className="text-2xl font-black text-white italic tracking-tight uppercase">Export Design</h2>
+                    <h2 className="text-xl md:text-2xl font-black text-white italic tracking-tight uppercase">Export Design</h2>
                     <p className="text-white/40 text-sm">Select format for high-res output</p>
                   </div>
                   <div className="grid gap-3">
@@ -743,7 +922,7 @@ REMEMBER: Never generate empty pages. Always fill pages with rich, varied conten
 
         {(exportStatus === 'processing' || exportStatus === 'success') && (
           <div className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-sm animate-in fade-in duration-500">
-            <div className={`absolute bottom-0 left-0 right-0 h-[35vh] rounded-t-[48px] shadow-[0_-20px_60px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center gap-6 p-8 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === 'processing' ? 'bg-[#F5E6D3] translate-y-0' : 'bg-[#EAE2D6] translate-y-0'}`}>
+            <div className={`absolute bottom-0 left-0 right-0 h-[35vh] rounded-t-[24px] shadow-[0_-20px_60px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center gap-6 p-8 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === 'processing' ? 'bg-[#F5E6D3] translate-y-0' : 'bg-[#EAE2D6] translate-y-0'}`}>
                <div className="relative">
                  {exportStatus === 'processing' ? (
                    <>
