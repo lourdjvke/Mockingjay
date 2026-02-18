@@ -140,6 +140,31 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const fetchWithRetry = async (url: string, payload: any, retries = 5): Promise<any> => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok) return await response.json();
+
+        const errData = await response.json();
+        if (response.status === 429 || response.status >= 500) {
+          const delay = Math.pow(2, i) * 1000;
+          await new Promise(res => setTimeout(res, delay));
+          continue;
+        }
+        throw new Error(errData.error?.message || 'Request failed');
+      } catch (err) {
+        if (i === retries - 1) throw err;
+        await new Promise(res => setTimeout(res, 1000));
+      }
+    }
+  };
+
   const handleAiRefine = async () => {
     if (!aiPrompt.trim()) return;
     setIsAiLoading(true);
@@ -147,81 +172,75 @@ const App: React.FC = () => {
 
     try {
       const apiKey = "AIzaSyDijEmI8NYHPcHzXpDT8ll2oxztOKfUAqY";
+      const modelName = "gemini-2.5-flash";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
       const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer.
-      Your task is to transform user prompts into high-fidelity design structures.
-      Don't just change colors; build a complete composition.
+Your task is to transform user prompts into high-fidelity design structures.
+Don't just change colors; build a complete composition.
 
-      COMPOSITION GUIDELINES:
-      - Ads: Use an Unsplash background image, a semi-transparent shape 'backing plate', a massive headline, a tagline, and a CTA button.
-      - Hierarchy: Headers (fontSize 40-70) must be bold. Subheaders (fontSize 24-30). Body (fontSize 14-18).
-      - Spacing: Elements must feel balanced. Use 20px margins.
-      - Canvas: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}.
+COMPOSITION GUIDELINES:
+- Ads: Use an Unsplash background image, a semi-transparent shape 'backing plate', a massive headline, a tagline, and a CTA button.
+- Hierarchy: Headers (fontSize 40-70) must be bold. Subheaders (fontSize 24-30). Body (fontSize 14-18).
+- Spacing: Elements must feel balanced. Use 20px margins.
+- Canvas: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}.
 
-      CAPABILITIES:
-      - Create New Pages: If asked for a "new page" or "another design", append a full Page object to 'pages'.
-      - Images: Use type "image". Use high-res Unsplash URLs.
-      - Shapes: Use type "shape" with 'clipPath' for complex icons/designs (stars, ribbons).
-      - Fonts: Use available fonts: ${allFonts.map(f => f.value).join(', ')}.
+CAPABILITIES:
+- Create New Pages: If asked for a "new page" or "another design", append a full Page object to 'pages'.
+- Images: Use type "image". Use high-res Unsplash URLs.
+- Shapes: Use type "shape" with 'clipPath' for complex icons/designs (stars, ribbons).
+- Fonts: Use available fonts: ${allFonts.map(f => f.value).join(', ')}.
 
-      LOGIC:
-      - If user asks for a theme (e.g. "Noodle Brand"), replace 'themeColors' with a palette like ["#E11D48", "#FBCC14", "#FFFFFF", "#000000"] and use them in the elements.
-      - If creating a brand ad, include: 1. Main visual image, 2. Text headline, 3. Tagline text, 4. A shape with 'CTA' text on top.
+LOGIC:
+- If user asks for a theme (e.g. "Noodle Brand"), replace 'themeColors' with a palette like ["#E11D48", "#FBCC14", "#FFFFFF", "#000000"] and use them in the elements.
+- If creating a brand ad, include: 1. Main visual image, 2. Text headline, 3. Tagline text, 4. A shape with 'CTA' text on top.
 
-      Return ONLY the COMPLETE absolute final EditorState JSON object. No markdown.`;
+Return ONLY the COMPLETE absolute final EditorState JSON object. No markdown.`;
 
-      const userPrompt = `Current Editor State: ${JSON.stringify(state)}.
-      User Request: ${aiPrompt}`;
-
-      const requestBody = {
+      const payload = {
         contents: [
           {
             parts: [
               {
-                text: `${systemInstruction}\n\n${userPrompt}`
+                text: `${systemInstruction}\n\nCurrent Editor State: ${JSON.stringify(state)}\n\nUser Request: ${aiPrompt}`
               }
             ]
           }
         ],
+        systemInstruction: {
+          parts: [{ text: systemInstruction }]
+        },
         generationConfig: {
+          responseMimeType: "application/json",
           temperature: 0.9,
           topP: 0.95,
           topK: 40,
-          maxOutputTokens: 8192,
-          responseMimeType: "application/json"
+          maxOutputTokens: 8192
         }
       };
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody)
+      const result = await fetchWithRetry(apiUrl, payload);
+      const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (textResponse) {
+        const newState = JSON.parse(textResponse);
+
+        if (newState.pages && Array.isArray(newState.pages)) {
+          const pageAdded = newState.pages.length > state.pages.length;
+          const targetPageIndex = pageAdded ? newState.pages.length - 1 : newState.currentPageIndex;
+
+          setState({
+            ...newState,
+            currentPageIndex: targetPageIndex
+          });
+          setIsAiModalOpen(false);
+          setAiPrompt("");
+          triggerHaptic(50);
+        } else {
+          throw new Error("Invalid response structure");
         }
-      );
-
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-      const newState = JSON.parse(responseText);
-
-      if (newState.pages && Array.isArray(newState.pages)) {
-        const pageAdded = newState.pages.length > state.pages.length;
-        const targetPageIndex = pageAdded ? newState.pages.length - 1 : newState.currentPageIndex;
-
-        setState({
-          ...newState,
-          currentPageIndex: targetPageIndex
-        });
-        setIsAiModalOpen(false);
-        setAiPrompt("");
-        triggerHaptic(50);
+      } else {
+        throw new Error("No response content");
       }
     } catch (err) {
       console.error("Design Engine Fail:", err);
