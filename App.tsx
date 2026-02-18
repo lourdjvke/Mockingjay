@@ -6,7 +6,6 @@ import Sidebar from './components/Sidebar.tsx';
 import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
 import { domToPng } from 'modern-screenshot';
-import { GoogleGenAI } from "@google/genai";
 
 interface SnapLine {
   type: 'vertical' | 'horizontal';
@@ -147,10 +146,14 @@ const App: React.FC = () => {
     triggerHaptic(30);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      
-      const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer. 
-      Your task is to transform user prompts into high-fidelity design structures. 
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+      if (!apiKey) {
+        throw new Error('Gemini API key not configured');
+      }
+
+      const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer.
+      Your task is to transform user prompts into high-fidelity design structures.
       Don't just change colors; build a complete composition.
 
       COMPOSITION GUIDELINES:
@@ -174,20 +177,45 @@ const App: React.FC = () => {
       const userPrompt = `Current Editor State: ${JSON.stringify(state)}.
       User Request: ${aiPrompt}`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: userPrompt,
-        config: { 
-          systemInstruction,
-          responseMimeType: "application/json" 
+      const requestBody = {
+        contents: [
+          {
+            parts: [
+              {
+                text: `${systemInstruction}\n\n${userPrompt}`
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.9,
+          topP: 0.95,
+          topK: 40,
+          maxOutputTokens: 8192,
+          responseMimeType: "application/json"
         }
-      });
+      };
 
-      const responseText = response.text || "{}";
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
       const newState = JSON.parse(responseText);
-      
+
       if (newState.pages && Array.isArray(newState.pages)) {
-        // Handle Auto-Switching to new pages if the model added one
         const pageAdded = newState.pages.length > state.pages.length;
         const targetPageIndex = pageAdded ? newState.pages.length - 1 : newState.currentPageIndex;
 
