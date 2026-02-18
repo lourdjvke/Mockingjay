@@ -600,6 +600,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     setExportStatus('processing');
     triggerHaptic(20);
 
+    const canvasNode = canvasRef.current;
+    const originalBoxShadow = canvasNode.style.boxShadow;
+    canvasNode.style.boxShadow = 'none';
+
     let fontStyleEl: HTMLStyleElement | null = null;
     try {
       // Embed Google Fonts as inline base64 @font-face rules
@@ -610,7 +614,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           fontStyleEl = document.createElement('style');
           fontStyleEl.setAttribute('data-export-fonts', 'true');
           fontStyleEl.textContent = inlineFontCss;
-          canvasRef.current.prepend(fontStyleEl);
+          canvasNode.prepend(fontStyleEl);
         }
       }
 
@@ -624,12 +628,12 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         fontStyleEl = document.createElement('style');
         fontStyleEl.setAttribute('data-export-fonts', 'true');
         fontStyleEl.textContent = userFontCss;
-        canvasRef.current.prepend(fontStyleEl);
+        canvasNode.prepend(fontStyleEl);
       }
 
-      const dataUrl = await domToPng(canvasRef.current, {
+      const dataUrl = await domToPng(canvasNode, {
         scale: 3,
-        backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : '#000000',
+        backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : 'transparent',
       });
       const link = document.createElement('a');
       link.download = `mockingjay-${Date.now()}.png`;
@@ -644,6 +648,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       setExportStatus('error');
       setTimeout(() => setExportStatus('idle'), 3000);
     } finally {
+      // Restore box shadow
+      canvasNode.style.boxShadow = originalBoxShadow;
       // Clean up injected font style element
       if (fontStyleEl && fontStyleEl.parentNode) {
         fontStyleEl.parentNode.removeChild(fontStyleEl);
