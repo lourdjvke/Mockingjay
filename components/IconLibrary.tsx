@@ -27,7 +27,9 @@ import {
   ArrowLeft,
   ArrowRight,
   Sparkles,
-  Layout
+  Layout,
+  Paperclip,
+  X
 } from 'lucide-react';
 
 export const Icons = {
@@ -35,5 +37,5 @@ export const Icons = {
   ChevronDown, ChevronUp, Undo2, Redo2, Download, 
   Trash2, Lock, Unlock, Move, RotateCw, Eye, EyeOff, 
   Wand2, MoreHorizontal, ThumbsUp, ThumbsDown, Flag,
-  ArrowLeft, ArrowRight, Sparkles, Layout
+  ArrowLeft, ArrowRight, Sparkles, Layout, Paperclip, X
 };

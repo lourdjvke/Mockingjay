@@ -1,6 +1,28 @@
 
 export const generateId = () => Math.random().toString(36).substring(2, 11);
 
+/**
+ * Sanitizes AI response text to extract valid JSON.
+ * Strips markdown code fences, leading/trailing text, and other non-JSON content.
+ */
+export const sanitizeAiJson = (raw: string): string => {
+  let cleaned = raw.trim();
+
+  // Strip markdown code fences: ```json ... ``` or ``` ... ```
+  cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
+
+  // Find the first { and last } to extract the JSON object
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    // No valid JSON object found, return original for error handling downstream
+    return cleaned;
+  }
+
+  return cleaned.substring(firstBrace, lastBrace + 1);
+};
+
 export const downloadTemplate = (state: any) => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -11,6 +33,67 @@ export const downloadTemplate = (state: any) => {
 };
 
 export const clamp = (num: number, min: number, max: number) => Math.min(Math.max(num, min), max);
+
+/**
+ * Fetches Google Fonts CSS, downloads font binaries, and returns inline @font-face CSS
+ * with base64-encoded font data. This enables modern-screenshot to embed fonts in exports.
+ */
+export const embedGoogleFonts = async (googleFontsCssUrl: string): Promise<string> => {
+  try {
+    // Fetch the CSS with a user-agent that triggers woff2 URLs
+    const cssResponse = await fetch(googleFontsCssUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    if (!cssResponse.ok) return '';
+    const cssText = await cssResponse.text();
+
+    // Parse all @font-face blocks and extract URLs
+    const fontFaceRegex = /@font-face\s*\{[^}]+\}/g;
+    const urlRegex = /url\(([^)]+)\)/g;
+
+    const fontFaces = cssText.match(fontFaceRegex);
+    if (!fontFaces) return '';
+
+    let inlineCss = '';
+
+    for (const block of fontFaces) {
+      let inlineBlock = block;
+      const urls: string[] = [];
+
+      let match;
+      while ((match = urlRegex.exec(block)) !== null) {
+        urls.push(match[1]);
+      }
+
+      for (const url of urls) {
+        try {
+          const fontResponse = await fetch(url);
+          if (!fontResponse.ok) continue;
+          const buffer = await fontResponse.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const base64 = btoa(binary);
+          const format = url.includes('.woff2') ? 'woff2' : (url.includes('.woff') ? 'woff' : 'truetype');
+          inlineBlock = inlineBlock.replace(`url(${url})`, `url(data:font/${format};base64,${base64})`);
+        } catch {
+          // Skip individual font files that fail
+          continue;
+        }
+      }
+      inlineCss += inlineBlock + '\n';
+    }
+
+    return inlineCss;
+  } catch (err) {
+    console.error('Font embedding failed:', err);
+    return '';
+  }
+};
 
 // IndexedDB Font Store
 const DB_NAME = 'MockingjayFonts';
