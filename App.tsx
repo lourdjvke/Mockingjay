@@ -175,27 +175,84 @@ const App: React.FC = () => {
       const modelName = "gemini-2.5-flash";
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
-      const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer.
-Your task is to transform user prompts into high-fidelity design structures.
-Don't just change colors; build a complete composition.
+      const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer and UI/UX expert.
+Your task is to transform user prompts into complete, high-fidelity design structures.
+ALWAYS generate RICH content with multiple elements. Never generate empty or minimal designs.
 
-COMPOSITION GUIDELINES:
-- Ads: Use an Unsplash background image, a semi-transparent shape 'backing plate', a massive headline, a tagline, and a CTA button.
-- Hierarchy: Headers (fontSize 40-70) must be bold. Subheaders (fontSize 24-30). Body (fontSize 14-18).
-- Spacing: Elements must feel balanced. Use 20px margins.
-- Canvas: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}.
+CRITICAL RULES:
+1. ALWAYS populate the current page with multiple elements (minimum 3-5 elements)
+2. NEVER return an empty page with only a background color
+3. Elements MUST have proper positioning, sizing, font families, colors, and spacing
+4. Apply the user's request (color theme, brand, style) throughout ALL elements
+5. Match the Canvas dimensions: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}
 
-CAPABILITIES:
-- Create New Pages: If asked for a "new page" or "another design", append a full Page object to 'pages'.
-- Images: Use type "image". Use high-res Unsplash URLs.
-- Shapes: Use type "shape" with 'clipPath' for complex icons/designs (stars, ribbons).
-- Fonts: Use available fonts: ${allFonts.map(f => f.value).join(', ')}.
+AVAILABLE FONTS: ${allFonts.map(f => f.value).join(', ')}.
 
-LOGIC:
-- If user asks for a theme (e.g. "Noodle Brand"), replace 'themeColors' with a palette like ["#E11D48", "#FBCC14", "#FFFFFF", "#000000"] and use them in the elements.
-- If creating a brand ad, include: 1. Main visual image, 2. Text headline, 3. Tagline text, 4. A shape with 'CTA' text on top.
+ELEMENT STRUCTURE - REQUIRED FIELDS FOR EACH ELEMENT:
+{
+  "id": "unique_id",
+  "type": "text|shape|image|icon",
+  "name": "descriptive name",
+  "box": { "x": number, "y": number, "width": number, "height": number, "rotation": 0 },
+  "content": "text content or SVG path or image URL",
+  "style": {
+    "color": "#hexcolor or white/black",
+    "backgroundColor": "#hexcolor (optional)",
+    "fontSize": number (14-70 for text),
+    "fontFamily": "font name from available list",
+    "fontWeight": "normal|bold|300|400|600|700",
+    "textAlign": "left|center|right",
+    "letterSpacing": 0,
+    "lineHeight": 1.4,
+    "borderRadius": 0,
+    "opacity": 1,
+    "strokeColor": "#hexcolor (optional)",
+    "strokeWidth": 0
+  },
+  "visible": true,
+  "locked": false
+}
 
-Return ONLY the COMPLETE absolute final EditorState JSON object. No markdown.`;
+DESIGN PATTERNS BY REQUEST TYPE:
+
+FOR BRAND/COMPANY REQUESTS:
+1. Background color or image (applies to page.background)
+2. Large headline (40-70px) with brand name
+3. Tagline/subtitle (24-30px)
+4. 2-3 descriptive text elements (14-18px)
+5. Accent shapes or icons for visual interest
+6. All text in theme colors from user request
+
+FOR COLOR/STYLE REQUESTS:
+- Update ALL element colors to match the requested theme
+- If "purple" mentioned, use gradients of purple: #8B5CF6, #A78BFA, #DDD6FE
+- If "brand colors" requested, create a palette and apply consistently
+
+POSITIONING GUIDELINES:
+- Use margins of 20-40px from canvas edges
+- Space elements 15-20px apart
+- Center headline at x: ${Math.round(CANVAS_WIDTH / 4)}, y: 40
+- Place secondary elements below with proper spacing
+- Use full width (${CANVAS_WIDTH}) for visual elements
+
+RESPONSE FORMAT:
+Return ONLY valid JSON matching this structure (NO markdown, NO code blocks):
+{
+  "pages": [
+    {
+      "id": "page_1",
+      "background": "#colorhex or image_url",
+      "elements": [
+        { element objects as defined above }
+      ]
+    }
+  ],
+  "currentPageIndex": 0,
+  "selectedElementId": null,
+  "themeColors": ["#color1", "#color2", "#color3", "#color4"]
+}
+
+REMEMBER: Never generate empty pages. Always fill pages with rich, varied content.`;
 
       const payload = {
         contents: [
@@ -222,29 +279,42 @@ Return ONLY the COMPLETE absolute final EditorState JSON object. No markdown.`;
       const result = await fetchWithRetry(apiUrl, payload);
       const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-      if (textResponse) {
-        const newState = JSON.parse(textResponse);
-
-        if (newState.pages && Array.isArray(newState.pages)) {
-          const pageAdded = newState.pages.length > state.pages.length;
-          const targetPageIndex = pageAdded ? newState.pages.length - 1 : newState.currentPageIndex;
-
-          setState({
-            ...newState,
-            currentPageIndex: targetPageIndex
-          });
-          setIsAiModalOpen(false);
-          setAiPrompt("");
-          triggerHaptic(50);
-        } else {
-          throw new Error("Invalid response structure");
-        }
-      } else {
-        throw new Error("No response content");
+      if (!textResponse) {
+        throw new Error("No response content from API");
       }
-    } catch (err) {
+
+      let newState;
+      try {
+        newState = JSON.parse(textResponse);
+      } catch (parseErr) {
+        console.error("JSON parse error:", parseErr, "Raw response:", textResponse);
+        throw new Error("Failed to parse AI response as JSON");
+      }
+
+      if (!newState.pages || !Array.isArray(newState.pages) || newState.pages.length === 0) {
+        console.error("Invalid response structure:", newState);
+        throw new Error("AI response missing pages array");
+      }
+
+      const currentPage = newState.pages[newState.currentPageIndex || 0];
+      if (!currentPage.elements || currentPage.elements.length === 0) {
+        console.warn("Warning: AI generated page with no elements");
+      }
+
+      const pageAdded = newState.pages.length > state.pages.length;
+      const targetPageIndex = pageAdded ? newState.pages.length - 1 : (newState.currentPageIndex || 0);
+
+      setState({
+        ...newState,
+        currentPageIndex: targetPageIndex
+      });
+      setIsAiModalOpen(false);
+      setAiPrompt("");
+      triggerHaptic(50);
+    } catch (err: any) {
       console.error("Design Engine Fail:", err);
-      alert("AI was unable to fulfill that request. Please try a more specific design prompt.");
+      const errorMsg = err?.message || "Unknown error";
+      alert(`AI Error: ${errorMsg}. Please try again with a more specific design prompt.`);
     } finally {
       setIsAiLoading(false);
     }
