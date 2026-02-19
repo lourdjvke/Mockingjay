@@ -105,30 +105,38 @@ const App: React.FC = () => {
 
   // Load user's designs from Firebase
   useEffect(() => {
-    if (user) {
-      const designsRef = ref(database, `users/${user.uid}/designs`);
-      const unsubscribe = onValue(designsRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          const userDesigns = Object.keys(data)
-            .map(key => ({ id: key, ...data[key] }))
-            .sort((a, b) => b.lastModified - a.lastModified);
-          setDesigns(userDesigns);
-          // If no design is loaded, load the most recent one
-          if (!currentDesignId && userDesigns.length > 0) {
-            loadDesign(userDesigns[0].id);
-          }
-        } else {
-          setDesigns([]);
-          // If user has no designs, create a new one
-          if (!currentDesignId) {
-            createNewDesign();
-          }
-        }
-      });
-      return () => unsubscribe();
+    if (!user) {
+      setDesigns([]);
+      return;
     }
+    const designsRef = ref(database, `users/${user.uid}/designs`);
+    const unsubscribe = onValue(designsRef, (snapshot) => {
+      const data = snapshot.val();
+      const userDesigns = data
+        ? Object.keys(data)
+          .map(key => ({ id: key, ...data[key] }))
+          .sort((a, b) => b.lastModified - a.lastModified)
+        : [];
+      setDesigns(userDesigns);
+    });
+    return () => unsubscribe();
   }, [user]);
+
+  // Handle loading the initial design or creating a new one
+  useEffect(() => {
+    if (isAuthLoading || !user) return; // Wait for auth and user
+
+    // This effect should only run when designs are populated but we have no active design.
+    if (currentDesignId) return;
+
+    if (designs.length > 0) {
+      loadDesign(designs[0].id);
+    } else {
+      // This ensures we only create a new design once we know there are no existing designs.
+      // The designs.length check is implicit from the 'if' branch.
+      createNewDesign();
+    }
+  }, [user, designs, currentDesignId, isAuthLoading, loadDesign, createNewDesign]);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -139,13 +147,13 @@ const App: React.FC = () => {
     }
   };
 
-  const createNewDesign = () => {
+  const createNewDesign = useCallback(() => {
     const newId = generateId();
     setState(INITIAL_STATE);
     setCurrentDesignId(newId);
-  };
+  }, []);
 
-  const loadDesign = (designId: string) => {
+  const loadDesign = useCallback((designId: string) => {
     const designToLoad = designs.find(d => d.id === designId);
     if (designToLoad) {
       // Ensure pages and elements arrays exist to prevent crashes from legacy data.
@@ -162,7 +170,7 @@ const App: React.FC = () => {
       });
       setCurrentDesignId(designId);
     }
-  };
+  }, [designs]);
 
   const addPage = () => {
     setState(prev => {
@@ -835,9 +843,25 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       )}
       
       <input type="file" ref={fileInputRef} className="hidden" accept="application/json" onChange={(e) => {
-        const file = e.target.files?.[0]; if (!file) return;
+        const file = e.target.files?.[0];
+        if (!file) return;
         const reader = new FileReader();
-        reader.onload = (ev) => { try { const s = JSON.parse(ev.target?.result as string); if (s.pages) setState(s); } catch (er) { console.error(er); } };
+        reader.onload = (ev) => {
+            try {
+                const importedState = JSON.parse(ev.target?.result as string);
+                if (importedState.pages) {
+                    // Create a new ID for the imported design to treat it as a new entity
+                    const newId = generateId();
+                    setState(importedState);
+                    setCurrentDesignId(newId);
+                }
+            } catch (er) {
+                console.error("Failed to import design:", er);
+                alert("Failed to import design. The file might be corrupted or in the wrong format.");
+            }
+            // Reset file input to allow re-importing the same file
+            if (e.target) e.target.value = '';
+        };
         reader.readAsText(file);
       }} />
 
