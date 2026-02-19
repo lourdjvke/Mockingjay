@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Icons } from './IconLibrary.tsx';
 import { DesignElement, Page } from '../types.ts';
-import { User } from 'firebase/auth';
+import type { User } from 'firebase/auth';
 
 interface SectionProps {
   title: string;
