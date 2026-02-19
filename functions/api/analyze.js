@@ -7,7 +7,7 @@ export async function onRequestPost({ request, env }) {
     return new Response(JSON.stringify({ error: 'Missing screenshotBase64 or websiteUrl' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`;
+  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`;
 
   const finalPrompt = `Analyze this website screenshot and extract the following information in JSON format.
     The website URL is ${websiteUrl}.
