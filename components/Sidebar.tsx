@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { Icons } from './IconLibrary.tsx';
 import { DesignElement, Page } from '../types.ts';
+import { downloadAllFontsAsZip, uploadAndConfigureFonts } from '../services/fontService.ts';
 
 interface SectionProps {
   title: string;
@@ -49,6 +50,7 @@ interface SidebarProps {
   onAddCustomFont: (name: string, data: ArrayBuffer) => void;
   onDeleteCustomFont: (name: string) => void;
   onUpdateColors?: (colors: string[]) => void;
+  onReplaceFonts?: (fonts: { name: string; value: string }[]) => void;
   isMobile?: boolean;
 }
 
@@ -69,6 +71,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onAddCustomFont,
   onDeleteCustomFont,
   onUpdateColors,
+  onReplaceFonts,
   isMobile = false
 }) => {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -80,8 +83,12 @@ const Sidebar: React.FC<SidebarProps> = ({
     elements: isMobile
   });
   const [showFontList, setShowFontList] = useState(false);
+  const [showFontConfigSheet, setShowFontConfigSheet] = useState(false);
+  const [fontConfigStep, setFontConfigStep] = useState<'download' | 'upload'>('download');
+  const [isDownloading, setIsDownloading] = useState(false);
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const fontUploadRef = useRef<HTMLInputElement>(null);
+  const fontZipUploadRef = useRef<HTMLInputElement>(null);
   const colorPickerRef = useRef<HTMLInputElement>(null);
 
   const triggerHaptic = (intensity = 10) => {
@@ -139,6 +146,42 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const handleDownloadFontPack = async () => {
+    setIsDownloading(true);
+    try {
+      const zipBlob = await downloadAllFontsAsZip();
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'pomelli-fonts.zip';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      setFontConfigStep('upload');
+    } catch (error) {
+      alert('Failed to download fonts. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleFontZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const configuredFonts = await uploadAndConfigureFonts(file);
+      if (onReplaceFonts) {
+        onReplaceFonts(configuredFonts);
+      }
+      setShowFontConfigSheet(false);
+      setFontConfigStep('download');
+      alert('Fonts configured successfully! All Google Fonts have been replaced with local versions.');
+    } catch (error) {
+      alert('Failed to configure fonts. Please try again.');
+    }
+  };
+
   const SHAPES = [
     { id: 'square', label: 'Square', icon: <div className="w-5 h-5 bg-white/20 rounded-sm" /> },
     { id: 'circle', label: 'Circle', icon: <div className="w-5 h-5 bg-white/20 rounded-full" /> },
@@ -155,6 +198,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     <div className={`${isMobile ? 'w-full' : 'w-[380px]'} h-full bg-[#111] ${isMobile ? '' : 'border-l'} border-white/10 flex flex-col select-none overflow-hidden`}>
       <input type="file" ref={imageUploadRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
       <input type="file" ref={fontUploadRef} className="hidden" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} />
+      <input type="file" ref={fontZipUploadRef} className="hidden" accept=".zip" onChange={handleFontZipUpload} />
       <input type="color" ref={colorPickerRef} className="hidden" onChange={handleAddColor} />
 
       {!isMobile && (
@@ -253,9 +297,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                         </div>
                         {showFontList && (
                           <div className="absolute z-[200] top-full mt-2 left-0 right-0 max-h-80 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl overflow-y-auto no-scrollbar py-2 animate-in slide-in-from-top-4 fade-in duration-200">
-                             <div className="px-5 py-2 border-b border-white/5 mb-2">
+                             <div className="px-5 py-2 border-b border-white/5 mb-2 space-y-2">
                                 <button onClick={() => { setShowFontList(false); fontUploadRef.current?.click(); }} className="w-full bg-lime-400 h-9 rounded-lg text-black text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-transform">
                                    <Icons.Plus className="w-3 h-3" /> Upload Font
+                                </button>
+                                <button onClick={() => { setShowFontList(false); setShowFontConfigSheet(true); }} className="w-full bg-zinc-800 h-9 rounded-lg text-white text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-transform border border-white/10">
+                                   <Icons.Paperclip className="w-3 h-3" /> Configure Fonts
                                 </button>
                              </div>
                              {availableFonts.map(font => (
@@ -344,6 +391,90 @@ const Sidebar: React.FC<SidebarProps> = ({
            <button onClick={() => (window as any).dispatchEvent(new CustomEvent('open-export-modal'))} className="w-full bg-lime-400 text-black h-12 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-lime-300 transition-all active:scale-95 shadow-[0_10px_30px_rgba(163,230,53,0.2)] italic uppercase tracking-tighter">
               <Icons.Download className="w-5 h-5" /> SNAP EXPORT
            </button>
+        </div>
+      )}
+
+      {showFontConfigSheet && (
+        <div className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-end md:items-center md:justify-center p-0 md:p-4">
+          <div className="bg-zinc-900 w-full md:max-w-lg md:rounded-3xl border-t md:border border-white/10 bottom-sheet-transition md:animate-in md:fade-in md:zoom-in-95">
+            <div className="p-6 border-b border-white/10 flex items-center justify-between">
+              <h2 className="text-xl font-bold">Configure Fonts</h2>
+              <button onClick={() => { setShowFontConfigSheet(false); setFontConfigStep('download'); }} className="p-2 hover:bg-white/5 rounded-lg transition-colors">
+                <Icons.X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {fontConfigStep === 'download' && (
+                <div className="space-y-4">
+                  <div className="bg-zinc-800/50 border border-white/5 rounded-2xl p-6 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-lime-400/10 rounded-xl flex items-center justify-center shrink-0">
+                        <Icons.Download className="w-5 h-5 text-lime-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-bold mb-1">Step 1: Download Font Pack</h3>
+                        <p className="text-sm text-white/60">Download all fonts used in Pomelli as a single ZIP file.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleDownloadFontPack}
+                    disabled={isDownloading}
+                    className="w-full bg-lime-400 text-black py-4 rounded-xl font-bold hover:bg-lime-300 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isDownloading ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                        Preparing Download...
+                      </>
+                    ) : (
+                      <>
+                        <Icons.Download className="w-5 h-5" />
+                        Download Font Pack
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {fontConfigStep === 'upload' && (
+                <div className="space-y-4">
+                  <div className="bg-zinc-800/50 border border-white/5 rounded-2xl p-6 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-lime-400/10 rounded-xl flex items-center justify-center shrink-0">
+                        <Icons.Paperclip className="w-5 h-5 text-lime-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-bold mb-1">Step 2: Upload Font Pack</h3>
+                        <p className="text-sm text-white/60">Upload the ZIP file you just downloaded to configure all fonts locally.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-lime-400/5 border border-lime-400/20 rounded-xl p-4 text-sm text-lime-400/80">
+                    <div className="flex items-start gap-2">
+                      <Icons.Sparkles className="w-4 h-4 shrink-0 mt-0.5" />
+                      <p>Once uploaded, all Google Fonts will be replaced with local versions for better performance and offline support.</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => fontZipUploadRef.current?.click()}
+                    className="w-full bg-lime-400 text-black py-4 rounded-xl font-bold hover:bg-lime-300 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <Icons.Paperclip className="w-5 h-5" />
+                    Upload Font Pack
+                  </button>
+                </div>
+              )}
+
+              <div className="text-xs text-white/40 text-center pt-4 border-t border-white/5">
+                This will store fonts locally in your browser for offline use
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

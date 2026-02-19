@@ -47,3 +47,41 @@ export interface EditorState {
   selectedElementId: string | null;
   themeColors: string[];
 }
+
+export interface BusinessDNA {
+  id: string;
+  userId: string;
+  brandName: string;
+  websiteUrl: string;
+  screenshotUrl?: string;
+  brandColors: string[];
+  topFonts: string[];
+  brandValues: string[];
+  brandToneOfVoice: string;
+  brandAesthetic: string;
+  businessOverview: string;
+  noticeableColors: string[];
+  logoUrl?: string;
+  images: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Campaign {
+  id: string;
+  userId: string;
+  name: string;
+  dnaId?: string;
+  pageCount: number;
+  prompt: string;
+  designs: EditorState;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface User {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL: string;
+}
