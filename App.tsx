@@ -6,7 +6,8 @@ import Sidebar from './components/Sidebar.tsx';
 import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
 import { domToPng } from 'modern-screenshot';
-import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, User } from './firebase.ts';
+import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child } from './firebase.ts';
+import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
 
 interface SnapLine {
@@ -689,7 +690,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       if (Math.abs(rotation % 45) < 5) rotation = Math.round(rotation / 45) * 45;
       updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation } });
     }
-  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement]);
+  }, [dragStart, elementStartPos, state.selectedElementId, scale, update.e,pdateElement]);
 
   const handlePointerUp = useCallback(() => {
     setDragStart(null);
