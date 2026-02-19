@@ -1,4 +1,4 @@
-import { sanitizeAiJson } from '../utils.js';
+import { sanitizeAiJson } from './utils.js';
 
 export async function onRequestPost({ request, env }) {
   const { screenshotBase64, websiteUrl } = await request.json();
