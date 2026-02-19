@@ -38,6 +38,7 @@ interface SidebarProps {
   currentDesignId: string | null;
   loadDesign: (id: string) => void;
   createNewDesign: () => void;
+  deleteAllDesigns: () => void;
   importDesign: () => void;
   selectedElement: DesignElement | null;
   themeColors: string[];
@@ -64,6 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   currentDesignId,
   loadDesign,
   createNewDesign,
+  deleteAllDesigns,
   importDesign,
   selectedElement,
   themeColors,
@@ -199,9 +201,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                   </button>
               ))}
             </div>
-            <button onClick={importDesign} className="w-full bg-zinc-800 h-10 rounded-lg text-xs font-bold border border-white/10 hover:border-white/20 active:scale-[0.98] uppercase flex items-center justify-center gap-2">
-                <Icons.Upload className="w-4 h-4" /> Import Design
-            </button>
+            <div className="flex gap-2">
+              <button onClick={importDesign} className="w-full bg-zinc-800 h-10 rounded-lg text-xs font-bold border border-white/10 hover:border-white/20 active:scale-[0.98] uppercase flex items-center justify-center gap-2">
+                  <Icons.Upload className="w-4 h-4" /> Import
+              </button>
+              <button onClick={deleteAllDesigns} className="w-full bg-red-500/10 text-red-400 h-10 rounded-lg text-xs font-bold border border-red-500/20 hover:bg-red-500/20 active:scale-[0.98] uppercase flex items-center justify-center gap-2">
+                  <Icons.Trash2 className="w-4 h-4" /> Delete All
+              </button>
+            </div>
           </div>
         </Section>
         
