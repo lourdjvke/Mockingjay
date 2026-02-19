@@ -479,26 +479,105 @@ For each attached image, create an image element with type "image" and set conte
 - Fourth image: "ATTACHED_IMAGE_3"
 Position them prominently in the design with good sizing (at least 200x200).` : ''}`;
 
-      const payload = {
-        contents: [
-          {
-            parts: [
-              {
-                text: `${systemInstruction}\n\nCurrent Editor State: ${JSON.stringify(state)}\n\nUser Request: ${aiPrompt}`
-              }
-            ]
-          }
-        ],
-        systemInstruction: {
-          parts: [{ text: systemInstruction }]
-        },
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.9,
-          topP: 0.95,
-          topK: 40,
-          maxOutputTokens: 8192
+      const userMessages = [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `${systemInstruction}\n\nCurrent Editor State: ${JSON.stringify(state)}\n\nUser Request: ${aiPrompt}`
+            }
+          ]
         }
+      ];
+
+      if (aiAttachedImages.length > 0) {
+        aiAttachedImages.forEach(image => {
+          userMessages[0].content.push({
+            type: "image_url",
+            image_url: { url: image }
+          });
+        });
+      }
+
+      const payload = {
+        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        messages: userMessages,
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "extraction_result",
+            strict: true,
+            schema: {
+                type: "object",
+                properties: {
+                    pages: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: {
+                                id: { type: "string" },
+                                background: { type: "string" },
+                                elements: {
+                                    type: "array",
+                                    items: {
+                                        type: "object",
+                                        properties: {
+                                            id: { type: "string" },
+                                            type: { type: "string" },
+                                            name: { type: "string" },
+                                            box: {
+                                                type: "object",
+                                                properties: {
+                                                    x: { type: "number" },
+                                                    y: { type: "number" },
+                                                    width: { type: "number" },
+                                                    height: { type: "number" },
+                                                    rotation: { type: "number" }
+                                                },
+                                                required: ["x", "y", "width", "height", "rotation"]
+                                            },
+                                            content: { type: "string" },
+                                            style: {
+                                                type: "object",
+                                                properties: {
+                                                    color: { type: "string" },
+                                                    backgroundColor: { type: "string" },
+                                                    fontSize: { type: "number" },
+                                                    fontFamily: { type: "string" },
+                                                    fontWeight: { type: "string" },
+                                                    textAlign: { type: "string" },
+                                                    letterSpacing: { type: "number" },
+                                                    lineHeight: { type: "number" },
+                                                    borderRadius: { type: "number" },
+                                                    opacity: { type: "number" },
+                                                    strokeColor: { type: "string" },
+                                                    strokeWidth: { type: "number" }
+                                                }
+                                            },
+                                            visible: { type: "boolean" },
+                                            locked: { type: "boolean" }
+                                        },
+                                        required: ["id", "type", "name", "box", "content", "style", "visible", "locked"]
+                                    }
+                                }
+                            },
+                            required: ["id", "background", "elements"]
+                        }
+                    },
+                    currentPageIndex: { type: "number" },
+                    selectedElementId: { type: ["string", "null"] },
+                    themeColors: { 
+                        type: "array", 
+                        items: { type: "string" } 
+                    }
+                },
+                required: ["pages", "currentPageIndex", "selectedElementId", "themeColors"]
+            }
+          }
+        },
+        temperature: 0,
+        max_tokens: 2048
       };
 
       const result = await fetchWithRetry(apiUrl, payload);
@@ -507,7 +586,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         throw new Error("Received an empty response from the AI service.");
       }
 
-      const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      const textResponse = result.choices?.[0]?.message?.content;
 
       if (!textResponse) {
         console.error("Invalid AI Response:", result);
