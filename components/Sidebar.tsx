@@ -1,7 +1,7 @@
-
 import React, { useState, useRef } from 'react';
 import { Icons } from './IconLibrary.tsx';
 import { DesignElement, Page } from '../types.ts';
+import { User } from 'firebase/auth';
 
 interface SectionProps {
   title: string;
@@ -33,6 +33,12 @@ const Section: React.FC<SectionProps> = ({ title, id, icon, children, isOpen, on
 );
 
 interface SidebarProps {
+  user: User | null;
+  designs: any[];
+  currentDesignId: string | null;
+  loadDesign: (id: string) => void;
+  createNewDesign: () => void;
+  importDesign: () => void;
   selectedElement: DesignElement | null;
   themeColors: string[];
   pages: Page[];
@@ -53,6 +59,12 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
+  user,
+  designs,
+  currentDesignId,
+  loadDesign,
+  createNewDesign,
+  importDesign,
   selectedElement,
   themeColors,
   pages,
@@ -72,6 +84,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   isMobile = false
 }) => {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    history: !isMobile,
     image: !isMobile,
     media: false,
     text: !isMobile,
@@ -167,6 +180,26 @@ const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <div className="flex-1 overflow-y-auto">
+        <Section title="Design History" id="history" icon={<Icons.History className="w-4 h-4" />} isOpen={openSections.history} onToggle={toggleSection}>
+          <div className="space-y-2">
+            <button onClick={createNewDesign} className="w-full bg-lime-400/10 text-lime-400 h-10 rounded-lg text-xs font-bold border border-lime-400/20 hover:bg-lime-400/20 active:scale-[0.98] uppercase flex items-center justify-center gap-2">
+              <Icons.Plus className="w-4 h-4" /> New Design
+            </button>
+            {designs.map(design => (
+              <button 
+                key={design.id} 
+                onClick={() => loadDesign(design.id)} 
+                className={`w-full p-3 rounded-lg text-left text-xs ${currentDesignId === design.id ? 'bg-zinc-700' : 'bg-zinc-800 hover:bg-zinc-700'}`}>
+                <p className="font-bold truncate">{design.pages[0]?.elements[0]?.content || 'Untitled Design'}</p>
+                <p className="text-white/40">{new Date(design.lastModified).toLocaleString()}</p>
+              </button>
+            ))}
+            <button onClick={importDesign} className="w-full bg-zinc-800 h-10 rounded-lg text-xs font-bold border border-white/10 hover:border-white/20 active:scale-[0.98] uppercase flex items-center justify-center gap-2">
+                <Icons.Upload className="w-4 h-4" /> Import Design
+            </button>
+          </div>
+        </Section>
+        
         <div className="px-5 py-4 border-b border-white/10">
            <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Palette</span>
