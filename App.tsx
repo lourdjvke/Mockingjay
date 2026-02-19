@@ -208,7 +208,7 @@ const App: React.FC = () => {
   };
 
   const injectFontFace = (name: string, base64: string) => {
-    const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
+    const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
     document.getElementById(styleId)?.remove();
     const style = document.createElement('style');
     style.id = styleId;
@@ -261,7 +261,7 @@ const App: React.FC = () => {
   const handleDeleteCustomFont = useCallback(async (name: string) => {
     try {
       await FontStore.deleteFont(name);
-      const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
+      const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
       document.getElementById(styleId)?.remove();
       setUserFonts(prev => prev.filter(f => f.name !== name));
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(5);
@@ -373,7 +373,7 @@ const App: React.FC = () => {
         if (response.ok) return await response.json();
 
         const errData = await response.json();
-        lastError = new Error(errData.error?.message || `Request failed with status ${response.status}`);
+        lastError = new Error(errData.error || `Request failed with status ${response.status}`);
         
         if (response.status === 429 || response.status >= 500) {
           const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
@@ -528,7 +528,11 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           content: [
             {
               type: "text",
-              text: `${systemInstruction}\\n\\nCurrent Editor State: ${JSON.stringify(state)}\\n\\nUser Request: ${aiPrompt}`
+              text: `${systemInstruction}
+
+Current Editor State: ${JSON.stringify(state)}
+
+User Request: ${aiPrompt}`
             }
           ]
         }
@@ -859,9 +863,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
       const userFontStyles = document.querySelectorAll('style[id^="font-face-"]');
       let userFontCss = '';
-      userFontStyles.forEach(el => { userFontCss += el.textContent + '\\n'; });
+      userFontStyles.forEach(el => { userFontCss += el.textContent + '\n'; });
       if (userFontCss && fontStyleEl) {
-        fontStyleEl.textContent += '\\n' + userFontCss;
+        fontStyleEl.textContent += '\n' + userFontCss;
       } else if (userFontCss && !fontStyleEl) {
         fontStyleEl = document.createElement('style');
         fontStyleEl.setAttribute('data-export-fonts', 'true');
