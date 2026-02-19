@@ -1,15 +1,11 @@
 
 export async function onRequestPost({ request, env }) {
-  // Switched to Google Gemini API
   const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`;
 
   try {
-    const clientRequestBody = await request.json(); // Original request from the client app
-
-    // Assuming the relevant prompt is the last message content.
+    const clientRequestBody = await request.json();
     const userPromptText = clientRequestBody.messages[clientRequestBody.messages.length - 1].content;
 
-    // The full schema for the design, as before.
     const designSchema = {
       "type": "object",
       "properties": {
@@ -33,9 +29,7 @@ export async function onRequestPost({ request, env }) {
                     "name": { "type": "string" },
                     "box": {
                       "type": "object",
-                      "properties": {
-                        "x": { "type": "number" }, "y": { "type": "number" }, "width": { "type": "number" }, "height": { "type": "number" }, "rotation": { "type": "number" }
-                      },
+                      "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "width": { "type": "number" }, "height": { "type": "number" }, "rotation": { "type": "number" } },
                       "required": ["x", "y", "width", "height", "rotation"]
                     },
                     "content": { "type": "string" },
@@ -73,7 +67,6 @@ export async function onRequestPost({ request, env }) {
       "required": ["currentPageIndex", "selectedElementId", "themeColors", "pages"]
     };
 
-    // New "luxury designer" persona
     const luxuryDesignContext = `
       You are "Mockingjay Atelier", the epitome of digital elegance and a visionary in luxury brand design.
       Your creations are not mere designs; they are bespoke digital couture. Your task is to interpret user aspirations and manifest them into breathtaking, high-fashion design structures.
@@ -113,14 +106,9 @@ export async function onRequestPost({ request, env }) {
       ${userPromptText}
     `;
 
-    // Construct the request body for the Gemini API
     const geminiRequestBody = {
-      contents: [{
-        parts: [{ text: luxuryDesignContext }]
-      }],
-      generationConfig: {
-        responseMimeType: "application/json",
-      }
+      contents: [{ parts: [{ text: luxuryDesignContext }] }],
+      generationConfig: { responseMimeType: "application/json" },
     };
 
     const geminiResponse = await fetch(geminiApiUrl, {
@@ -130,9 +118,24 @@ export async function onRequestPost({ request, env }) {
     });
 
     if (!geminiResponse.ok) {
-      const errorBody = await geminiResponse.json();
+      if (geminiResponse.status === 429) {
+        return new Response(JSON.stringify({ error: 'High traffic: try again soon' }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      let errorBody;
+      try {
+        errorBody = await geminiResponse.json();
+      } catch (e) {
+        const errorText = await geminiResponse.text();
+        throw new Error(`Gemini API request failed with status ${geminiResponse.status}: ${errorText}`);
+      }
+      
+      const errorMessage = errorBody?.error?.message || JSON.stringify(errorBody);
       console.error('Gemini API Error:', errorBody);
-      throw new Error(`Gemini API request failed: ${errorBody.error.message}`);
+      throw new Error(`Gemini API request failed: ${errorMessage}`);
     }
 
     const geminiData = await geminiResponse.json();
@@ -143,11 +146,8 @@ export async function onRequestPost({ request, env }) {
       throw new Error('No content in Gemini response');
     }
 
-    // Transform the Gemini response to the OpenAI format that the client expects
     const openAICompliantResponse = {
-      choices: [{
-        message: { content: generatedText }
-      }]
+      choices: [{ message: { content: generatedText } }]
     };
 
     return new Response(JSON.stringify(openAICompliantResponse), {
