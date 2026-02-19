@@ -35,11 +35,13 @@ const Section: React.FC<SectionProps> = ({ title, id, icon, children, isOpen, on
 interface SidebarProps {
   user: User | null;
   designs: any[];
+  brandData: any;
   currentDesignId: string | null;
   loadDesign: (id: string) => void;
   createNewDesign: () => void;
   deleteDesign: (id: string) => void;
   importDesign: () => void;
+  openBrandDna: () => void;
   selectedElement: DesignElement | null;
   themeColors: string[];
   pages: Page[];
@@ -62,11 +64,13 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({
   user,
   designs,
+  brandData,
   currentDesignId,
   loadDesign,
   createNewDesign,
   deleteDesign,
   importDesign,
+  openBrandDna,
   selectedElement,
   themeColors,
   pages,
@@ -238,6 +242,18 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               ))}
            </div>
+            <button
+                onClick={openBrandDna}
+                className="mt-4 w-full h-10 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-2 border transition-all active:scale-[0.98]"
+                style={{
+                    background: brandData ? 'linear-gradient(to right, #8B5CF6, #EC4899, #F59E0B, #10B981)' : '#27272A',
+                    borderColor: brandData ? 'transparent' : '#404040',
+                    color: 'white',
+                    padding: '0 1rem'
+                }}
+            >
+            {brandData ? 'Use Brand DNA' : 'Create Brand DNA'}
+            </button>
         </div>
 
         <Section title="Media" id="media" icon={<Icons.ImageIcon className="w-4 h-4" />} isOpen={openSections.media} onToggle={toggleSection}>
