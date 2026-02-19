@@ -181,19 +181,24 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       <div className="flex-1 overflow-y-auto">
         <Section title="Design History" id="history" icon={<Icons.History className="w-4 h-4" />} isOpen={openSections.history} onToggle={toggleSection}>
-          <div className="space-y-2">
+          <div className="space-y-3">
             <button onClick={createNewDesign} className="w-full bg-lime-400/10 text-lime-400 h-10 rounded-lg text-xs font-bold border border-lime-400/20 hover:bg-lime-400/20 active:scale-[0.98] uppercase flex items-center justify-center gap-2">
               <Icons.Plus className="w-4 h-4" /> New Design
             </button>
-            {designs.map(design => (
-              <button 
-                key={design.id} 
-                onClick={() => loadDesign(design.id)} 
-                className={`w-full p-3 rounded-lg text-left text-xs ${currentDesignId === design.id ? 'bg-zinc-700' : 'bg-zinc-800 hover:bg-zinc-700'}`}>
-                <p className="font-bold truncate">{design.pages?.[0]?.elements?.[0]?.content || 'Untitled Design'}</p>
-                <p className="text-white/40">{new Date(design.lastModified).toLocaleString()}</p>
-              </button>
-            ))}
+            <div className="grid grid-cols-2 gap-3">
+              {designs.map(design => (
+                  <button 
+                      key={design.id} 
+                      onClick={() => loadDesign(design.id)} 
+                      className={`w-full aspect-[4/3] rounded-lg text-left text-xs overflow-hidden group relative ${currentDesignId === design.id ? 'border-2 border-lime-400' : 'border border-white/10'}`}>
+                      <img src={design.thumbnail} alt="Design thumbnail" className="w-full h-full object-cover bg-zinc-800"/>
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                          <p className="font-bold truncate text-white">{design.pages?.[0]?.elements?.[0]?.content || 'Untitled Design'}</p>
+                          <p className="text-white/50 text-[10px]">{new Date(design.lastModified).toLocaleDateString()}</p>
+                      </div>
+                  </button>
+              ))}
+            </div>
             <button onClick={importDesign} className="w-full bg-zinc-800 h-10 rounded-lg text-xs font-bold border border-white/10 hover:border-white/20 active:scale-[0.98] uppercase flex items-center justify-center gap-2">
                 <Icons.Upload className="w-4 h-4" /> Import Design
             </button>
@@ -212,7 +217,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => { triggerHaptic(5); updatePage({ background: c }); }}
                     onContextMenu={(e) => { e.preventDefault(); handleRemoveColor(c); }}
                     style={{ backgroundColor: c }}
-                    className={`w-8 h-8 rounded-full border-2 ${currentPage.background === c ? 'border-white shadow-[0_0_10px_rgba(255,255,255,0.3)]' : 'border-white/10'} active:scale-90 transition-all`}
+                    className={`w-8 h-8 rounded-full border-2 ${currentPage?.background === c ? 'border-white shadow-[0_0_10px_rgba(255,255,255,0.3)]' : 'border-white/10'} active:scale-90 transition-all`}
                   />
                   <button 
                     onClick={() => handleRemoveColor(c)}
@@ -357,7 +362,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
             <Section title="Layers" id="layers" icon={<Icons.Layout className="w-4 h-4" />} isOpen={openSections.layers} onToggle={toggleSection}>
                <div className="space-y-2">
-                 {[...currentPage.elements].reverse().map((el) => (
+                 {currentPage?.elements.slice().reverse().map((el) => (
                    <div key={el.id} className={`flex items-center justify-between p-3 rounded-xl text-xs ${selectedElement.id === el.id ? 'bg-lime-400/10 text-lime-400 border border-lime-400/20' : 'bg-zinc-900/50 border border-white/5'}`}>
                       <span className="truncate flex-1 font-bold italic">{el.name}</span>
                       <div className="flex gap-1">
