@@ -51,20 +51,38 @@ const App: React.FC = () => {
 
   const allFonts = [...userFonts, ...BASE_FONTS];
 
-  // Debounced save function
-  const debouncedSave = useDebouncedCallback((designState: EditorState, designId: string) => {
-    if (!user) return;
+  // Debounced save function with thumbnail generation
+  const debouncedSave = useDebouncedCallback(async (designState: EditorState, designId: string) => {
+    if (!user || !canvasRef.current) return;
+    
     setSaveStatus('saving');
+    
+    // Generate a low-quality snapshot for the thumbnail
+    const thumbnail = await domToPng(canvasRef.current, {
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
+        scale: 0.2, // Low scale for performance
+    }).catch(e => {
+        console.error("Thumbnail generation failed:", e);
+        return ''; // Return empty string on failure
+    });
+
+    const designData = {
+        ...designState,
+        lastModified: Date.now(),
+        thumbnail, // This will be an empty string if generation failed
+    };
+
     const dbRef = ref(database, `users/${user.uid}/designs/${designId}`);
-    set(dbRef, { ...designState, lastModified: Date.now() })
-      .then(() => {
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2000);
-      })
-      .catch(error => {
-        console.error("Failed to save design:", error);
-        setSaveStatus('idle');
-      });
+    set(dbRef, designData)
+        .then(() => {
+            setSaveStatus('saved');
+            setTimeout(() => setSaveStatus('idle'), 2000);
+        })
+        .catch(error => {
+            console.error("Failed to save design:", error);
+            setSaveStatus('idle');
+        });
   }, 3000);
 
   // Autosave effect
@@ -113,7 +131,7 @@ const App: React.FC = () => {
       });
       return () => unsubscribe();
     }
-  }, [user]);
+  }, [user, loadDesign, createNewDesign]);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -124,13 +142,13 @@ const App: React.FC = () => {
     }
   };
 
-  const createNewDesign = () => {
+  const createNewDesign = useCallback(() => {
     const newId = generateId();
     setState(INITIAL_STATE);
     setCurrentDesignId(newId);
-  };
+  }, []);
 
-  const loadDesign = (designId: string) => {
+  const loadDesign = useCallback((designId: string) => {
     const designToLoad = designs.find(d => d.id === designId);
     if (designToLoad) {
       // Ensure pages and elements arrays exist to prevent crashes from legacy data.
@@ -147,7 +165,7 @@ const App: React.FC = () => {
       });
       setCurrentDesignId(designId);
     }
-  };
+  }, [designs]);
 
   const addPage = () => {
     setState(prev => {
@@ -204,7 +222,6 @@ const App: React.FC = () => {
     loadStoredData();
   }, []);
 
-  // Added handleAddCustomFont to fix missing name error
   const handleAddCustomFont = useCallback(async (name: string, data: ArrayBuffer) => {
     try {
       await FontStore.saveFont(name, data);
@@ -222,7 +239,6 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Added handleDeleteCustomFont to fix missing name error
   const handleDeleteCustomFont = useCallback(async (name: string) => {
     try {
       await FontStore.deleteFont(name);
@@ -243,7 +259,6 @@ const App: React.FC = () => {
 
   // PWA install prompt handling
   useEffect(() => {
-    // Check if already installed as PWA
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
       || (window.navigator as any).standalone === true;
     setIsPwaInstalled(isStandalone);
@@ -321,7 +336,6 @@ const App: React.FC = () => {
       };
       reader.readAsDataURL(file);
     });
-    // Reset input so same files can be re-selected
     e.target.value = '';
   };
 
@@ -587,7 +601,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
       setElementStartPos({ ...element.box });
     }
-  }, [currentPage.elements, state.selectedElementId, triggerHaptic]);
+  }, [currentPage, state.selectedElementId, triggerHaptic]);
 
   const deselectAll = () => setState(prev => ({ ...prev, selectedElementId: null }));
 
@@ -743,7 +757,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
     let fontStyleEl: HTMLStyleElement | null = null;
     try {
-      // Embed Google Fonts as inline base64 @font-face rules
       const googleFontsLink = document.querySelector('link[href*="fonts.googleapis.com"]') as HTMLLinkElement;
       if (googleFontsLink) {
         const inlineFontCss = await embedGoogleFonts(googleFontsLink.href);
@@ -755,7 +768,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         }
       }
 
-      // Also collect user-uploaded font @font-face rules already in <head>
       const userFontStyles = document.querySelectorAll('style[id^="font-face-"]');
       let userFontCss = '';
       userFontStyles.forEach(el => { userFontCss += el.textContent + '\n'; });
@@ -795,11 +807,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       setExportStatus('error');
       setTimeout(() => setExportStatus('idle'), 3000);
     } finally {
-      // Restore styles
       canvasNode.style.boxShadow = originalBoxShadow;
       canvasNode.style.transform = originalTransform;
       canvasNode.style.transition = originalTransition;
-      // Clean up injected font style element
       if (fontStyleEl && fontStyleEl.parentNode) {
         fontStyleEl.parentNode.removeChild(fontStyleEl);
       }
@@ -808,7 +818,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
-       {/* Authentication Overlay */}
        {!user && !isAuthLoading && (
         <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center gap-8 animate-in fade-in duration-500">
           <div className="text-center space-y-2">
@@ -841,7 +850,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       </div>
       
       <div className="flex-1 flex flex-col relative canvas-container overflow-hidden">
-        {/* DESIGN ENGINE THINKING STATE */}
         {isAiLoading && (
           <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-xl flex flex-col items-center justify-center gap-8 animate-in fade-in duration-500">
              <div className="relative">
@@ -1026,7 +1034,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                       <button onClick={() => setIsBottomSheetOpen(true)} className="flex flex-col items-center gap-1 text-lime-400 p-2 min-w-[50px]"><Icons.Plus className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Add</span></button>
                       <div className="flex gap-2 items-center">
                          {state.themeColors.slice(0, 3).map(c => (
-                           <button key={c} onClick={() => updatePage({ background: c })} className={`w-8 h-8 rounded-full border ${currentPage.background === c ? 'border-white' : 'border-white/20'}`} style={{ backgroundColor: c }} />
+                           <button key={c} onClick={() => updatePage({ background: c })} className={`w-8 h-8 rounded-full border ${currentPage?.background === c ? 'border-white' : 'border-white/20'}`} style={{ backgroundColor: c }} />
                          ))}
                       </div>
                     </>
@@ -1064,7 +1072,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   onAddCustomFont={handleAddCustomFont}
                   onDeleteCustomFont={handleDeleteCustomFont}
                   onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
-                  onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
+                  onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                   onAddShape={onAddShape}
                   onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                   onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
@@ -1079,7 +1087,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
         {isExportModalOpen && exportStatus === 'idle' && (
           <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-6" onClick={() => setIsExportModalOpen(false)}>
-            <div className="bg-zinc-900 border border-white/10 rounded-[24px] w-full max-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+            <div className="bg-zinc-900 border border-white/10 rounded-[24px] w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                <div className="p-8 space-y-6">
                   <div className="text-center space-y-2">
                     <h2 className="text-xl md:text-2xl font-black text-white italic tracking-tight uppercase">Export Design</h2>
@@ -1152,7 +1160,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           onAddCustomFont={handleAddCustomFont}
           onDeleteCustomFont={handleDeleteCustomFont}
           onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
-          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0].value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
+          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
           onAddShape={onAddShape}
           onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
           onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
