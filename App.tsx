@@ -1,26 +1,26 @@
-import React, { useState, useCallback, useRef, useEffect } from \'react\';
-import { EditorState, DesignElement, BoundingBox, Page } from \'./types.ts\';
-import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from \'./constants.ts\';
-import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, embedGoogleFonts } from \'./utils.ts\';
-import Sidebar from \'./components/Sidebar.tsx\';
-import ElementRenderer from \'./components/ElementRenderer.tsx\';
-import { Icons } from \'./components/IconLibrary.tsx\';
-import { domToPng } from \'modern-screenshot\';
-import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove } from \'./firebase.ts\';
-import type { User } from \'firebase/auth\';
-import { useDebouncedCallback } from \'use-debounce\';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { EditorState, DesignElement, BoundingBox, Page } from './types.ts';
+import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
+import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, embedGoogleFonts } from './utils.ts';
+import Sidebar from './components/Sidebar.tsx';
+import ElementRenderer from './components/ElementRenderer.tsx';
+import { Icons } from './components/IconLibrary.tsx';
+import { domToPng } from 'modern-screenshot';
+import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove } from './firebase.ts';
+import type { User } from 'firebase/auth';
+import { useDebouncedCallback } from 'use-debounce';
 
 interface SnapLine {
-  type: \'vertical\' | \'horizontal\';
+  type: 'vertical' | 'horizontal';
   position: number;
 }
 
-type ExportStatus = \'idle\' | \'processing\' | \'success\' | \'error\';
-type SaveStatus = \'idle\' | \'saving\' | \'saved\';
+type ExportStatus = 'idle' | 'processing' | 'success' | 'error';
+type SaveStatus = 'idle' | 'saving' | 'saved';
 
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>(INITIAL_STATE);
-  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: \'move\' | \'resize\' | \'rotate\', handle?: string, initialAngle?: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: 'move' | 'resize' | 'rotate', handle?: string, initialAngle?: number } | null>(null);
   const [elementStartPos, setElementStartPos] = useState<BoundingBox | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
@@ -30,7 +30,7 @@ const App: React.FC = () => {
   const [scale, setScale] = useState(1);
   const [snapLines, setSnapLines] = useState<SnapLine[]>([]);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [exportStatus, setExportStatus] = useState<ExportStatus>(\'idle\');
+  const [exportStatus, setExportStatus] = useState<ExportStatus>('idle');
   const [userFonts, setUserFonts] = useState<{ name: string; value: string }[]>([]);
   const [recentImages, setRecentImages] = useState<string[]>([]);
   const [aiAttachedImages, setAiAttachedImages] = useState<string[]>([]);
@@ -42,7 +42,7 @@ const App: React.FC = () => {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [designs, setDesigns] = useState<any[]>([]);
   const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>(\'idle\');
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -55,7 +55,7 @@ const App: React.FC = () => {
   const debouncedSave = useDebouncedCallback(async (designState: EditorState, designId: string) => {
     if (!user || !canvasRef.current) return;
 
-    setSaveStatus(\'saving\');
+    setSaveStatus('saving');
 
     try {
         const thumbnail = await domToPng(canvasRef.current, {
@@ -73,12 +73,12 @@ const App: React.FC = () => {
         const dbRef = ref(database, `users/${user.uid}/designs/${designId}`);
         await set(dbRef, designData);
 
-        setSaveStatus(\'saved\');
-        setTimeout(() => setSaveStatus(\'idle\'), 2000);
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
 
     } catch (error) {
         console.error("Failed to save design or generate thumbnail:", error);
-        setSaveStatus(\'idle\'); // Ensure we always reset status on error
+        setSaveStatus('idle'); // Ensure we always reset status on error
     }
   }, 3000);
 
@@ -103,7 +103,7 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Load user\'s designs from Firebase
+  // Load user's designs from Firebase
   useEffect(() => {
     if (!user) {
       setDesigns([]);
@@ -131,7 +131,7 @@ const App: React.FC = () => {
     if (designs.length > 0) {
       loadDesign(designs[0].id);
     } else if (designs.length === 0) {
-        // If there are no designs, create a new one, but don\'t save it until a change is made.
+        // If there are no designs, create a new one, but don't save it until a change is made.
         createNewDesign();
     }
 }, [user, designs, currentDesignId, isAuthLoading]);
@@ -186,7 +186,7 @@ const App: React.FC = () => {
 
   const addPage = () => {
     setState(prev => {
-      const newPage: Page = { id: generateId(), background: \'#18181b\', elements: [] };
+      const newPage: Page = { id: generateId(), background: '#18181b', elements: [] };
       const newPages = [...prev.pages, newPage];
       return {
         ...prev,
@@ -198,7 +198,7 @@ const App: React.FC = () => {
 
 
   const bufferToBase64 = (buffer: ArrayBuffer): string => {
-    let binary = \'\';
+    let binary = '';
     const bytes = new Uint8Array(buffer);
     const len = bytes.byteLength;
     for (let i = 0; i < len; i++) {
@@ -208,11 +208,11 @@ const App: React.FC = () => {
   };
 
   const injectFontFace = (name: string, base64: string) => {
-    const styleId = `font-face-${name.replace(/\\s+/g, \'-\').toLowerCase()}`;
+    const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
     document.getElementById(styleId)?.remove();
-    const style = document.createElement(\'style\');
+    const style = document.createElement('style');
     style.id = styleId;
-    style.innerHTML = `@font-face { font-family: \'${name}\'; src: url(data:font/ttf;base64,${base64}); font-weight: normal; font-style: normal; }`;
+    style.innerHTML = `@font-face { font-family: '${name}'; src: url(data:font/ttf;base64,${base64}); font-weight: normal; font-style: normal; }`;
     document.head.appendChild(style);
   };
 
@@ -228,7 +228,7 @@ const App: React.FC = () => {
             const fontFace = new FontFace(font.name, font.data);
             const loadedFace = await fontFace.load();
             document.fonts.add(loadedFace);
-            loadedFonts.push({ name: font.name, value: `\'${font.name}\', sans-serif` });
+            loadedFonts.push({ name: font.name, value: `'${font.name}', sans-serif` });
           } catch (e) { console.error(`Font init fail: ${font.name}`, e); }
         }
         setUserFonts(loadedFonts);
@@ -250,7 +250,7 @@ const App: React.FC = () => {
       const loadedFace = await fontFace.load();
       document.fonts.add(loadedFace);
       
-      setUserFonts(prev => [...prev, { name, value: `\'${name}\', sans-serif` }]);
+      setUserFonts(prev => [...prev, { name, value: `'${name}', sans-serif` }]);
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(20);
     } catch (err) {
       console.error("Font save failed:", err);
@@ -261,7 +261,7 @@ const App: React.FC = () => {
   const handleDeleteCustomFont = useCallback(async (name: string) => {
     try {
       await FontStore.deleteFont(name);
-      const styleId = `font-face-${name.replace(/\\s+/g, \'-\').toLowerCase()}`;
+      const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
       document.getElementById(styleId)?.remove();
       setUserFonts(prev => prev.filter(f => f.name !== name));
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(5);
@@ -272,14 +272,14 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener(\'resize\', handleResize);
-    return () => window.removeEventListener(\'resize\', handleResize);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // PWA install prompt handling
   useEffect(() => {
     // Check if already installed as PWA
-    const isStandalone = window.matchMedia(\'(display-mode: standalone)\').matches
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
       || (window.navigator as any).standalone === true;
     setIsPwaInstalled(isStandalone);
 
@@ -293,11 +293,11 @@ const App: React.FC = () => {
       setDeferredPrompt(null);
     };
 
-    window.addEventListener(\'beforeinstallprompt\', handleBeforeInstall);
-    window.addEventListener(\'appinstalled\', handleAppInstalled);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', handleAppInstalled);
     return () => {
-      window.removeEventListener(\'beforeinstallprompt\', handleBeforeInstall);
-      window.removeEventListener(\'appinstalled\', handleAppInstalled);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
@@ -313,8 +313,8 @@ const App: React.FC = () => {
       setScale(Math.min(sx, sy, 1));
     };
     updateScale();
-    window.addEventListener(\'resize\', updateScale);
-    return () => window.removeEventListener(\'resize\', updateScale);
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
   }, [isMobile]);
 
   const currentPage = state.pages[state.currentPageIndex];
@@ -330,7 +330,7 @@ const App: React.FC = () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === \'accepted\') {
+    if (outcome === 'accepted') {
       setIsPwaInstalled(true);
     }
     setDeferredPrompt(null);
@@ -357,7 +357,7 @@ const App: React.FC = () => {
       reader.readAsDataURL(file);
     });
     // Reset input so same files can be re-selected
-    e.target.value = \'\';
+    e.target.value = '';
   };
 
   const fetchWithRetry = async (url: string, payload: any, retries = 5): Promise<any> => {
@@ -365,8 +365,8 @@ const App: React.FC = () => {
     for (let i = 0; i < retries; i++) {
       try {
         const response = await fetch(url, {
-          method: \'POST\',
-          headers: { \'Content-Type\': \'application/json\' },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
@@ -397,7 +397,7 @@ const App: React.FC = () => {
     triggerHaptic(30);
 
     try {
-      const apiUrl = \'/api/ai\';
+      const apiUrl = '/api/ai';
 
       const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer and UI/UX expert.
 Your task is to transform user prompts into complete, high-fidelity design structures.
@@ -410,13 +410,13 @@ CRITICAL RULES:
 1. ALWAYS populate the current page with multiple elements (minimum 3-5 elements)
 2. NEVER return an empty page with only a background color
 3. Elements MUST have proper positioning, sizing, font families, colors, and spacing
-4. Apply the user\'s request (color theme, brand, style) throughout ALL elements
+4. Apply the user's request (color theme, brand, style) throughout ALL elements
 5. Match the Canvas dimensions: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}
 6. When user asks for additional pages, append new pages to the pages array. Every page MUST have elements.
 7. Use reasonable borderRadius values (0-24px for rectangles, 999 for circles/pills). Do NOT use excessive values.
 8. For optional style properties that are not applicable to an element, you MUST return them with a value of null.
 
-AVAILABLE FONTS: ${allFonts.map(f => f.value).join(\', \')}.
+AVAILABLE FONTS: ${allFonts.map(f => f.value).join(', ')}.
 
 ELEMENT STRUCTURE - ALL FIELDS ARE REQUIRED FOR EACH ELEMENT:
 {
@@ -438,7 +438,7 @@ ELEMENT STRUCTURE - ALL FIELDS ARE REQUIRED FOR EACH ELEMENT:
     "opacity": 1, // Must be a number
     "strokeColor": "#hexcolor or null",
     "strokeWidth": "number or null",
-    "strokePattern": "\'solid\'|\'dashed\'|\'dotted\' or null",
+    "strokePattern": "'solid'|'dashed'|'dotted' or null",
     "clipPath": "CSS clip-path value or null"
   },
   "visible": true,
@@ -520,7 +520,7 @@ For each attached image, create an image element with type "image" and set conte
 - Second image: "ATTACHED_IMAGE_1"
 - Third image: "ATTACHED_IMAGE_2"
 - Fourth image: "ATTACHED_IMAGE_3"
-Position them prominently in the design with good sizing (at least 200x200).` : \'\'}`;
+Position them prominently in the design with good sizing (at least 200x200).` : ''}`;
 
       const userMessages = [
         {
@@ -584,10 +584,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         for (const page of newState.pages) {
           if (page.elements) {
             page.elements = page.elements.map((el: any) => {
-              if (typeof el.content === \'string\' && el.content.startsWith(\'ATTACHED_IMAGE_\')) {
-                const idx = parseInt(el.content.replace(\'ATTACHED_IMAGE_\', \'\'), 10);
+              if (typeof el.content === 'string' && el.content.startsWith('ATTACHED_IMAGE_')) {
+                const idx = parseInt(el.content.replace('ATTACHED_IMAGE_', ''), 10);
                 if (!isNaN(idx) && idx < aiAttachedImages.length) {
-                  return { ...el, content: aiAttachedImages[idx], type: \'image\' };
+                  return { ...el, content: aiAttachedImages[idx], type: 'image' };
                 }
               }
               return el;
@@ -658,7 +658,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     setState(prev => ({ ...prev, selectedElementId: id }));
     const element = currentPage.elements.find(el => el.id === id);
     if (element && !element.locked) {
-      setDragStart({ x: e.clientX, y: e.clientY, type: \'move\' });
+      setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
       setElementStartPos({ ...element.box });
     }
   }, [currentPage, state.selectedElementId, triggerHaptic]);
@@ -666,14 +666,14 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   const deselectAll = () => setState(prev => ({ ...prev, selectedElementId: null }));
 
   const addElement = useCallback((element: Partial<DesignElement>) => {
-    const defaultFont = allFonts.length > 0 ? allFonts[0].value : "\'Inter\', sans-serif";
+    const defaultFont = allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif";
     const newElement: DesignElement = {
       id: generateId(),
-      name: element.name || (element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : \'Element\'),
-      type: (element.type as any) || \'shape\',
+      name: element.name || (element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : 'Element'),
+      type: (element.type as any) || 'shape',
       box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 200, rotation: 0 },
-      content: \'\',
-      style: { backgroundColor: \'#FFFFFF\', color: \'#000000\', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: \'solid\', strokeColor: \'#000000\', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: \'400\', textAlign: \'center\' },
+      content: '',
+      style: { backgroundColor: '#FFFFFF', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: '400', textAlign: 'center' },
       visible: true,
       locked: false,
       ...element
@@ -683,7 +683,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       newPages[prev.currentPageIndex].elements.push(newElement);
       return { ...prev, pages: newPages, selectedElementId: newElement.id };
     });
-    if (element.type === \'image\' && element.content) {
+    if (element.type === 'image' && element.content) {
       MediaStore.saveImage(element.content).then(() => {
         MediaStore.getImages().then(imgs => setRecentImages(imgs.map(i => i.data)));
       });
@@ -696,31 +696,31 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     let borderRadius = 0;
     let width = 200;
     let height = 200;
-    if (type === \'circle\') borderRadius = 999;
-    if (type === \'pill\') { borderRadius = 999; height = 100; }
-    if (type === \'triangle\') clipPath = \'polygon(50% 0%, 0% 100%, 100% 100%)\';
-    if (type === \'diamond\') clipPath = \'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)\';
-    if (type === \'pentagon\') clipPath = \'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)\';
-    if (type === \'hexagon\') clipPath = \'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)\';
-    if (type === \'star\') clipPath = \'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)\';
-    if (type === \'parallelogram\') clipPath = \'polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%)\';
+    if (type === 'circle') borderRadius = 999;
+    if (type === 'pill') { borderRadius = 999; height = 100; }
+    if (type === 'triangle') clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)';
+    if (type === 'diamond') clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
+    if (type === 'pentagon') clipPath = 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)';
+    if (type === 'hexagon') clipPath = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)';
+    if (type === 'star') clipPath = 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)';
+    if (type === 'parallelogram') clipPath = 'polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%)';
 
     addElement({
-      type: \'shape\',
+      type: 'shape',
       name: type.charAt(0).toUpperCase() + type.slice(1),
-      style: { backgroundColor: state.themeColors[0] || \'#FFFFFF\', borderRadius, clipPath },
+      style: { backgroundColor: state.themeColors[0] || '#FFFFFF', borderRadius, clipPath },
       box: { x: (CANVAS_WIDTH - width) / 2, y: (CANVAS_HEIGHT - height) / 2, width, height, rotation: 0 }
     });
   }, [addElement, state.themeColors]);
 
-  const onReorder = useCallback((id: string, direction: \'up\' | \'down\') => {
+  const onReorder = useCallback((id: string, direction: 'up' | 'down') => {
     setState(prev => {
       const newPages = [...prev.pages];
       const page = { ...newPages[prev.currentPageIndex] };
       const index = page.elements.findIndex(el => el.id === id);
       if (index === -1) return prev;
       const newElements = [...page.elements];
-      if (direction === \'up\') {
+      if (direction === 'up') {
         if (index < newElements.length - 1) [newElements[index], newElements[index + 1]] = [newElements[index + 1], newElements[index]];
       } else {
         if (index > 0) [newElements[index], newElements[index - 1]] = [newElements[index - 1], newElements[index]];
@@ -736,7 +736,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     if (!dragStart || !elementStartPos || !state.selectedElementId) return;
     const dx = (e.clientX - dragStart.x) / scale;
     const dy = (e.clientY - dragStart.y) / scale;
-    if (dragStart.type === \'move\') {
+    if (dragStart.type === 'move') {
       const newX = elementStartPos.x + dx;
       const newY = elementStartPos.y + dy;
       const centerX = CANVAS_WIDTH / 2 - elementStartPos.width / 2;
@@ -746,21 +746,21 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       const snappedX = isSnappedX ? centerX : newX;
       const snappedY = isSnappedY ? centerY : newY;
       const lines: SnapLine[] = [];
-      if (isSnappedX) lines.push({ type: \'vertical\', position: CANVAS_WIDTH / 2 });
-      if (isSnappedY) lines.push({ type: \'horizontal\', position: CANVAS_HEIGHT / 2 });
+      if (isSnappedX) lines.push({ type: 'vertical', position: CANVAS_WIDTH / 2 });
+      if (isSnappedY) lines.push({ type: 'horizontal', position: CANVAS_HEIGHT / 2 });
       setSnapLines(lines);
       updateElement(state.selectedElementId, { box: { ...elementStartPos, x: snappedX, y: snappedY } });
-    } else if (dragStart.type === \'resize\' && dragStart.handle) {
+    } else if (dragStart.type === 'resize' && dragStart.handle) {
       const h = dragStart.handle;
       let { x, y, width, height } = elementStartPos;
-      if (h.includes(\'e\')) width += dx;
-      if (h.includes(\'w\')) { width -= dx; x += dx; }
-      if (h.includes(\'s\')) height += dy;
-      if (h.includes(\'n\')) { height -= dy; y += dy; }
+      if (h.includes('e')) width += dx;
+      if (h.includes('w')) { width -= dx; x += dx; }
+      if (h.includes('s')) height += dy;
+      if (h.includes('n')) { height -= dy; y += dy; }
       width = Math.max(10, width);
       height = Math.max(10, height);
       updateElement(state.selectedElementId, { box: { ...elementStartPos, x, y, width, height } });
-    } else if (dragStart.type === \'rotate\') {
+    } else if (dragStart.type === 'rotate') {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
       const cX = rect.left + (elementStartPos.x + elementStartPos.width / 2) * scale;
@@ -779,11 +779,11 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   }, []);
 
   useEffect(() => {
-    window.addEventListener(\'pointermove\', handlePointerMove);
-    window.addEventListener(\'pointerup\', handlePointerUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
     return () => {
-      window.removeEventListener(\'pointermove\', handlePointerMove);
-      window.removeEventListener(\'pointerup\', handlePointerUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
     };
   }, [handlePointerMove, handlePointerUp]);
 
@@ -803,7 +803,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   const handleExportPng = async () => {
     if (!canvasRef.current) return;
-    setExportStatus(\'processing\');
+    setExportStatus('processing');
     triggerHaptic(20);
 
     const canvasNode = canvasRef.current;
@@ -811,60 +811,60 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     const originalTransform = canvasNode.style.transform;
     const originalTransition = canvasNode.style.transition;
     
-    canvasNode.style.boxShadow = \'none\';
-    canvasNode.style.transform = \'none\';
-    canvasNode.style.transition = \'none\';
+    canvasNode.style.boxShadow = 'none';
+    canvasNode.style.transform = 'none';
+    canvasNode.style.transition = 'none';
 
     let fontStyleEl: HTMLStyleElement | null = null;
     try {
       // Dynamically build the Google Fonts URL for embedding, ensuring all fonts are available for export.
       const fontFamilies = [
-        \'Inter:wght@300;400;500;600;700\',
-        \'Playfair Display:ital,wght@0,400..900;1,400..900\',
-        \'Montserrat:wght@400;700;900\',
-        \'Bangers\',
-        \'Lobster\',
-        \'Permanent Marker\',
-        \'Sacramento\',
-        \'Press Start 2P\',
-        \'Monoton\',
-        \'Alfa Slab One\',
-        \'Cinzel Decorative:wght@400;700;900\',
-        \'Faster One\',
-        \'Righteous\',
-        \'Fredoka One\',
-        \'Orbitron:wght@400;700;900\',
-        \'Special Elite\',
-        \'Cookie\',
-        \'Satisfy\',
-        \'Kaushan Script\',
-        \'Pinyon Script\',
-        \'Rochester\',
-        \'Abril Fatface\',
-        \'Comfortaa:wght@300;700\',
-        \'UnifrakturMaguntia\',
-        \'Creepster\',
-        \'Nosifer\',
-        \'Bungee Shade\'
+        'Inter:wght@300;400;500;600;700',
+        'Playfair Display:ital,wght@0,400..900;1,400..900',
+        'Montserrat:wght@400;700;900',
+        'Bangers',
+        'Lobster',
+        'Permanent Marker',
+        'Sacramento',
+        'Press Start 2P',
+        'Monoton',
+        'Alfa Slab One',
+        'Cinzel Decorative:wght@400;700;900',
+        'Faster One',
+        'Righteous',
+        'Fredoka One',
+        'Orbitron:wght@400;700;900',
+        'Special Elite',
+        'Cookie',
+        'Satisfy',
+        'Kaushan Script',
+        'Pinyon Script',
+        'Rochester',
+        'Abril Fatface',
+        'Comfortaa:wght@300;700',
+        'UnifrakturMaguntia',
+        'Creepster',
+        'Nosifer',
+        'Bungee Shade'
       ];
-      const googleFontsUrl = `https://fonts.googleapis.com/css2?${fontFamilies.map(f => `family=${f.replace(/ /g, \'+\')}`).join(\'&\')}&display=swap`;
+      const googleFontsUrl = `https://fonts.googleapis.com/css2?${fontFamilies.map(f => `family=${f.replace(/ /g, '+')}`).join('&')}&display=swap`;
 
       const inlineFontCss = await embedGoogleFonts(googleFontsUrl);
       if (inlineFontCss) {
-        fontStyleEl = document.createElement(\'style\');
-        fontStyleEl.setAttribute(\'data-export-fonts\', \'true\');
+        fontStyleEl = document.createElement('style');
+        fontStyleEl.setAttribute('data-export-fonts', 'true');
         fontStyleEl.textContent = inlineFontCss;
         canvasNode.prepend(fontStyleEl);
       }
 
-      const userFontStyles = document.querySelectorAll(\'style[id^="font-face-"]\');
-      let userFontCss = \'\';
-      userFontStyles.forEach(el => { userFontCss += el.textContent + \'\\n\'; });
+      const userFontStyles = document.querySelectorAll('style[id^="font-face-"]');
+      let userFontCss = '';
+      userFontStyles.forEach(el => { userFontCss += el.textContent + '\\n'; });
       if (userFontCss && fontStyleEl) {
-        fontStyleEl.textContent += \'\\n\' + userFontCss;
+        fontStyleEl.textContent += '\\n' + userFontCss;
       } else if (userFontCss && !fontStyleEl) {
-        fontStyleEl = document.createElement(\'style\');
-        fontStyleEl.setAttribute(\'data-export-fonts\', \'true\');
+        fontStyleEl = document.createElement('style');
+        fontStyleEl.setAttribute('data-export-fonts', 'true');
         fontStyleEl.textContent = userFontCss;
         canvasNode.prepend(fontStyleEl);
       }
@@ -873,28 +873,28 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         scale: 3,
         width: CANVAS_WIDTH,
         height: CANVAS_HEIGHT,
-        backgroundColor: currentPage.background.startsWith(\'#\') ? currentPage.background : \'transparent\',
+        backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : 'transparent',
         style: {
-          transform: \'none\',
-          left: \'0\',
-          top: \'0\',
-          position: \'relative\',
-          margin: \'0\',
-          padding: \'0\',
+          transform: 'none',
+          left: '0',
+          top: '0',
+          position: 'relative',
+          margin: '0',
+          padding: '0',
         }
       });
-      const link = document.createElement(\'a\');
+      const link = document.createElement('a');
       link.download = `mockingjay-${Date.now()}.png`;
       link.href = dataUrl;
       link.click();
-      setExportStatus(\'success\');
+      setExportStatus('success');
       triggerHaptic(40);
-      setTimeout(() => setExportStatus(\'idle\'), 3000);
+      setTimeout(() => setExportStatus('idle'), 3000);
       setIsExportModalOpen(false);
     } catch (err) {
       console.error("Export failed:", err);
-      setExportStatus(\'error\');
-      setTimeout(() => setExportStatus(\'idle\'), 3000);
+      setExportStatus('error');
+      setTimeout(() => setExportStatus('idle'), 3000);
     } finally {
       canvasNode.style.boxShadow = originalBoxShadow;
       canvasNode.style.transform = originalTransform;
@@ -940,12 +940,12 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                 alert("Failed to import design. The file might be corrupted or in the wrong format.");
             }
             // Reset file input to allow re-importing the same file
-            if (e.target) e.target.value = \'\';
+            if (e.target) e.target.value = '';
         };
         reader.readAsText(file);
       }} />
 
-      <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === \'success\' ? \'opacity-100 translate-y-0\' : \'opacity-0 -translate-y-12 scale-90\'}`}>
+      <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === 'success' ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-12 scale-90'}`}>
         <div className="bg-zinc-900/90 backdrop-blur-3xl border border-white/10 px-6 py-3 rounded-full flex items-center gap-4 shadow-[0_12px_48px_rgba(0,0,0,0.6)]">
            <div className="w-6 h-6 bg-lime-400 text-black rounded-full flex items-center justify-center shadow-inner">
              <Icons.Sparkles className="w-3.5 h-3.5" />
@@ -971,15 +971,15 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           </div>
         )}
 
-        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? \'opacity-0\' : \'opacity-100\'}`}>
+        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) })); triggerHaptic(2); }}><Icons.ArrowLeft className="w-5 h-5"/></button>
            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">{state.currentPageIndex + 1}/{state.pages.length}</span>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) })); triggerHaptic(2); }}><Icons.ArrowRight className="w-5 h-5"/></button>
            <div className="w-[1px] h-4 bg-white/10 mx-1" />
             <button className="p-1 text-lime-400 hover:scale-125 transition-transform w-5 h-5 flex items-center justify-center" onClick={addPage}>
-              {saveStatus === \'saving\' && <Icons.RotateCw className="w-4 h-4 animate-spin" />}
-              {saveStatus === \'saved\' && <Icons.Check className="w-4 h-4 text-green-400" />}
-              {saveStatus === \'idle\' && <Icons.Plus className="w-5 h-5" />}
+              {saveStatus === 'saving' && <Icons.RotateCw className="w-4 h-4 animate-spin" />}
+              {saveStatus === 'saved' && <Icons.Check className="w-4 h-4 text-green-400" />}
+              {saveStatus === 'idle' && <Icons.Plus className="w-5 h-5" />}
             </button>
            <button className="p-1.5 bg-gradient-to-tr from-lime-600 to-lime-400 rounded-full text-black hover:rotate-12 transition-all shadow-[0_0_15px_rgba(163,230,53,0.4)]" onClick={() => { setIsAiModalOpen(true); triggerHaptic(10); }}><Icons.Wand2 className="w-4 h-4" /></button>
            <button className="p-1 text-red-400/60 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
@@ -988,10 +988,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         <div ref={workspaceRef} className="flex-1 flex items-center justify-center relative overflow-hidden">
            {snapLines.map((line, i) => (
              <div key={i} className="absolute bg-lime-400 z-[100] pointer-events-none" style={{
-                 left: line.type === \'vertical\' ? `calc(50% + (${line.position - CANVAS_WIDTH / 2}px * ${scale}))` : 0,
-                 top: line.type === \'horizontal\' ? `calc(50% + (${line.position - CANVAS_HEIGHT / 2}px * ${scale}))` : 0,
-                 width: line.type === \'vertical\' ? \'1px\' : \'100%\',
-                 height: line.type === \'horizontal\' ? \'1px\' : \'100%\',
+                 left: line.type === 'vertical' ? `calc(50% + (${line.position - CANVAS_WIDTH / 2}px * ${scale}))` : 0,
+                 top: line.type === 'horizontal' ? `calc(50% + (${line.position - CANVAS_HEIGHT / 2}px * ${scale}))` : 0,
+                 width: line.type === 'vertical' ? '1px' : '100%',
+                 height: line.type === 'horizontal' ? '1px' : '100%',
                  opacity: 0.6
                }}
              />
@@ -1000,30 +1000,30 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
            <div id="design-canvas" ref={canvasRef} onPointerDown={deselectAll} className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center bg-zinc-800 overflow-hidden"
              style={{ 
                width: CANVAS_WIDTH, height: CANVAS_HEIGHT, transform: `scale(${scale})`,
-               backgroundColor: currentPage?.background.startsWith(\'#\') ? currentPage.background : undefined,
-               backgroundImage: !currentPage?.background.startsWith(\'#\') ? `url(${currentPage.background})` : undefined,
-               backgroundSize: \'cover\', backgroundPosition: \'center\'
+               backgroundColor: currentPage?.background.startsWith('#') ? currentPage.background : undefined,
+               backgroundImage: !currentPage?.background.startsWith('#') ? `url(${currentPage.background})` : undefined,
+               backgroundSize: 'cover', backgroundPosition: 'center'
              }}
            >
               {currentPage?.elements.map(el => (
                 <div key={el.id}>
                   <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleSelect} onAutoResize={handleAutoResize} />
                   {state.selectedElementId === el.id && !el.locked && (
-                    <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: \'2px solid #bef264\' }}>
-                      {[\'nw\', \'ne\', \'sw\', \'se\', \'n\', \'s\', \'e\', \'w\'].map(h => {
+                    <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
+                      {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
                         let s: React.CSSProperties = {};
-                        if (h === \'nw\') s = { top: \'-12px\', left: \'-12px\' }; if (h === \'ne\') s = { top: \'-12px\', right: \'-12px\' };
-                        if (h === \'sw\') s = { bottom: \'-12px\', left: \'-12px\' }; if (h === \'se\') s = { bottom: \'-12px\', right: \'-12px\' };
-                        if (h === \'n\') s = { top: \'-12px\', left: \'50%\', transform: \'translateX(-50%)\' }; if (h === \'s\') s = { bottom: \'-12px\', left: \'50%\', transform: \'translateX(-50%)\' };
-                        if (h === \'e\') s = { right: \'-12px\', top: \'50%\', transform: \'translateY(-50%)\' }; if (h === \'w\') s = { left: \'-12px\', top: \'50%\', transform: \'translateY(-50%)\' };
+                        if (h === 'nw') s = { top: '-12px', left: '-12px' }; if (h === 'ne') s = { top: '-12px', right: '-12px' };
+                        if (h === 'sw') s = { bottom: '-12px', left: '-12px' }; if (h === 'se') s = { bottom: '-12px', right: '-12px' };
+                        if (h === 'n') s = { top: '-12px', left: '50%', transform: 'translateX(-50%)' }; if (h === 's') s = { bottom: '-12px', left: '50%', transform: 'translateX(-50%)' };
+                        if (h === 'e') s = { right: '-12px', top: '50%', transform: 'translateY(-50%)' }; if (h === 'w') s = { left: '-12px', top: '50%', transform: 'translateY(-50%)' };
                         const isC = h.length === 2;
                         return (
-                          <div key={h} onPointerDown={(e) => { e.stopPropagation(); setDragStart({ x: e.clientX, y: e.clientY, type: \'resize\', handle: h }); setElementStartPos({...el.box}); triggerHaptic(5); }}
-                            style={s} className={`absolute bg-white border-2 border-lime-400 pointer-events-auto shadow-lg ${isC ? \'w-6 h-6 rounded-full\' : \'w-10 h-3 rounded-sm\'} z-50 hover:scale-110 transition-transform`}
+                          <div key={h} onPointerDown={(e) => { e.stopPropagation(); setDragStart({ x: e.clientX, y: e.clientY, type: 'resize', handle: h }); setElementStartPos({...el.box}); triggerHaptic(5); }}
+                            style={s} className={`absolute bg-white border-2 border-lime-400 pointer-events-auto shadow-lg ${isC ? 'w-6 h-6 rounded-full' : 'w-10 h-3 rounded-sm'} z-50 hover:scale-110 transition-transform`}
                           />
                         );
                       })}
-                      <div onPointerDown={(e) => { e.stopPropagation(); const rect = canvasRef.current?.getBoundingClientRect(); if (!rect) return; const cX = rect.left + (el.box.x + el.box.width / 2) * scale; const cY = rect.top + (el.box.y + el.box.height / 2) * scale; const initialAngle = Math.atan2(e.clientY - cY, e.clientX - cX) * (180 / Math.PI); setDragStart({ x: e.clientX, y: e.clientY, type: \'rotate\', initialAngle }); setElementStartPos({...el.box}); triggerHaptic(10); }}
+                      <div onPointerDown={(e) => { e.stopPropagation(); const rect = canvasRef.current?.getBoundingClientRect(); if (!rect) return; const cX = rect.left + (el.box.x + el.box.width / 2) * scale; const cY = rect.top + (el.box.y + el.box.height / 2) * scale; const initialAngle = Math.atan2(e.clientY - cY, e.clientX - cX) * (180 / Math.PI); setDragStart({ x: e.clientX, y: e.clientY, type: 'rotate', initialAngle }); setElementStartPos({...el.box}); triggerHaptic(10); }}
                         className="absolute -bottom-24 left-1/2 -translate-x-1/2 w-14 h-14 bg-zinc-900 border border-white/20 rounded-full flex items-center justify-center pointer-events-auto shadow-2xl"
                       >
                          <Icons.RotateCw className="w-7 h-7 text-lime-400" />
@@ -1054,17 +1054,17 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                 <div className="relative">
                   <input 
                     autoFocus
-                    placeholder="e.g., \'Advertise my noodle brand\', \'Create a new coffee flyer\'"
+                    placeholder="e.g., 'Advertise my noodle brand', 'Create a new coffee flyer'"
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
-                    onKeyDown={(e) => e.key === \'Enter\' && handleAiRefine()}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAiRefine()}
                     disabled={isAiLoading}
                     className="w-full bg-white/5 border border-white/10 rounded-2xl h-16 pl-12 pr-14 text-sm focus:outline-none focus:border-lime-400 transition-all placeholder:text-white/20"
                   />
                   <button onClick={() => aiImageInputRef.current?.click()} disabled={aiAttachedImages.length >= 4} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors disabled:opacity-30">
                     <Icons.Paperclip className="w-5 h-5" />
                   </button>
-                  <button onClick={handleAiRefine} disabled={isAiLoading} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? \'bg-zinc-800\' : \'bg-lime-400 text-black active:scale-90 hover:shadow-[0_0_15px_rgba(163,230,53,0.5)]\'}`}>
+                  <button onClick={handleAiRefine} disabled={isAiLoading} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-zinc-800' : 'bg-lime-400 text-black active:scale-90 hover:shadow-[0_0_15px_rgba(163,230,53,0.5)]'}`}>
                     {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
                   </button>
                 </div>
@@ -1086,7 +1086,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   </div>
                 )}
                 <div className="mt-6 flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                   {[\'Advertise my noodle brand\', \'Create a new page with coffee ad\', \'Cyberpunk flyer\', \'Minimalist layout\', \'Bold brand poster\'].map(s => (
+                   {['Advertise my noodle brand', 'Create a new page with coffee ad', 'Cyberpunk flyer', 'Minimalist layout', 'Bold brand poster'].map(s => (
                      <button key={s} onClick={() => setAiPrompt(s)} className="shrink-0 bg-white/5 border border-white/5 px-5 py-2.5 rounded-full text-[10px] font-bold uppercase hover:bg-white/10 hover:border-white/20 transition-all text-white/60 hover:text-white">{s}</button>
                    ))}
                 </div>
@@ -1107,7 +1107,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         )}
 
         {isMobile && !isAiModalOpen && !isPwaInstalled && deferredPrompt && (
-          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? \'translate-y-full\' : \'translate-y-0\'}`}>
+          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? 'translate-y-full' : 'translate-y-0'}`}>
             <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-lime-400/20 rounded-2xl shadow-2xl p-4">
               <button onClick={handlePwaInstall} className="w-full flex items-center gap-4">
                 <div className="w-12 h-12 bg-lime-400 rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(163,230,53,0.3)]">
@@ -1124,7 +1124,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         )}
 
         {isMobile && !isAiModalOpen && (isPwaInstalled || !deferredPrompt) && (
-          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? \'translate-y-full\' : \'translate-y-0\'}`}>
+          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? 'translate-y-full' : 'translate-y-0'}`}>
             <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl p-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
@@ -1139,7 +1139,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                       <button onClick={() => setIsBottomSheetOpen(true)} className="flex flex-col items-center gap-1 text-lime-400 p-2 min-w-[50px]"><Icons.Plus className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Add</span></button>
                       <div className="flex gap-2 items-center">
                          {state.themeColors.slice(0, 3).map(c => (
-                           <button key={c} onClick={() => updatePage({ background: c })} className={`w-8 h-8 rounded-full border ${currentPage?.background === c ? \'border-white\' : \'border-white/20\'}`} style={{ backgroundColor: c }} />
+                           <button key={c} onClick={() => updatePage({ background: c })} className={`w-8 h-8 rounded-full border ${currentPage?.background === c ? 'border-white' : 'border-white/20'}`} style={{ backgroundColor: c }} />
                          ))}
                       </div>
                     </>
@@ -1177,10 +1177,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   availableFonts={allFonts}
                   onAddCustomFont={handleAddCustomFont}
                   onDeleteCustomFont={handleDeleteCustomFont}
-                  onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === \'text\' || selectedElement.type === \'icon\' ? \'color\' : \'backgroundColor\'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
-                  onAddText={(type) => { addElement({ type: \'text\', name: type, content: type === \'Header\' ? \'HEADER\' : (type === \'Subheader\' ? \'Subheader\' : \'Paragraph text.\'), style: { fontSize: type === \'Header\' ? 42 : 24, fontFamily: allFonts[0]?.value, color: \'#FFF\', textAlign: \'center\', lineHeight: 1.2, letterSpacing: 0, fontWeight: \'700\' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
+                  onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
+                  onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                   onAddShape={onAddShape}
-                  onAddImage={(src) => { addElement({ type: \'image\', name: \'Image\', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); setIsBottomSheetOpen(false); }}
+                  onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                   onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
                 />
               </div>
@@ -1191,7 +1191,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           </div>
         )}
 
-        {isExportModalOpen && exportStatus === \'idle\' && (
+        {isExportModalOpen && exportStatus === 'idle' && (
           <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-6" onClick={() => setIsExportModalOpen(false)}>
             <div className="bg-zinc-900 border border-white/10 rounded-[24px] w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                <div className="p-8 space-y-6">
@@ -1215,11 +1215,11 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           </div>
         )}
 
-        {(exportStatus === \'processing\' || exportStatus === \'success\') && (
+        {(exportStatus === 'processing' || exportStatus === 'success') && (
           <div className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-sm animate-in fade-in duration-500">
-            <div className={`absolute bottom-0 left-0 right-0 h-[35vh] rounded-t-[24px] shadow-[0_-20px_60px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center gap-6 p-8 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === \'processing\' ? \'bg-[#F5E6D3] translate-y-0\' : \'bg-[#EAE2D6] translate-y-0\'}`}>
+            <div className={`absolute bottom-0 left-0 right-0 h-[35vh] rounded-t-[24px] shadow-[0_-20px_60px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center gap-6 p-8 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === 'processing' ? 'bg-[#F5E6D3] translate-y-0' : 'bg-[#EAE2D6] translate-y-0'}`}>
                <div className="relative">
-                 {exportStatus === \'processing\' ? (
+                 {exportStatus === 'processing' ? (
                    <>
                      <div className="w-20 h-20 border-[3px] border-[#4A3F35]/10 border-t-[#4A3F35] rounded-full animate-spin"></div>
                      <div className="absolute inset-0 flex items-center justify-center text-[#4A3F35]">
@@ -1234,10 +1234,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                </div>
                <div className="text-center space-y-1">
                  <h3 className="text-2xl font-light tracking-tight text-[#4A3F35] italic">
-                   {exportStatus === \'processing\' ? \'Downloading...\' : \'Complete!\'}
+                   {exportStatus === 'processing' ? 'Downloading...' : 'Complete!'}
                  </h3>
                  <p className="text-[#4A3F35]/40 text-[11px] font-bold uppercase tracking-[0.2em]">
-                   {exportStatus === \'processing\' ? \'Encoding literal snapshot assets\' : \'Your file has been saved\'}
+                   {exportStatus === 'processing' ? 'Encoding literal snapshot assets' : 'Your file has been saved'}
                  </p>
                </div>
             </div>
@@ -1266,10 +1266,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           availableFonts={allFonts}
           onAddCustomFont={handleAddCustomFont}
           onDeleteCustomFont={handleDeleteCustomFont}
-          onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === \'text\' || selectedElement.type === \'icon\' ? \'color\' : \'backgroundColor\'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
-          onAddText={(type) => addElement({ type: \'text\', name: type, content: type === \'Header\' ? \'HEADER\' : (type === \'Subheader\' ? \'Subheader\' : \'Paragraph text.\'), style: { fontSize: type === \'Header\' ? 42 : 24, fontFamily: allFonts[0]?.value, color: \'#FFF\', textAlign: \'center\', lineHeight: 1.2, letterSpacing: 0, fontWeight: \'700\' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
+          onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
+          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
           onAddShape={onAddShape}
-          onAddImage={(src) => addElement({ type: \'image\', name: \'Image\', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
+          onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
           onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
         />
       )}
