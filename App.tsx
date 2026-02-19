@@ -9,7 +9,7 @@ import { BusinessDNA, Campaign, EditorState, DesignElement, Page } from './types
 
 import Home from './pages/Home.tsx';
 import Dashboard from './pages/Dashboard.tsx';
-import { BusinessDNAInput } from './pages/BusinessDNAInput.tsx';
+import BusinessDNAInput from './pages/BusinessDNAInput.tsx';
 import BusinessDNADetail from './pages/BusinessDNADetail.tsx';
 import CampaignIdeasInput from './pages/CampaignIdeasInput.tsx';
 import Sidebar from './components/Sidebar.tsx';
