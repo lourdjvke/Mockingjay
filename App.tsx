@@ -6,7 +6,7 @@ import Sidebar from './components/Sidebar.tsx';
 import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
 import { domToPng } from 'modern-screenshot';
-import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child } from './firebase.ts';
+import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove } from './firebase.ts';
 import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
 
@@ -124,19 +124,17 @@ const App: React.FC = () => {
 
   // Handle loading the initial design or creating a new one
   useEffect(() => {
-    if (isAuthLoading || !user) return; // Wait for auth and user
+    if (isAuthLoading || !user) return;
 
-    // This effect should only run when designs are populated but we have no active design.
     if (currentDesignId) return;
 
     if (designs.length > 0) {
       loadDesign(designs[0].id);
-    } else {
-      // This ensures we only create a new design once we know there are no existing designs.
-      // The designs.length check is implicit from the 'if' branch.
-      createNewDesign();
+    } else if (designs.length === 0) {
+        // If there are no designs, create a new one, but don't save it until a change is made.
+        createNewDesign();
     }
-  }, [user, designs, currentDesignId, isAuthLoading]);
+}, [user, designs, currentDesignId, isAuthLoading]);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -152,6 +150,17 @@ const App: React.FC = () => {
     setState(INITIAL_STATE);
     setCurrentDesignId(newId);
   }, []);
+
+  const deleteAllDesigns = async () => {
+    if (!user) return;
+    const confirmed = window.confirm("Are you sure you want to delete all your designs? This action cannot be undone.");
+    if (confirmed) {
+        const designsRef = ref(database, `users/${user.uid}/designs`);
+        await remove(designsRef);
+        // After deleting, we should reset the state to a new fresh design
+        createNewDesign();
+    }
+};
 
   const loadDesign = useCallback((designId: string) => {
     const designToLoad = designs.find(d => d.id === designId);
@@ -1291,6 +1300,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           currentDesignId={currentDesignId}
           loadDesign={loadDesign}
           createNewDesign={createNewDesign}
+          deleteAllDesigns={deleteAllDesigns}
           importDesign={() => fileInputRef.current?.click()}
           selectedElement={selectedElement} 
           themeColors={state.themeColors} 
