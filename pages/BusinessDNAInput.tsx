@@ -9,8 +9,7 @@ interface Props {
   onComplete: (dna: Partial<BusinessDNA>) => void;
 }
 
-// Using a named export to match the existing import in App.tsx
-export const BusinessDNAInput: React.FC<Props> = ({ onBack, onComplete }) => {
+const BusinessDNAInput: React.FC<Props> = ({ onBack, onComplete }) => {
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +23,6 @@ export const BusinessDNAInput: React.FC<Props> = ({ onBack, onComplete }) => {
     setError(null);
 
     try {
-      // 1. Capture screenshot using the reliable pageshot.site service
       const response = await fetch('https://pageshot.site/v1/screenshot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -41,7 +39,6 @@ export const BusinessDNAInput: React.FC<Props> = ({ onBack, onComplete }) => {
         throw new Error(`Screenshot service failed with status: ${response.status}`);
       }
 
-      // 2. Convert the response blob to a base64 string for the AI service
       const blob = await response.blob();
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -50,13 +47,10 @@ export const BusinessDNAInput: React.FC<Props> = ({ onBack, onComplete }) => {
         reader.readAsDataURL(blob);
       });
 
-      // 3. Preserve existing feature: Save the image to the media store
       await MediaStore.saveImage(base64);
 
-      // 4. Analyze the image with the secure, server-side AI service
       const dna = await analyzeBusinessFromScreenshot(base64, url);
 
-      // 5. Complete the process and navigate to the detail page
       onComplete(dna);
 
     } catch (err: any) {
@@ -131,3 +125,5 @@ export const BusinessDNAInput: React.FC<Props> = ({ onBack, onComplete }) => {
     </div>
   );
 };
+
+export default BusinessDNAInput;
