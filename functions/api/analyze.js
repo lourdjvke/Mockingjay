@@ -1,3 +1,4 @@
+import { sanitizeAiJson } from '../utils.js';
 
 export async function onRequestPost({ request, env }) {
   const { screenshotBase64, websiteUrl } = await request.json();
@@ -57,7 +58,13 @@ export async function onRequestPost({ request, env }) {
       throw new Error('No content in Gemini response');
     }
 
-    const parsedJson = JSON.parse(generatedText);
+    let parsedJson;
+    try {
+        parsedJson = JSON.parse(sanitizeAiJson(generatedText));
+    } catch (e) {
+        console.error("Failed to parse JSON from Gemini response:", generatedText);
+        throw new Error("The AI returned an invalid response. Please try again.");
+    }
 
     return new Response(JSON.stringify(parsedJson), {
       headers: { 'Content-Type': 'application/json' },
