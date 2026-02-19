@@ -9,10 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "firebase": "^10.12.2",
+    "lucide-react": "0.460.0",
+    "modern-screenshot": "4.4.37",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "lucide-react": "0.460.0",
-    "modern-screenshot": "4.4.37"
+    "use-debounce": "^10.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
