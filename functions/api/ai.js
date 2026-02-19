@@ -6,22 +6,22 @@ export async function onRequestPost({ request, env }) {
     const clientRequestBody = await request.json();
 
     const lastMessage = clientRequestBody.messages[clientRequestBody.messages.length - 1];
-    let userPromptText = \'\';
+    let userPromptText = '';
 
     if (!lastMessage || !lastMessage.content) {
-        return new Response(JSON.stringify({ error: \'Invalid request: No message content found.\' }), { status: 400, headers: { \'Content-Type\': \'application/json\' } });
+        return new Response(JSON.stringify({ error: 'Invalid request: No message content found.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
     // Handle both string and array content types to ensure we get the prompt
-    if (typeof lastMessage.content === \'string\') {
+    if (typeof lastMessage.content === 'string') {
         userPromptText = lastMessage.content;
     } else if (Array.isArray(lastMessage.content)) {
-        const textPart = lastMessage.content.find(p => p.type === \'text\');
-        userPromptText = textPart?.text || \'\';
+        const textPart = lastMessage.content.find(p => p.type === 'text');
+        userPromptText = textPart?.text || '';
     }
 
     if (!userPromptText) {
-        return new Response(JSON.stringify({ error: \'Invalid prompt format: No text prompt found.\' }), { status: 400, headers: { \'Content-Type\': \'application/json\' } });
+        return new Response(JSON.stringify({ error: 'Invalid prompt format: No text prompt found.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
     const designSchema = {
@@ -89,13 +89,13 @@ export async function onRequestPost({ request, env }) {
       You are "Mockingjay Atelier", the epitome of digital elegance and a visionary in luxury brand design.
       Your creations are not mere designs; they are bespoke digital couture. Your task is to interpret user aspirations and manifest them into breathtaking, high-fashion design structures.
       You operate with an unparalleled aesthetic sense, blending classic principles with avant-garde trends.
-      ALWAYS generate opulent, richly detailed content with a story. Never settle for mediocrity or minimalism unless the prompt explicitly demands it in a high-fashion context (e.g., \'brutalist luxury\').
+      ALWAYS generate opulent, richly detailed content with a story. Never settle for mediocrity or minimalism unless the prompt explicitly demands it in a high-fashion context (e.g., 'brutalist luxury').
 
       CRITICAL RULES OF THE ATELIER:
       1. Every canvas is a masterpiece. Populate it with an abundance of carefully curated elements (minimum 4-6).
       2. Blank space is a statement, not an oversight. Never return an empty page.
       3. Impeccable execution is paramount. Elements MUST have flawless positioning, exquisite typography, and a harmonious color palette.
-      4. Embody the client\'s vision. The brand\'s soul must permeate every pixel.
+      4. Embody the client's vision. The brand's soul must permeate every pixel.
       5. The canvas is your domain: 1080x1080 pixels. Every element must respect its sacred boundaries.
       6. For multi-page narratives, each page is a new chapter, as rich and complete as the last.
       7. Details make the luxury. Use \`borderRadius\` with intention (0-30px for sharp, modern looks; 999px for soft, organic forms).
@@ -105,7 +105,7 @@ export async function onRequestPost({ request, env }) {
 
       FOR ASPIRATIONAL BRANDS:
       1. Set the mood with a sophisticated background color or a subtle, textured image (\`page.background\`).
-      2. A bold, elegant headline (50-80px) that captures the brand\'s essence.
+      2. A bold, elegant headline (50-80px) that captures the brand's essence.
       3. An eloquent tagline or sub-header (28-36px).
       4. 2-4 blocks of poetic, descriptive text (16-20px).
       5. Sculptural shapes, icons, or line art to add depth and intrigue. Use \`clipPath\` to create signature forms.
@@ -115,11 +115,11 @@ export async function onRequestPost({ request, env }) {
       - Adhere to a generous margin of 30-60px from all canvas edges.
       - Create visual rhythm by spacing elements 20-30px apart.
       - The main headline should command attention, often placed at a key focal point, not just centered at the top.
-      - Guide the viewer\'s eye with a clear visual hierarchy.
+      - Guide the viewer's eye with a clear visual hierarchy.
 
       The output must be a flawless JSON object. Do not include any text, code block markers, or markdown before or after the JSON object.
 
-      User\'s request is as follows:
+      User's request is as follows:
       ${userPromptText}
     `;
 
@@ -132,16 +132,16 @@ export async function onRequestPost({ request, env }) {
     };
 
     const geminiResponse = await fetch(geminiApiUrl, {
-      method: \'POST\',
-      headers: { \'Content-Type\': \'application/json\' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(geminiRequestBody),
     });
 
     if (!geminiResponse.ok) {
       if (geminiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: \'High traffic: try again soon\' }), {
+        return new Response(JSON.stringify({ error: 'High traffic: try again soon' }), {
           status: 429,
-          headers: { \'Content-Type\': \'application/json\' },
+          headers: { 'Content-Type': 'application/json' },
         });
       }
 
@@ -154,7 +154,7 @@ export async function onRequestPost({ request, env }) {
       }
       
       const errorMessage = errorBody?.error?.message || JSON.stringify(errorBody);
-      console.error(\'Gemini API Error:\', errorBody);
+      console.error('Gemini API Error:', errorBody);
       throw new Error(`Gemini API request failed: ${errorMessage}`);
     }
 
@@ -162,8 +162,8 @@ export async function onRequestPost({ request, env }) {
     const generatedText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!generatedText) {
-      console.error(\'Invalid Gemini Response:\', geminiData);
-      throw new Error(\'No content in Gemini response\');
+      console.error('Invalid Gemini Response:', geminiData);
+      throw new Error('No content in Gemini response');
     }
 
     const openAICompliantResponse = {
@@ -172,14 +172,14 @@ export async function onRequestPost({ request, env }) {
 
     return new Response(JSON.stringify(openAICompliantResponse), {
       status: 200,
-      headers: { \'Content-Type\': \'application/json\' }
+      headers: { 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
-    console.error(\'Error in Cloudflare Function:\', error);
-    return new Response(JSON.stringify({ error: error.message || \'Failed to process request\' }), {
+    console.error('Error in Cloudflare Function:', error);
+    return new Response(JSON.stringify({ error: error.message || 'Failed to process request' }), {
       status: 500,
-      headers: { \'Content-Type\': \'application/json\' },
+      headers: { 'Content-Type': 'application/json' },
     });
   }
 }
