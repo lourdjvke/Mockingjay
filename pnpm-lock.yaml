@@ -8,6 +8,87 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/abril-fatface':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/alfa-slab-one':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/bangers':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/bungee-shade':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/cinzel-decorative':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/comfortaa':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/cookie':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/creepster':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/faster-one':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/fredoka-one':
+        specifier: ^5.2.5
+        version: 5.2.5
+      '@fontsource/inter':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/kaushan-script':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/lobster':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/monoton':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/montserrat':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/nosifer':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/orbitron':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/permanent-marker':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/pinyon-script':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/playfair-display':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/press-start-2p':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/righteous':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/rochester':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/sacramento':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/satisfy':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/special-elite':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/unifrakturmaguntia':
+        specifier: ^5.2.8
+        version: 5.2.8
       firebase:
         specifier: ^10.12.2
         version: 10.14.1
@@ -907,6 +988,87 @@ packages:
 
   '@firebase/webchannel-wrapper@1.0.1':
     resolution: {integrity: sha512-jmEnr/pk0yVkA7mIlHNnxCi+wWzOFUg0WyIotgkKAb2u1J7fAeDBcVNSTjTihbAYNusCLQdW5s9IJ5qwnEufcQ==}
+
+  '@fontsource/abril-fatface@5.2.7':
+    resolution: {integrity: sha512-2wcf7CchGHdAAl27L+StPK3fj5H1OtpPMglZ9ism0Za6w5h3khsKIMLvJaV/hey8U8QDyk6yDdkOjMXDEhOc6Q==}
+
+  '@fontsource/alfa-slab-one@5.2.8':
+    resolution: {integrity: sha512-++XkDfZAfT2qb8MAiyMR+clQe7HZRci1if88IZxd1Vlhu4fc6FvraSgOTa01OmQ8vdy/KTumdX5J3rZvGsjKGQ==}
+
+  '@fontsource/bangers@5.2.8':
+    resolution: {integrity: sha512-fFFXg+IHf05TEQ4U0gS8f7B0JHrhAN7oEw/Q8wR0APPLXnhnQSfZz2QDjg0kmVuM+IsM28ODga+0rSpnHLqFfQ==}
+
+  '@fontsource/bungee-shade@5.2.7':
+    resolution: {integrity: sha512-lkXUV70wgUtqDU5RuljKchpQY3QGZCkygwET4w57QNLArZ72LJGURuSuakS6ItDGK0tzU2CxjrekRekRngShqw==}
+
+  '@fontsource/cinzel-decorative@5.2.8':
+    resolution: {integrity: sha512-BtrvcprcCd0DyAcIXZRohfMyh+n/MwNvmhmAZ0kXDe9T1w2XSOodb3RNoD1uHm3TlGw7fjTU0YepgAQbPW0sFw==}
+
+  '@fontsource/comfortaa@5.2.8':
+    resolution: {integrity: sha512-S5oyMR0QzBPIJvS52W8Xgv9IcJkScIHgHZ7R2lqwW9nVD10mlIzunNPrIrAuU6kES+A35tc52UdQ9tunL1CWeg==}
+
+  '@fontsource/cookie@5.2.7':
+    resolution: {integrity: sha512-jI772JjcXz5zjraPzM819udIFhxyeZf6UZL2UuodOsg6Yh9DMQoeGZ1fkHqMXivYpC0qi3qpiln++c87S4mRyA==}
+
+  '@fontsource/creepster@5.2.7':
+    resolution: {integrity: sha512-dKTVl/9boPwxGTI7A4MsBzvpk12S/1TvZid7CI0EFyWSthYmAviK+6RlJz/ZVHB/rSSRbdCphRhwSfIjdISc1g==}
+
+  '@fontsource/faster-one@5.2.7':
+    resolution: {integrity: sha512-hTltpJDXj7hbB2+fG+FuCh0Q4dbbJ1wUeWq4C65nqq6U4Ns32W+38yWwmglNPKCtGyqX9gG/DIklpSoDuvMmyw==}
+
+  '@fontsource/fredoka-one@5.2.5':
+    resolution: {integrity: sha512-Fan2k5pTOmmN8eydeUOk20/NALW+qtRu6WdqPBNhFq2WaquxKpBMUzdxFXgy9asICtbEhxTM51XHeU+OKfPQnQ==}
+
+  '@fontsource/inter@5.2.8':
+    resolution: {integrity: sha512-P6r5WnJoKiNVV+zvW2xM13gNdFhAEpQ9dQJHt3naLvfg+LkF2ldgSLiF4T41lf1SQCM9QmkqPTn4TH568IRagg==}
+
+  '@fontsource/kaushan-script@5.2.8':
+    resolution: {integrity: sha512-iZ5n3EvASrFjJFdqIxW3snotnbIznnWiwy3UlIwgZmsOOfAckWJ0QPLKp5sj3jBHwsQ3NawvrIgKTQQrfbep4g==}
+
+  '@fontsource/lobster@5.2.8':
+    resolution: {integrity: sha512-5xlo4rcvefhac1tnwingFR9OT9wZYUVwlm4Iemx21flMCH8Z7mS4bNHosUtoRodPB8KLLFgywfjUbyt5rNRLng==}
+
+  '@fontsource/monoton@5.2.7':
+    resolution: {integrity: sha512-Gp5yUntyJdOsEDfYncnIufUZqN1v9ScEzWEY8gF9+s/mmGN8J+75InTmwxmJU0bk7x8eXKxiBBFKzVelJxlIRA==}
+
+  '@fontsource/montserrat@5.2.8':
+    resolution: {integrity: sha512-xTjLxSbSfCycDB0pwmNsfNvdfWPaDaRQ2LC6yt/ZI7SdvXG52zHnzNYC/09mzuAuWNJyShkteutfCoDgym56hQ==}
+
+  '@fontsource/nosifer@5.2.7':
+    resolution: {integrity: sha512-Xwc4yMQJx+Q8OV/g2bU1Qk8C37juQ4BLDs6lZabGxVlO3HQvacdwcZsrANAWM107mTzhILH2E9s2tr8EsH0MZw==}
+
+  '@fontsource/orbitron@5.2.8':
+    resolution: {integrity: sha512-ruzrDl5vnqNykk5DZWY0Ezj4aeFZSbCnwJTc/98ojNJHSsHhlhT2r7rwQrA5sptmF8JtB8TQTAvlfRvcV28RPw==}
+
+  '@fontsource/permanent-marker@5.2.7':
+    resolution: {integrity: sha512-Lpjv3yD6TSRvcxjhdv4OZuNtEttbUgVNfFqAE8Qf7D1J8L97qZTZ8rj8OExX2ezCNv920psv+HBHvthAQxNE+A==}
+
+  '@fontsource/pinyon-script@5.2.8':
+    resolution: {integrity: sha512-X2besX/JgOOPGwPy3CX6InZwmMQ7wmLGNGTWDHHhUfpfSj94TbfTieFpDW2/PoFLjWswiTdWwlOM8rQY0QGEVg==}
+
+  '@fontsource/playfair-display@5.2.8':
+    resolution: {integrity: sha512-fUEhib70SszNhQVsGbUMSsWJhr7Je0rdeuZdtGpDNu0GKF1xJM8QhpI/y0pckU25GcChXm9TLOmeZupkvvZo2g==}
+
+  '@fontsource/press-start-2p@5.2.7':
+    resolution: {integrity: sha512-ezSxYRchANoteja170ZHh2Tt4oejmVEvX42VFPOVVvERSZ68pcuZFjbhHfrK/sNjYmaGg656y7B3431ojO9PCQ==}
+
+  '@fontsource/righteous@5.2.7':
+    resolution: {integrity: sha512-u50Zr6cPEmbf5DUsw/NW5kQGgKB45mnFc+N12rFsoDm7pywUaEQmrVcYKPv2+4yo6f+mIDUXb4olZruknMU3QA==}
+
+  '@fontsource/rochester@5.2.8':
+    resolution: {integrity: sha512-B7okOqnbF6+YSPxapQVFiqpn5eZbdqrGYlEYIfCKjvqEOfzl+SG5ETRy5YXxJz5rgsjEphmK2xSYsqEjT1R2AQ==}
+
+  '@fontsource/sacramento@5.2.8':
+    resolution: {integrity: sha512-f2G+HIFZ7PGUxJPlm+TT6eH0HnlAQigMOCDIHXO/112LaxYA7NsTX3rczkrJLxJnycl91XyQ/0GfGLwpBkAuiw==}
+
+  '@fontsource/satisfy@5.2.7':
+    resolution: {integrity: sha512-nCryyRwgppe04BV6WcaaL9x52AsF3VrJ06rBW6wOz+7xqwqJRaw6fy69bW86kmL/NanEfraFDciMm9IDUGoqEg==}
+
+  '@fontsource/special-elite@5.2.8':
+    resolution: {integrity: sha512-tJRYZ6dZK3wiGvMS5NMOg6fqctWimNUUrYtLfPGJYqidaFeI2QqFUE0rbn16DjqID0DrnZSHYfqz1jGdctd5ew==}
+
+  '@fontsource/unifrakturmaguntia@5.2.8':
+    resolution: {integrity: sha512-FN6yt2BPasuXuwttsz31qlgcMMx6SZdY9HFv/GPAPonFfF5e4Y11j9mGRGGXY6V0iZzaZnQ4Yx6UPRCE/ECRqA==}
 
   '@grpc/grpc-js@1.9.15':
     resolution: {integrity: sha512-nqE7Hc0AzI+euzUwDAy0aY5hCp10r734gMGRdU+qOPX0XSceI2ULrcXB5U2xSc5VkWwalCj4M7GzCAygZl2KoQ==}
@@ -3343,6 +3505,60 @@ snapshots:
       tslib: 2.8.1
 
   '@firebase/webchannel-wrapper@1.0.1': {}
+
+  '@fontsource/abril-fatface@5.2.7': {}
+
+  '@fontsource/alfa-slab-one@5.2.8': {}
+
+  '@fontsource/bangers@5.2.8': {}
+
+  '@fontsource/bungee-shade@5.2.7': {}
+
+  '@fontsource/cinzel-decorative@5.2.8': {}
+
+  '@fontsource/comfortaa@5.2.8': {}
+
+  '@fontsource/cookie@5.2.7': {}
+
+  '@fontsource/creepster@5.2.7': {}
+
+  '@fontsource/faster-one@5.2.7': {}
+
+  '@fontsource/fredoka-one@5.2.5': {}
+
+  '@fontsource/inter@5.2.8': {}
+
+  '@fontsource/kaushan-script@5.2.8': {}
+
+  '@fontsource/lobster@5.2.8': {}
+
+  '@fontsource/monoton@5.2.7': {}
+
+  '@fontsource/montserrat@5.2.8': {}
+
+  '@fontsource/nosifer@5.2.7': {}
+
+  '@fontsource/orbitron@5.2.8': {}
+
+  '@fontsource/permanent-marker@5.2.7': {}
+
+  '@fontsource/pinyon-script@5.2.8': {}
+
+  '@fontsource/playfair-display@5.2.8': {}
+
+  '@fontsource/press-start-2p@5.2.7': {}
+
+  '@fontsource/righteous@5.2.7': {}
+
+  '@fontsource/rochester@5.2.8': {}
+
+  '@fontsource/sacramento@5.2.8': {}
+
+  '@fontsource/satisfy@5.2.7': {}
+
+  '@fontsource/special-elite@5.2.8': {}
+
+  '@fontsource/unifrakturmaguntia@5.2.8': {}
 
   '@grpc/grpc-js@1.9.15':
     dependencies:
