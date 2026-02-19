@@ -6,6 +6,8 @@ import Sidebar from './components/Sidebar.tsx';
 import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
 import { domToPng } from 'modern-screenshot';
+import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, User } from './firebase.ts';
+import { useDebouncedCallback } from 'use-debounce';
 
 interface SnapLine {
   type: 'vertical' | 'horizontal';
@@ -13,6 +15,7 @@ interface SnapLine {
 }
 
 type ExportStatus = 'idle' | 'processing' | 'success' | 'error';
+type SaveStatus = 'idle' | 'saving' | 'saved';
 
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>(INITIAL_STATE);
@@ -32,6 +35,13 @@ const App: React.FC = () => {
   const [aiAttachedImages, setAiAttachedImages] = useState<string[]>([]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
+
+  // Firebase and Design-related state
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [designs, setDesigns] = useState<any[]>([]);
+  const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -39,6 +49,111 @@ const App: React.FC = () => {
   const aiImageInputRef = useRef<HTMLInputElement>(null);
 
   const allFonts = [...userFonts, ...BASE_FONTS];
+
+  // Debounced save function
+  const debouncedSave = useDebouncedCallback((designState: EditorState, designId: string) => {
+    if (!user) return;
+    setSaveStatus('saving');
+    const dbRef = ref(database, `users/${user.uid}/designs/${designId}`);
+    set(dbRef, { ...designState, lastModified: Date.now() })
+      .then(() => {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      })
+      .catch(error => {
+        console.error("Failed to save design:", error);
+        setSaveStatus('idle');
+      });
+  }, 3000);
+
+  // Autosave effect
+  useEffect(() => {
+    if (user && currentDesignId && !isAuthLoading && state !== INITIAL_STATE) {
+      debouncedSave(state, currentDesignId);
+    }
+  }, [state, user, currentDesignId, isAuthLoading, debouncedSave]);
+
+  // Firebase auth listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      setIsAuthLoading(false);
+      if (!user) {
+        setState(INITIAL_STATE);
+        setCurrentDesignId(null);
+        setDesigns([]);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Load user's designs from Firebase
+  useEffect(() => {
+    if (user) {
+      const designsRef = ref(database, `users/${user.uid}/designs`);
+      const unsubscribe = onValue(designsRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          const userDesigns = Object.keys(data)
+            .map(key => ({ id: key, ...data[key] }))
+            .sort((a, b) => b.lastModified - a.lastModified);
+          setDesigns(userDesigns);
+          // If no design is loaded, load the most recent one
+          if (!currentDesignId && userDesigns.length > 0) {
+            loadDesign(userDesigns[0].id);
+          }
+        } else {
+          setDesigns([]);
+          // If user has no designs, create a new one
+          if (!currentDesignId) {
+            createNewDesign();
+          }
+        }
+      });
+      return () => unsubscribe();
+    }
+  }, [user]);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Google Sign-In Error:", error);
+      alert("Could not sign in with Google. Please try again.");
+    }
+  };
+
+  const createNewDesign = () => {
+    const newId = generateId();
+    setState(INITIAL_STATE);
+    setCurrentDesignId(newId);
+  };
+
+  const loadDesign = (designId: string) => {
+    const designToLoad = designs.find(d => d.id === designId);
+    if (designToLoad) {
+      setState({
+        pages: designToLoad.pages || INITIAL_STATE.pages,
+        currentPageIndex: designToLoad.currentPageIndex || 0,
+        selectedElementId: designToLoad.selectedElementId || null,
+        themeColors: designToLoad.themeColors || INITIAL_STATE.themeColors,
+      });
+      setCurrentDesignId(designId);
+    }
+  };
+
+  const addPage = () => {
+    setState(prev => {
+      const newPage: Page = { id: generateId(), background: '#18181b', elements: [] };
+      const newPages = [...prev.pages, newPage];
+      return {
+        ...prev,
+        pages: newPages,
+        currentPageIndex: newPages.length - 1,
+      };
+    });
+  };
+
 
   const bufferToBase64 = (buffer: ArrayBuffer): string => {
     let binary = '';
@@ -71,7 +186,7 @@ const App: React.FC = () => {
             const fontFace = new FontFace(font.name, font.data);
             const loadedFace = await fontFace.load();
             document.fonts.add(loadedFace);
-            loadedFonts.push({ name: font.name, value: `\'${font.name}\', sans-serif` });
+            loadedFonts.push({ name: font.name, value: `'${font.name}', sans-serif` });
           } catch (e) { console.error(`Font init fail: ${font.name}`, e); }
         }
         setUserFonts(loadedFonts);
@@ -93,7 +208,7 @@ const App: React.FC = () => {
       const loadedFace = await fontFace.load();
       document.fonts.add(loadedFace);
       
-      setUserFonts(prev => [...prev, { name, value: `\'${name}\', sans-serif` }]);
+      setUserFonts(prev => [...prev, { name, value: `'${name}', sans-serif` }]);
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(20);
     } catch (err) {
       console.error("Font save failed:", err);
@@ -470,7 +585,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   const deselectAll = () => setState(prev => ({ ...prev, selectedElementId: null }));
 
   const addElement = useCallback((element: Partial<DesignElement>) => {
-    const defaultFont = allFonts.length > 0 ? allFonts[0].value : "\'Inter\', sans-serif";
+    const defaultFont = allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif";
     const newElement: DesignElement = {
       id: generateId(),
       name: element.name || (element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : 'Element'),
@@ -686,6 +801,22 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
+       {/* Authentication Overlay */}
+       {!user && !isAuthLoading && (
+        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center gap-8 animate-in fade-in duration-500">
+          <div className="text-center space-y-2">
+            <h1 className="text-4xl font-black text-white italic tracking-tighter uppercase">Mockingjay</h1>
+            <p className="text-white/50">Your AI-powered design companion</p>
+          </div>
+          <button 
+            onClick={handleGoogleSignIn} 
+            className="bg-lime-400 text-black px-8 py-4 rounded-full font-bold text-lg flex items-center gap-3 hover:bg-lime-300 transition-all active:scale-95 shadow-lg shadow-lime-500/20"
+          >
+            Continue with Google
+          </button>
+        </div>
+      )}
+      
       <input type="file" ref={fileInputRef} className="hidden" accept="application/json" onChange={(e) => {
         const file = e.target.files?.[0]; if (!file) return;
         const reader = new FileReader();
@@ -725,7 +856,11 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">{state.currentPageIndex + 1}/{state.pages.length}</span>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) })); triggerHaptic(2); }}><Icons.ArrowRight className="w-5 h-5"/></button>
            <div className="w-[1px] h-4 bg-white/10 mx-1" />
-           <button className="p-1 text-lime-400 hover:scale-125 transition-transform" onClick={() => fileInputRef.current?.click()}><Icons.Plus className="w-5 h-5"/></button>
+            <button className="p-1 text-lime-400 hover:scale-125 transition-transform w-5 h-5 flex items-center justify-center" onClick={addPage}>
+              {saveStatus === 'saving' && <Icons.RotateCw className="w-4 h-4 animate-spin" />}
+              {saveStatus === 'saved' && <Icons.Check className="w-4 h-4 text-green-400" />}
+              {saveStatus === 'idle' && <Icons.Plus className="w-5 h-5" />}
+            </button>
            <button className="p-1.5 bg-gradient-to-tr from-lime-600 to-lime-400 rounded-full text-black hover:rotate-12 transition-all shadow-[0_0_15px_rgba(163,230,53,0.4)]" onClick={() => { setIsAiModalOpen(true); triggerHaptic(10); }}><Icons.Wand2 className="w-4 h-4" /></button>
            <button className="p-1 text-red-400/60 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
         </div>
@@ -903,6 +1038,12 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
               <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mt-4 mb-2 shrink-0" />
               <div className="flex-1 overflow-y-auto">
                 <Sidebar 
+                  user={user}
+                  designs={designs}
+                  currentDesignId={currentDesignId}
+                  loadDesign={loadDesign}
+                  createNewDesign={createNewDesign}
+                  importDesign={() => fileInputRef.current?.click()}
                   selectedElement={selectedElement} 
                   themeColors={state.themeColors} 
                   pages={state.pages} 
@@ -985,6 +1126,12 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
       {!isMobile && (
         <Sidebar 
+          user={user}
+          designs={designs}
+          currentDesignId={currentDesignId}
+          loadDesign={loadDesign}
+          createNewDesign={createNewDesign}
+          importDesign={() => fileInputRef.current?.click()}
           selectedElement={selectedElement} 
           themeColors={state.themeColors} 
           pages={state.pages} 
