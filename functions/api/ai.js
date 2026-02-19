@@ -4,7 +4,25 @@ export async function onRequestPost({ request, env }) {
 
   try {
     const clientRequestBody = await request.json();
-    const userPromptText = clientRequestBody.messages[clientRequestBody.messages.length - 1].content;
+
+    const lastMessage = clientRequestBody.messages[clientRequestBody.messages.length - 1];
+    let userPromptText = '';
+
+    if (!lastMessage || !lastMessage.content) {
+        return new Response(JSON.stringify({ error: 'Invalid request: No message content found.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // Handle both string and array content types to ensure we get the prompt
+    if (typeof lastMessage.content === 'string') {
+        userPromptText = lastMessage.content;
+    } else if (Array.isArray(lastMessage.content)) {
+        const textPart = lastMessage.content.find(p => p.type === 'text');
+        userPromptText = textPart?.text || '';
+    }
+
+    if (!userPromptText) {
+        return new Response(JSON.stringify({ error: 'Invalid prompt format: No text prompt found.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
 
     const designSchema = {
       "type": "object",
