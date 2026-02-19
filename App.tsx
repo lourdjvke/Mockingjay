@@ -528,7 +528,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           content: [
             {
               type: "text",
-              text: `${systemInstruction}\n\nCurrent Editor State: ${JSON.stringify(state)}\n\nUser Request: ${aiPrompt}`
+              text: `${systemInstruction}\\n\\nCurrent Editor State: ${JSON.stringify(state)}\\n\\nUser Request: ${aiPrompt}`
             }
           ]
         }
@@ -898,15 +898,44 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
     let fontStyleEl: HTMLStyleElement | null = null;
     try {
-      const googleFontsLink = document.querySelector('link[href*="fonts.googleapis.com"]') as HTMLLinkElement;
-      if (googleFontsLink) {
-        const inlineFontCss = await embedGoogleFonts(googleFontsLink.href);
-        if (inlineFontCss) {
-          fontStyleEl = document.createElement('style');
-          fontStyleEl.setAttribute('data-export-fonts', 'true');
-          fontStyleEl.textContent = inlineFontCss;
-          canvasNode.prepend(fontStyleEl);
-        }
+      // Dynamically build the Google Fonts URL for embedding, ensuring all fonts are available for export.
+      const fontFamilies = [
+        'Inter:wght@300;400;500;600;700',
+        'Playfair Display:ital,wght@0,400..900;1,400..900',
+        'Montserrat:wght@400;700;900',
+        'Bangers',
+        'Lobster',
+        'Permanent Marker',
+        'Sacramento',
+        'Press Start 2P',
+        'Monoton',
+        'Alfa Slab One',
+        'Cinzel Decorative:wght@400;700;900',
+        'Faster One',
+        'Righteous',
+        'Fredoka One',
+        'Orbitron:wght@400;700;900',
+        'Special Elite',
+        'Cookie',
+        'Satisfy',
+        'Kaushan Script',
+        'Pinyon Script',
+        'Rochester',
+        'Abril Fatface',
+        'Comfortaa:wght@300;700',
+        'UnifrakturMaguntia',
+        'Creepster',
+        'Nosifer',
+        'Bungee Shade'
+      ];
+      const googleFontsUrl = `https://fonts.googleapis.com/css2?${fontFamilies.map(f => `family=${f.replace(/ /g, '+')}`).join('&')}&display=swap`;
+
+      const inlineFontCss = await embedGoogleFonts(googleFontsUrl);
+      if (inlineFontCss) {
+        fontStyleEl = document.createElement('style');
+        fontStyleEl.setAttribute('data-export-fonts', 'true');
+        fontStyleEl.textContent = inlineFontCss;
+        canvasNode.prepend(fontStyleEl);
       }
 
       const userFontStyles = document.querySelectorAll('style[id^="font-face-"]');
