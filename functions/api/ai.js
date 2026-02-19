@@ -1,23 +1,23 @@
 
 export async function onRequestPost({ request, env }) {
-  const modelName = "gemini-2.5-flash";
-  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${env.GEMINI_API_KEY}`;
+  const groqApiUrl = "https://api.groq.com/openai/v1/chat/completions";
 
   try {
     const clientRequestBody = await request.json();
 
-    const geminiResponse = await fetch(geminiApiUrl, {
+    const groqResponse = await fetch(groqApiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${env.GROQ_API_KEY}`,
       },
       body: JSON.stringify(clientRequestBody),
     });
 
-    const geminiData = await geminiResponse.json();
+    const groqData = await groqResponse.json();
 
-    return new Response(JSON.stringify(geminiData), {
-        status: geminiResponse.status,
+    return new Response(JSON.stringify(groqData), {
+        status: groqResponse.status,
         headers: { 'Content-Type': 'application/json' }
     });
 
