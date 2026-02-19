@@ -1,50 +1,21 @@
 
-// Function to remove base64 images from the design data
-const removeBase64Images = (design) => {
-    if (design && design.pages) {
-        design.pages.forEach(page => {
-            if (page.elements) {
-                page.elements.forEach(element => {
-                    if (element.props && element.props.src && element.props.src.startsWith('data:image')) {
-                        element.props.src = ''; // or a placeholder like 'image_removed'
-                    }
-                });
-            }
-        });
-    }
-    return design;
-};
-
 export async function onRequestPost({ request, env }) {
-  const groqApiUrl = "https://api.groq.com/openai/v1/chat/completions";
+  // Switched to Google Gemini API
+  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`;
 
   try {
-    const clientRequestBody = await request.json();
+    const clientRequestBody = await request.json(); // Original request from the client app
 
-    // 1. Remove base64 images to reduce request size
-    if (clientRequestBody.messages && clientRequestBody.messages.length > 0) {
-        const lastMessage = clientRequestBody.messages[clientRequestBody.messages.length - 1];
-        try {
-            const content = JSON.parse(lastMessage.content);
-            if (content.design) {
-                content.design = removeBase64Images(content.design);
-                lastMessage.content = JSON.stringify(content);
-            }
-        } catch (e) {
-            // Not a JSON content, proceed as is
-        }
-    }
-    
-    // 2. Add design context and detailed schema to the prompt
+    // Assuming the relevant prompt is the last message content.
+    const userPromptText = clientRequestBody.messages[clientRequestBody.messages.length - 1].content;
+
+    // The full schema for the design, as before.
     const designSchema = {
       "type": "object",
       "properties": {
         "currentPageIndex": { "type": "number" },
         "selectedElementId": { "type": ["string", "null"] },
-        "themeColors": {
-          "type": "array",
-          "items": { "type": "string" }
-        },
+        "themeColors": { "type": "array", "items": { "type": "string" } },
         "pages": {
           "type": "array",
           "items": {
@@ -63,11 +34,7 @@ export async function onRequestPost({ request, env }) {
                     "box": {
                       "type": "object",
                       "properties": {
-                        "x": { "type": "number" },
-                        "y": { "type": "number" },
-                        "width": { "type": "number" },
-                        "height": { "type": "number" },
-                        "rotation": { "type": "number" }
+                        "x": { "type": "number" }, "y": { "type": "number" }, "width": { "type": "number" }, "height": { "type": "number" }, "rotation": { "type": "number" }
                       },
                       "required": ["x", "y", "width", "height", "rotation"]
                     },
@@ -75,21 +42,22 @@ export async function onRequestPost({ request, env }) {
                     "style": {
                       "type": "object",
                       "properties": {
-                        "color": { "type": "string" },
-                        "backgroundColor": { "type": "string" },
-                        "fontSize": { "type": "number" },
-                        "fontFamily": { "type": "string" },
-                        "fontWeight": { "type": "string" },
-                        "textAlign": { "enum": ["left", "center", "right"] },
-                        "borderRadius": { "type": "number" },
+                        "color": { "type": ["string", "null"] },
+                        "backgroundColor": { "type": ["string", "null"] },
+                        "fontSize": { "type": ["number", "null"] },
+                        "fontFamily": { "type": ["string", "null"] },
+                        "fontWeight": { "type": ["string", "null"] },
+                        "textAlign": { "enum": ["left", "center", "right", null] },
+                        "borderRadius": { "type": ["number", "null"] },
                         "opacity": { "type": "number" },
-                        "strokeColor": { "type": "string" },
-                        "strokeWidth": { "type": "number" },
-                        "strokePattern": { "enum": ["solid", "dashed", "dotted"] },
-                        "letterSpacing": { "type": "number" },
-                        "lineHeight": { "type": "number" },
-                        "clipPath": { "type": "string" }
-                      }
+                        "strokeColor": { "type": ["string", "null"] },
+                        "strokeWidth": { "type": ["number", "null"] },
+                        "strokePattern": { "enum": ["solid", "dashed", "dotted", null] },
+                        "letterSpacing": { "type": ["number", "null"] },
+                        "lineHeight": { "type": ["number", "null"] },
+                        "clipPath": { "type": ["string", "null"] }
+                      },
+                       "required": ["color", "backgroundColor", "fontSize", "fontFamily", "fontWeight", "textAlign", "letterSpacing", "lineHeight", "borderRadius", "opacity", "strokeColor", "strokeWidth", "strokePattern", "clipPath"]
                     },
                     "visible": { "type": "boolean" },
                     "locked": { "type": "boolean" }
@@ -105,72 +73,91 @@ export async function onRequestPost({ request, env }) {
       "required": ["currentPageIndex", "selectedElementId", "themeColors", "pages"]
     };
 
-    const designContext = `
-      You are "Mockingjay AI", a world-class Lead Designer and UI/UX expert.
-      Your task is to transform user prompts into complete, high-fidelity design structures.
-      ALWAYS generate RICH content with multiple elements. Never generate empty or minimal designs.
+    // New "luxury designer" persona
+    const luxuryDesignContext = `
+      You are "Mockingjay Atelier", the epitome of digital elegance and a visionary in luxury brand design.
+      Your creations are not mere designs; they are bespoke digital couture. Your task is to interpret user aspirations and manifest them into breathtaking, high-fashion design structures.
+      You operate with an unparalleled aesthetic sense, blending classic principles with avant-garde trends.
+      ALWAYS generate opulent, richly detailed content with a story. Never settle for mediocrity or minimalism unless the prompt explicitly demands it in a high-fashion context (e.g., 'brutalist luxury').
 
-      CRITICAL RULES:
-      1. ALWAYS populate the current page with multiple elements (minimum 3-5 elements)
-      2. NEVER return an empty page with only a background color
-      3. Elements MUST have proper positioning, sizing, font families, colors, and spacing
-      4. Apply the user's request (color theme, brand, style) throughout ALL elements
-      5. Match the Canvas dimensions: 1080x1080
-      6. When user asks for additional pages, append new pages to the pages array. Every page MUST have elements.
-      7. Use reasonable borderRadius values (0-24px for rectangles, 999 for circles/pills). Do NOT use excessive values.
-      8. For optional style properties that are not applicable to an element, you MUST return them with a value of null.
+      CRITICAL RULES OF THE ATELIER:
+      1. Every canvas is a masterpiece. Populate it with an abundance of carefully curated elements (minimum 4-6).
+      2. Blank space is a statement, not an oversight. Never return an empty page.
+      3. Impeccable execution is paramount. Elements MUST have flawless positioning, exquisite typography, and a harmonious color palette.
+      4. Embody the client's vision. The brand's soul must permeate every pixel.
+      5. The canvas is your domain: 1080x1080 pixels. Every element must respect its sacred boundaries.
+      6. For multi-page narratives, each page is a new chapter, as rich and complete as the last.
+      7. Details make the luxury. Use \`borderRadius\` with intention (0-30px for sharp, modern looks; 999px for soft, organic forms).
+      8. All properties in the schema are intentional. If a style property is not applicable, it MUST be \`null\`.
 
-      DESIGN PATTERNS BY REQUEST TYPE:
+      STYLISTIC GUIDANCE (DESIGN PATTERNS):
 
-      FOR BRAND/COMPANY REQUESTS:
-      1. Background color or image (applies to page.background)
-      2. Large headline (40-70px) with brand name
-      3. Tagline/subtitle (24-30px)
-      4. 2-3 descriptive text elements (14-18px)
-      5. Accent shapes or icons for visual interest (can use clipPath for unique shapes).
-      6. All text in theme colors from user request
+      FOR ASPIRATIONAL BRANDS:
+      1. Set the mood with a sophisticated background color or a subtle, textured image (\`page.background\`).
+      2. A bold, elegant headline (50-80px) that captures the brand's essence.
+      3. An eloquent tagline or sub-header (28-36px).
+      4. 2-4 blocks of poetic, descriptive text (16-20px).
+      5. Sculptural shapes, icons, or line art to add depth and intrigue. Use \`clipPath\` to create signature forms.
+      6. The color palette must breathe luxury.
 
-      FOR COLOR/STYLE REQUESTS:
-      - Update ALL element colors to match the requested theme
-      - If "purple" mentioned, use gradients of purple: #8B5CF6, #A78BFA, #DDD6FE
-      - If "brand colors" requested, create a palette and apply consistently
+      COMPOSITION & LAYOUT (THE GOLDEN RATIO):
+      - Adhere to a generous margin of 30-60px from all canvas edges.
+      - Create visual rhythm by spacing elements 20-30px apart.
+      - The main headline should command attention, often placed at a key focal point, not just centered at the top.
+      - Guide the viewer's eye with a clear visual hierarchy.
 
-      POSITIONING GUIDELINES:
-      - Use margins of 20-40px from canvas edges
-      - Space elements 15-20px apart
-      - Center headline at x: 270, y: 40
-      - Place secondary elements below with proper spacing
-      - Use full width (1080) for visual elements
+      The output must be a flawless JSON object, adhering strictly to the following schema. Do not include any text, code block markers, or markdown before or after the JSON object.
+      Schema: ${JSON.stringify(designSchema, null, 2)}
 
-      The output must be a valid JSON object matching the following schema:
-      ${JSON.stringify(designSchema, null, 2)}
+      User's request is as follows:
+      ${userPromptText}
     `;
 
-    if (clientRequestBody.messages && clientRequestBody.messages.length > 0) {
-        const lastMessage = clientRequestBody.messages[clientRequestBody.messages.length - 1];
-        lastMessage.content = designContext + '\n\n' + lastMessage.content;
-    }
+    // Construct the request body for the Gemini API
+    const geminiRequestBody = {
+      contents: [{
+        parts: [{ text: luxuryDesignContext }]
+      }],
+      generationConfig: {
+        responseMimeType: "application/json",
+      }
+    };
 
-
-    const groqResponse = await fetch(groqApiUrl, {
+    const geminiResponse = await fetch(geminiApiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${env.GROQ_API_KEY}`,
-      },
-      body: JSON.stringify(clientRequestBody),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(geminiRequestBody),
     });
 
-    const groqData = await groqResponse.json();
+    if (!geminiResponse.ok) {
+      const errorBody = await geminiResponse.json();
+      console.error('Gemini API Error:', errorBody);
+      throw new Error(\`Gemini API request failed: \${errorBody.error.message}\`);
+    }
 
-    return new Response(JSON.stringify(groqData), {
-        status: groqResponse.status,
-        headers: { 'Content-Type': 'application/json' }
+    const geminiData = await geminiResponse.json();
+    const generatedText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!generatedText) {
+      console.error('Invalid Gemini Response:', geminiData);
+      throw new Error('No content in Gemini response');
+    }
+
+    // Transform the Gemini response to the OpenAI format that the client expects
+    const openAICompliantResponse = {
+      choices: [{
+        message: { content: generatedText }
+      }]
+    };
+
+    return new Response(JSON.stringify(openAICompliantResponse), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
     console.error('Error in Cloudflare Function:', error);
-    return new Response(JSON.stringify({ error: 'Failed to process request' }), {
+    return new Response(JSON.stringify({ error: error.message || 'Failed to process request' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
