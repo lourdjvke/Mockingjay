@@ -127,7 +127,7 @@ export async function onRequestPost({ request, env }) {
         contents: [{ parts: [{ text: luxuryDesignContext }] }],
         generationConfig: {
             responseMimeType: "application/json",
-            responseSchema: designSchema,
+          //  responseSchema: designSchema,
         },
     };
 
