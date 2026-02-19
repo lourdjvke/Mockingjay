@@ -1,42 +1,63 @@
 import React, { useState } from 'react';
-import { Icons } from '../components/IconLibrary.tsx';
-import { analyzeBusinessFromScreenshot } from '../services/aiService.ts';
-import { BusinessDNA } from '../types.ts';
+import { BusinessDNA } from '../types';
+import { analyzeBusinessFromScreenshot } from '../services/aiService';
+import { Icons } from '../components/IconLibrary';
+import { MediaStore } from '../utils';
 
-interface BusinessDNAInputProps {
-  onComplete: (dna: Partial<BusinessDNA>) => void;
+interface Props {
   onBack: () => void;
+  onComplete: (dna: Partial<BusinessDNA>) => void;
 }
 
-const BusinessDNAInput: React.FC<BusinessDNAInputProps> = ({ onComplete, onBack }) => {
+const BusinessDNAInput: React.FC<Props> = ({ onBack, onComplete }) => {
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const handleAnalyze = async () => {
-    if (!url) {
-      setError('Please enter a URL');
+    if (!url || !url.startsWith('http')) {
+      setError('Please enter a valid URL (e.g., https://example.com)');
       return;
     }
-
     setIsLoading(true);
-    setError('');
+    setError(null);
 
     try {
-      const screenshotUrl = `https://pageshot.site/v1/screenshot?url=${encodeURIComponent(url)}&width=1440&full_page=true&delay=3000&format=png`;
+      // 1. Capture screenshot using pageshot.site
+      const response = await fetch('https://pageshot.site/v1/screenshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: url,
+          width: 1440,
+          full_page: true,
+          delay: 3000,
+          format: 'png',
+        }),
+      });
 
-      const response = await fetch(screenshotUrl);
-      if (!response.ok) throw new Error('Failed to capture screenshot');
+      if (!response.ok) {
+        throw new Error(`Screenshot service failed with status: ${response.status}`);
+      }
 
+      // 2. Convert response to blob and then to base64
       const blob = await response.blob();
-      const base64 = await new Promise<string>((resolve) => {
+      const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
 
+      // 3. (Feature Preservation) Save the image to IndexedDB
+      await MediaStore.saveImage(base64);
+
+      // 4. Analyze the image with the AI service
       const dna = await analyzeBusinessFromScreenshot(base64, url);
+
+      // 5. Complete the process
       onComplete(dna);
+
     } catch (err: any) {
       setError(err.message || 'Failed to analyze website');
     } finally {
@@ -57,60 +78,53 @@ const BusinessDNAInput: React.FC<BusinessDNAInputProps> = ({ onComplete, onBack 
 
         <div className="text-center space-y-4">
           <div className="flex justify-center mb-6">
-            <div className="w-20 h-20 bg-teal-500/20 rounded-3xl flex items-center justify-center">
-              <span className="text-5xl">🧬</span>
+            <div className="w-24 h-24 bg-teal-500/10 rounded-3xl flex items-center justify-center border border-teal-500/20 shadow-lg">
+              <span className="text-6xl">🧬</span>
             </div>
           </div>
-          <h1 className="text-4xl md:text-6xl font-serif italic">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tighter">
             Generate Business DNA
           </h1>
-          <p className="text-white/60 text-lg">
-            Enter your website URL and we'll analyze your brand
+          <p className="text-white/50 text-lg md:text-xl">
+            Enter your website URL and we'll analyze its brand identity.
           </p>
         </div>
 
-        <div className="bg-zinc-800/40 backdrop-blur-sm rounded-3xl p-8 md:p-12 border border-white/10 space-y-6">
-          <div className="space-y-3">
-            <label className="text-sm font-medium text-white/80 uppercase tracking-wider">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 md:p-8 space-y-6 shadow-2xl">
+          <div>
+            <label htmlFor="url-input" className="block text-sm font-medium text-white/80 mb-2">
               Website URL
             </label>
             <input
+              id="url-input"
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com"
-              className="w-full bg-zinc-900/50 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder:text-white/30 focus:border-lime-400/50 focus:outline-none transition-colors text-lg"
+              className="w-full bg-black/30 border border-white/20 rounded-lg p-4 text-lg focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
               disabled={isLoading}
             />
           </div>
-
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm">
-              {error}
-            </div>
-          )}
-
           <button
             onClick={handleAnalyze}
-            disabled={isLoading || !url}
-            className="w-full bg-lime-400 text-black py-5 rounded-2xl font-bold text-lg hover:bg-lime-300 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_10px_40px_rgba(163,230,53,0.3)] uppercase tracking-tight italic flex items-center justify-center gap-3"
+            disabled={isLoading}
+            className="w-full bg-teal-500 hover:bg-teal-600 disabled:bg-gray-600 text-black font-bold rounded-lg px-8 py-4 text-xl transition-all duration-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>
-                <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                Analyzing...
+                <Icons.Loader className="w-6 h-6 animate-spin" />
+                <span>Analyzing...</span>
               </>
             ) : (
-              <>
-                <Icons.Sparkles className="w-5 h-5" />
-                Analyze Website
-              </>
+              'Analyze Website'
             )}
           </button>
         </div>
 
+        {error && <p className="text-red-500 text-center mt-4">{error}</p>}
+
         <div className="text-center text-sm text-white/40">
-          This will capture a screenshot of your website and analyze its branding
+          This will capture a screenshot of your website and analyze its branding.
         </div>
       </div>
     </div>
