@@ -133,8 +133,14 @@ const App: React.FC = () => {
   const loadDesign = (designId: string) => {
     const designToLoad = designs.find(d => d.id === designId);
     if (designToLoad) {
+      // Ensure pages and elements arrays exist to prevent crashes from legacy data.
+      const sanitizedPages = (designToLoad.pages || INITIAL_STATE.pages).map((page: Page) => ({
+        ...page,
+        elements: page.elements || [],
+      }));
+
       setState({
-        pages: designToLoad.pages || INITIAL_STATE.pages,
+        pages: sanitizedPages,
         currentPageIndex: designToLoad.currentPageIndex || 0,
         selectedElementId: designToLoad.selectedElementId || null,
         themeColors: designToLoad.themeColors || INITIAL_STATE.themeColors,
@@ -277,7 +283,7 @@ const App: React.FC = () => {
   }, [isMobile]);
 
   const currentPage = state.pages[state.currentPageIndex];
-  const selectedElement = currentPage.elements.find(e => e.id === state.selectedElementId) || null;
+  const selectedElement = currentPage?.elements.find(e => e.id === state.selectedElementId) || null;
 
   const triggerHaptic = useCallback((intensity = 10) => {
     if (window.navigator && window.navigator.vibrate) {
@@ -881,12 +887,12 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
            <div id="design-canvas" ref={canvasRef} onPointerDown={deselectAll} className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center bg-zinc-800 overflow-hidden"
              style={{ 
                width: CANVAS_WIDTH, height: CANVAS_HEIGHT, transform: `scale(${scale})`,
-               backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : undefined,
-               backgroundImage: !currentPage.background.startsWith('#') ? `url(${currentPage.background})` : undefined,
+               backgroundColor: currentPage?.background.startsWith('#') ? currentPage.background : undefined,
+               backgroundImage: !currentPage?.background.startsWith('#') ? `url(${currentPage.background})` : undefined,
                backgroundSize: 'cover', backgroundPosition: 'center'
              }}
            >
-              {currentPage.elements.map(el => (
+              {currentPage?.elements.map(el => (
                 <div key={el.id}>
                   <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleSelect} onAutoResize={handleAutoResize} />
                   {state.selectedElementId === el.id && !el.locked && (
