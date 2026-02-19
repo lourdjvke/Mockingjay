@@ -1,6 +1,6 @@
 
 export async function onRequestPost({ request, env }) {
-  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`;
+  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`;
 
   try {
     const clientRequestBody = await request.json();
