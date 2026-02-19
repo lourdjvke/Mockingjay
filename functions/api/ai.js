@@ -132,7 +132,7 @@ export async function onRequestPost({ request, env }) {
     if (!geminiResponse.ok) {
       const errorBody = await geminiResponse.json();
       console.error('Gemini API Error:', errorBody);
-      throw new Error(\`Gemini API request failed: \${errorBody.error.message}\`);
+      throw new Error(`Gemini API request failed: ${errorBody.error.message}`);
     }
 
     const geminiData = await geminiResponse.json();
