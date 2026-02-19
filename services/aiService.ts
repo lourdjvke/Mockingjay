@@ -2,7 +2,8 @@ import { sanitizeAiJson } from '../utils.ts';
 import { BusinessDNA } from '../types.ts';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+        const modelName = "gemini-2.5-flash"; 
+const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent';
 
 export const analyzeBusinessFromScreenshot = async (screenshotBase64: string, websiteUrl: string): Promise<Partial<BusinessDNA>> => {
   const prompt = `Analyze this website screenshot and extract the following information in JSON format:
