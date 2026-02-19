@@ -54,35 +54,32 @@ const App: React.FC = () => {
   // Debounced save function with thumbnail generation
   const debouncedSave = useDebouncedCallback(async (designState: EditorState, designId: string) => {
     if (!user || !canvasRef.current) return;
-    
+
     setSaveStatus('saving');
-    
-    // Generate a low-quality snapshot for the thumbnail
-    const thumbnail = await domToPng(canvasRef.current, {
-        width: CANVAS_WIDTH,
-        height: CANVAS_HEIGHT,
-        scale: 0.2, // Low scale for performance
-    }).catch(e => {
-        console.error("Thumbnail generation failed:", e);
-        return ''; // Return empty string on failure
-    });
 
-    const designData = {
-        ...designState,
-        lastModified: Date.now(),
-        thumbnail, // This will be an empty string if generation failed
-    };
-
-    const dbRef = ref(database, `users/${user.uid}/designs/${designId}`);
-    set(dbRef, designData)
-        .then(() => {
-            setSaveStatus('saved');
-            setTimeout(() => setSaveStatus('idle'), 2000);
-        })
-        .catch(error => {
-            console.error("Failed to save design:", error);
-            setSaveStatus('idle');
+    try {
+        const thumbnail = await domToPng(canvasRef.current, {
+            width: CANVAS_WIDTH,
+            height: CANVAS_HEIGHT,
+            scale: 0.2, // Low scale for performance
         });
+
+        const designData = {
+            ...designState,
+            lastModified: Date.now(),
+            thumbnail,
+        };
+
+        const dbRef = ref(database, `users/${user.uid}/designs/${designId}`);
+        await set(dbRef, designData);
+
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+
+    } catch (error) {
+        console.error("Failed to save design or generate thumbnail:", error);
+        setSaveStatus('idle'); // Ensure we always reset status on error
+    }
   }, 3000);
 
   // Autosave effect
@@ -131,7 +128,7 @@ const App: React.FC = () => {
       });
       return () => unsubscribe();
     }
-  }, [user, loadDesign, createNewDesign]);
+  }, [user]);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -142,13 +139,13 @@ const App: React.FC = () => {
     }
   };
 
-  const createNewDesign = useCallback(() => {
+  const createNewDesign = () => {
     const newId = generateId();
     setState(INITIAL_STATE);
     setCurrentDesignId(newId);
-  }, []);
+  };
 
-  const loadDesign = useCallback((designId: string) => {
+  const loadDesign = (designId: string) => {
     const designToLoad = designs.find(d => d.id === designId);
     if (designToLoad) {
       // Ensure pages and elements arrays exist to prevent crashes from legacy data.
@@ -165,7 +162,7 @@ const App: React.FC = () => {
       });
       setCurrentDesignId(designId);
     }
-  }, [designs]);
+  };
 
   const addPage = () => {
     setState(prev => {
@@ -222,6 +219,7 @@ const App: React.FC = () => {
     loadStoredData();
   }, []);
 
+  // Added handleAddCustomFont to fix missing name error
   const handleAddCustomFont = useCallback(async (name: string, data: ArrayBuffer) => {
     try {
       await FontStore.saveFont(name, data);
@@ -239,6 +237,7 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Added handleDeleteCustomFont to fix missing name error
   const handleDeleteCustomFont = useCallback(async (name: string) => {
     try {
       await FontStore.deleteFont(name);
@@ -259,6 +258,7 @@ const App: React.FC = () => {
 
   // PWA install prompt handling
   useEffect(() => {
+    // Check if already installed as PWA
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
       || (window.navigator as any).standalone === true;
     setIsPwaInstalled(isStandalone);
@@ -336,6 +336,7 @@ const App: React.FC = () => {
       };
       reader.readAsDataURL(file);
     });
+    // Reset input so same files can be re-selected
     e.target.value = '';
   };
 
