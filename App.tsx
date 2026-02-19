@@ -402,31 +402,32 @@ CRITICAL RULES:
 5. Match the Canvas dimensions: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}
 6. When user asks for additional pages, append new pages to the pages array. Every page MUST have elements.
 7. Use reasonable borderRadius values (0-24px for rectangles, 999 for circles/pills). Do NOT use excessive values.
+8. For optional style properties that are not applicable to an element, you MUST return them with a value of null.
 
 AVAILABLE FONTS: ${allFonts.map(f => f.value).join(', ')}.
 
-ELEMENT STRUCTURE - REQUIRED FIELDS FOR EACH ELEMENT:
+ELEMENT STRUCTURE - ALL FIELDS ARE REQUIRED FOR EACH ELEMENT:
 {
   "id": "unique_id",
   "type": "text|shape|image|icon",
   "name": "descriptive name",
   "box": { "x": number, "y": number, "width": number, "height": number, "rotation": 0 },
   "content": "text content or SVG path or image URL",
-  "style": {
-    "color": "#hexcolor or white/black",
-    "backgroundColor": "#hexcolor (optional)",
-    "fontSize": number (14-70 for text),
-    "fontFamily": "font name from available list",
-    "fontWeight": "normal|bold|300|400|600|700",
-    "textAlign": "left|center|right",
-    "letterSpacing": 0,
-    "lineHeight": 1.4,
-    "borderRadius": 0,
-    "opacity": 1,
-    "strokeColor": "#hexcolor (optional)",
-    "strokeWidth": 0,
-    "strokePattern": "'solid'|'dashed'|'dotted' (optional, for shapes)",
-    "clipPath": "CSS clip-path value (optional, for custom shapes)"
+  "style": { // All style properties are required. Use null if not applicable.
+    "color": "#hexcolor or null",
+    "backgroundColor": "#hexcolor or null",
+    "fontSize": "number (for text) or null",
+    "fontFamily": "font name or null",
+    "fontWeight": "string or null",
+    "textAlign": "string or null",
+    "letterSpacing": "number or null",
+    "lineHeight": "number or null",
+    "borderRadius": "number or null",
+    "opacity": 1, // Must be a number
+    "strokeColor": "#hexcolor or null",
+    "strokeWidth": "number or null",
+    "strokePattern": "'solid'|'dashed'|'dotted' or null",
+    "clipPath": "CSS clip-path value or null"
   },
   "visible": true,
   "locked": false
@@ -461,7 +462,22 @@ An example of a shape element:
   "type": "shape",
   "box": { "x": 12, "y": 125, "width": 192, "height": 62, "rotation": 0 },
   "content": "",
-  "style": { "backgroundColor": "#2D6B58", "opacity": 1, "borderRadius": 1000 },
+  "style": { 
+    "color": null, 
+    "backgroundColor": "#2D6B58", 
+    "fontSize": null, 
+    "fontFamily": null, 
+    "fontWeight": null, 
+    "textAlign": null, 
+    "letterSpacing": null, 
+    "lineHeight": null, 
+    "borderRadius": 1000, 
+    "opacity": 1, 
+    "strokeColor": null, 
+    "strokeWidth": 0, 
+    "strokePattern": null, 
+    "clipPath": null 
+  },
   "visible": true,
   "locked": false
 }
@@ -557,21 +573,22 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                                             style: {
                                                 type: "object",
                                                 properties: {
-                                                    color: { type: "string" },
-                                                    backgroundColor: { type: "string" },
-                                                    fontSize: { type: "number" },
-                                                    fontFamily: { type: "string" },
-                                                    fontWeight: { type: "string" },
-                                                    textAlign: { type: "string" },
-                                                    letterSpacing: { type: "number" },
-                                                    lineHeight: { type: "number" },
-                                                    borderRadius: { type: "number" },
+                                                    color: { type: ["string", "null"] },
+                                                    backgroundColor: { type: ["string", "null"] },
+                                                    fontSize: { type: ["number", "null"] },
+                                                    fontFamily: { type: ["string", "null"] },
+                                                    fontWeight: { type: ["string", "null"] },
+                                                    textAlign: { type: ["string", "null"] },
+                                                    letterSpacing: { type: ["number", "null"] },
+                                                    lineHeight: { type: ["number", "null"] },
+                                                    borderRadius: { type: ["number", "null"] },
                                                     opacity: { type: "number" },
-                                                    strokeColor: { type: "string" },
-                                                    strokeWidth: { type: "number" },
-                                                    strokePattern: { type: "string" },
-                                                    clipPath: { type: "string" }
+                                                    strokeColor: { type: ["string", "null"] },
+                                                    strokeWidth: { type: ["number", "null"] },
+                                                    strokePattern: { type: ["string", "null"] },
+                                                    clipPath: { type: ["string", "null"] }
                                                 },
+                                                required: ["color", "backgroundColor", "fontSize", "fontFamily", "fontWeight", "textAlign", "letterSpacing", "lineHeight", "borderRadius", "opacity", "strokeColor", "strokeWidth", "strokePattern", "clipPath"],
                                                 additionalProperties: false
                                             },
                                             visible: { type: "boolean" },
@@ -599,7 +616,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           }
         },
         temperature: 0,
-        max_tokens: 2048
+        max_tokens: 4096
       };
 
       const result = await fetchWithRetry(apiUrl, payload);
