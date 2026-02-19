@@ -71,7 +71,7 @@ const App: React.FC = () => {
             const fontFace = new FontFace(font.name, font.data);
             const loadedFace = await fontFace.load();
             document.fonts.add(loadedFace);
-            loadedFonts.push({ name: font.name, value: `'${font.name}', sans-serif` });
+            loadedFonts.push({ name: font.name, value: `\'${font.name}\', sans-serif` });
           } catch (e) { console.error(`Font init fail: ${font.name}`, e); }
         }
         setUserFonts(loadedFonts);
@@ -93,7 +93,7 @@ const App: React.FC = () => {
       const loadedFace = await fontFace.load();
       document.fonts.add(loadedFace);
       
-      setUserFonts(prev => [...prev, { name, value: `'${name}', sans-serif` }]);
+      setUserFonts(prev => [...prev, { name, value: `\'${name}\', sans-serif` }]);
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(20);
     } catch (err) {
       console.error("Font save failed:", err);
@@ -204,6 +204,7 @@ const App: React.FC = () => {
   };
 
   const fetchWithRetry = async (url: string, payload: any, retries = 5): Promise<any> => {
+    let lastError: any;
     for (let i = 0; i < retries; i++) {
       try {
         const response = await fetch(url, {
@@ -215,17 +216,22 @@ const App: React.FC = () => {
         if (response.ok) return await response.json();
 
         const errData = await response.json();
+        lastError = new Error(errData.error?.message || `Request failed with status ${response.status}`);
+        
         if (response.status === 429 || response.status >= 500) {
-          const delay = Math.pow(2, i) * 1000;
+          const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
           await new Promise(res => setTimeout(res, delay));
           continue;
         }
-        throw new Error(errData.error?.message || 'Request failed');
+        
+        throw lastError;
       } catch (err) {
-        if (i === retries - 1) throw err;
+        lastError = err;
+        if (i === retries - 1) throw lastError;
         await new Promise(res => setTimeout(res, 1000));
       }
     }
+    throw lastError;
   };
 
   const handleAiRefine = async () => {
@@ -351,10 +357,16 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       };
 
       const result = await fetchWithRetry(apiUrl, payload);
+      
+      if (!result) {
+        throw new Error("Received an empty response from the AI service.");
+      }
+
       const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (!textResponse) {
-        throw new Error("No response content from API");
+        console.error("Invalid AI Response:", result);
+        throw new Error("No response content from API. The AI may be experiencing issues.");
       }
 
       let newState;
@@ -458,7 +470,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   const deselectAll = () => setState(prev => ({ ...prev, selectedElementId: null }));
 
   const addElement = useCallback((element: Partial<DesignElement>) => {
-    const defaultFont = allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif";
+    const defaultFont = allFonts.length > 0 ? allFonts[0].value : "\'Inter\', sans-serif";
     const newElement: DesignElement = {
       id: generateId(),
       name: element.name || (element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : 'Element'),
