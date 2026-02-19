@@ -196,7 +196,7 @@ const App: React.FC = () => {
   };
 
   const injectFontFace = (name: string, base64: string) => {
-    const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
+    const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
     document.getElementById(styleId)?.remove();
     const style = document.createElement('style');
     style.id = styleId;
@@ -249,7 +249,7 @@ const App: React.FC = () => {
   const handleDeleteCustomFont = useCallback(async (name: string) => {
     try {
       await FontStore.deleteFont(name);
-      const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
+      const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
       document.getElementById(styleId)?.remove();
       setUserFonts(prev => prev.filter(f => f.name !== name));
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(5);
@@ -424,7 +424,9 @@ ELEMENT STRUCTURE - REQUIRED FIELDS FOR EACH ELEMENT:
     "borderRadius": 0,
     "opacity": 1,
     "strokeColor": "#hexcolor (optional)",
-    "strokeWidth": 0
+    "strokeWidth": 0,
+    "strokePattern": "'solid'|'dashed'|'dotted' (optional, for shapes)",
+    "clipPath": "CSS clip-path value (optional, for custom shapes)"
   },
   "visible": true,
   "locked": false
@@ -437,7 +439,7 @@ FOR BRAND/COMPANY REQUESTS:
 2. Large headline (40-70px) with brand name
 3. Tagline/subtitle (24-30px)
 4. 2-3 descriptive text elements (14-18px)
-5. Accent shapes or icons for visual interest
+5. Accent shapes or icons for visual interest (can use clipPath for unique shapes).
 6. All text in theme colors from user request
 
 FOR COLOR/STYLE REQUESTS:
@@ -451,6 +453,19 @@ POSITIONING GUIDELINES:
 - Center headline at x: ${Math.round(CANVAS_WIDTH / 4)}, y: 40
 - Place secondary elements below with proper spacing
 - Use full width (${CANVAS_WIDTH}) for visual elements
+
+An example of a shape element:
+{
+  "id": "n7bv9j3aw",
+  "name": "pill",
+  "type": "shape",
+  "box": { "x": 12, "y": 125, "width": 192, "height": 62, "rotation": 0 },
+  "content": "",
+  "style": { "backgroundColor": "#2D6B58", "opacity": 1, "borderRadius": 1000 },
+  "visible": true,
+  "locked": false
+}
+
 
 RESPONSE FORMAT:
 Return ONLY valid JSON matching this structure (NO markdown, NO code blocks):
@@ -535,7 +550,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                                                     height: { type: "number" },
                                                     rotation: { type: "number" }
                                                 },
-                                                required: ["x", "y", "width", "height", "rotation"]
+                                                required: ["x", "y", "width", "height", "rotation"],
+                                                additionalProperties: false
                                             },
                                             content: { type: "string" },
                                             style: {
@@ -552,17 +568,22 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                                                     borderRadius: { type: "number" },
                                                     opacity: { type: "number" },
                                                     strokeColor: { type: "string" },
-                                                    strokeWidth: { type: "number" }
-                                                }
+                                                    strokeWidth: { type: "number" },
+                                                    strokePattern: { type: "string" },
+                                                    clipPath: { type: "string" }
+                                                },
+                                                additionalProperties: false
                                             },
                                             visible: { type: "boolean" },
                                             locked: { type: "boolean" }
                                         },
-                                        required: ["id", "type", "name", "box", "content", "style", "visible", "locked"]
+                                        required: ["id", "type", "name", "box", "content", "style", "visible", "locked"],
+                                        additionalProperties: false
                                     }
                                 }
                             },
-                            required: ["id", "background", "elements"]
+                            required: ["id", "background", "elements"],
+                            additionalProperties: false
                         }
                     },
                     currentPageIndex: { type: "number" },
@@ -572,7 +593,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                         items: { type: "string" } 
                     }
                 },
-                required: ["pages", "currentPageIndex", "selectedElementId", "themeColors"]
+                required: ["pages", "currentPageIndex", "selectedElementId", "themeColors"],
+                additionalProperties: false
             }
           }
         },
@@ -592,6 +614,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         console.error("Invalid AI Response:", result);
         throw new Error("No response content from API. The AI may be experiencing issues.");
       }
+
+      console.log("Raw AI Response for debugging:", textResponse);
 
       let newState;
       try {
@@ -641,7 +665,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       setAiAttachedImages([]);
       triggerHaptic(50);
     } catch (err: any) {
-      console.error("Design Engine Fail:", err);
+      console.error("Design Engine Fail:", err, "Raw Response:", (err as any).textResponse);
       const errorMsg = err?.message || "Unknown error";
       alert(`AI Error: ${errorMsg}. Please try again with a more specific design prompt.`);
     } finally {
