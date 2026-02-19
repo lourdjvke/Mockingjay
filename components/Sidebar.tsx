@@ -190,7 +190,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 key={design.id} 
                 onClick={() => loadDesign(design.id)} 
                 className={`w-full p-3 rounded-lg text-left text-xs ${currentDesignId === design.id ? 'bg-zinc-700' : 'bg-zinc-800 hover:bg-zinc-700'}`}>
-                <p className="font-bold truncate">{design.pages[0]?.elements[0]?.content || 'Untitled Design'}</p>
+                <p className="font-bold truncate">{design.pages?.[0]?.elements?.[0]?.content || 'Untitled Design'}</p>
                 <p className="text-white/40">{new Date(design.lastModified).toLocaleString()}</p>
               </button>
             ))}
