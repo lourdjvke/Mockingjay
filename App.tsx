@@ -690,7 +690,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       if (Math.abs(rotation % 45) < 5) rotation = Math.round(rotation / 45) * 45;
       updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation } });
     }
-  }, [dragStart, elementStartPos, state.selectedElementId, scale, update.e,pdateElement]);
+  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement]);
 
   const handlePointerUp = useCallback(() => {
     setDragStart(null);
