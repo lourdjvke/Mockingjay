@@ -46,7 +46,10 @@ const BrandDna = ({ onClose }) => {
   const fetchWithRetry = async (url, options, retries = 5, backoff = 1000) => {
     try {
       const response = await fetch(url, options);
-      if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+      if (!response.ok) {
+          const errorBody = await response.text();
+          throw new Error(`HTTP Error: ${response.status} - ${errorBody}`);
+      }
       return response;
     } catch (err) {
       if (retries > 0) {
@@ -67,6 +70,7 @@ const BrandDna = ({ onClose }) => {
       });
       return await response.json();
     } catch (error) {
+      console.error("Analysis failed:", error);
       throw new Error("Failed to analyze brand with AI.");
     }
   };
@@ -265,7 +269,7 @@ const BrandDna = ({ onClose }) => {
         
             <div className="flex items-center gap-4">
               <button 
-                onClick={onClose}
+                onClick={() => setBrandData(null)} // This will now show the initial screen
                 className="flex items-center gap-2 bg-[#1a1a1a] px-4 py-2 rounded-xl border border-gray-800 text-sm hover:bg-gray-800 transition-colors"
               >
                 <Search size={16} />
@@ -404,7 +408,7 @@ const BrandDna = ({ onClose }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-[#0a0a0a] z-50 overflow-y-auto">
+    <div className="fixed inset-0 bg-[#0a0a0a] z-[2000] overflow-y-auto">
         {mainContent()}
     </div>
   )
