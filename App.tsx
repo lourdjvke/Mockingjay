@@ -136,7 +136,7 @@ const App: React.FC = () => {
       // The designs.length check is implicit from the 'if' branch.
       createNewDesign();
     }
-  }, [user, designs, currentDesignId, isAuthLoading, loadDesign, createNewDesign]);
+  }, [user, designs, currentDesignId, isAuthLoading]);
 
   const handleGoogleSignIn = async () => {
     try {
