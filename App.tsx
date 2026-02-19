@@ -5,6 +5,7 @@ import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, em
 import Sidebar from './components/Sidebar.tsx';
 import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
+import BrandDna from './components/BrandDna.tsx';
 import { domToPng } from 'modern-screenshot';
 import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove } from './firebase.ts';
 import type { User } from 'firebase/auth';
@@ -36,6 +37,8 @@ const App: React.FC = () => {
   const [aiAttachedImages, setAiAttachedImages] = useState<string[]>([]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
+  const [isBrandDnaOpen, setIsBrandDnaOpen] = useState(false);
+  const [brandData, setBrandData] = useState(null);
 
   // Firebase and Design-related state
   const [user, setUser] = useState<User | null>(null);
@@ -118,6 +121,21 @@ const App: React.FC = () => {
           .sort((a, b) => b.lastModified - a.lastModified)
         : [];
       setDesigns(userDesigns);
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  // Load brand data from Firebase
+  useEffect(() => {
+    if (!user) {
+        setBrandData(null);
+        return;
+    }
+    const brandRef = ref(database, 'brands');
+    const unsubscribe = onValue(brandRef, (snapshot) => {
+        const data = snapshot.val();
+        const [firstBrand] = data ? Object.values(data) : [];
+        setBrandData(firstBrand || null);
     });
     return () => unsubscribe();
   }, [user]);
@@ -975,6 +993,8 @@ User Request: ${aiPrompt}`
           </div>
         )}
 
+        {isBrandDnaOpen && <BrandDna onClose={() => setIsBrandDnaOpen(false)} />}
+
         <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) })); triggerHaptic(2); }}><Icons.ArrowLeft className="w-5 h-5"/></button>
            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">{state.currentPageIndex + 1}/{state.pages.length}</span>
@@ -1164,11 +1184,13 @@ User Request: ${aiPrompt}`
                 <Sidebar 
                   user={user}
                   designs={designs}
+                  brandData={brandData}
                   currentDesignId={currentDesignId}
                   loadDesign={loadDesign}
                   createNewDesign={createNewDesign}
                   deleteDesign={deleteDesign} // Pass the new function
                   importDesign={() => fileInputRef.current?.click()}
+                  openBrandDna={() => setIsBrandDnaOpen(true)}
                   selectedElement={selectedElement} 
                   themeColors={state.themeColors} 
                   pages={state.pages} 
@@ -1253,11 +1275,13 @@ User Request: ${aiPrompt}`
         <Sidebar 
           user={user}
           designs={designs}
+          brandData={brandData}
           currentDesignId={currentDesignId}
           loadDesign={loadDesign}
           createNewDesign={createNewDesign}
           deleteDesign={deleteDesign} // Pass the new function
           importDesign={() => fileInputRef.current?.click()}
+          openBrandDna={() => setIsBrandDnaOpen(true)}
           selectedElement={selectedElement} 
           themeColors={state.themeColors} 
           pages={state.pages} 
