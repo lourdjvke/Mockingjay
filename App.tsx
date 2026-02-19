@@ -151,14 +151,17 @@ const App: React.FC = () => {
     setCurrentDesignId(newId);
   }, []);
 
-  const deleteAllDesigns = async () => {
+  const deleteDesign = async (designId: string) => {
     if (!user) return;
-    const confirmed = window.confirm("Are you sure you want to delete all your designs? This action cannot be undone.");
+
+    const confirmed = window.confirm("Are you sure you want to delete this design?");
     if (confirmed) {
-        const designsRef = ref(database, `users/${user.uid}/designs`);
-        await remove(designsRef);
-        // After deleting, we should reset the state to a new fresh design
-        createNewDesign();
+        const designRef = ref(database, `users/${user.uid}/designs/${designId}`);
+        await remove(designRef);
+
+        if (currentDesignId === designId) {
+            setCurrentDesignId(null);
+        }
     }
 };
 
@@ -1212,6 +1215,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   currentDesignId={currentDesignId}
                   loadDesign={loadDesign}
                   createNewDesign={createNewDesign}
+                  deleteDesign={deleteDesign} // Pass the new function
                   importDesign={() => fileInputRef.current?.click()}
                   selectedElement={selectedElement} 
                   themeColors={state.themeColors} 
@@ -1300,7 +1304,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           currentDesignId={currentDesignId}
           loadDesign={loadDesign}
           createNewDesign={createNewDesign}
-          deleteAllDesigns={deleteAllDesigns}
+          deleteDesign={deleteDesign} // Pass the new function
           importDesign={() => fileInputRef.current?.click()}
           selectedElement={selectedElement} 
           themeColors={state.themeColors} 
