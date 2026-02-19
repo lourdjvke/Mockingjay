@@ -234,9 +234,7 @@ const App: React.FC = () => {
     triggerHaptic(30);
 
     try {
-      const apiKey = "AIzaSyC8OAZN6qdzsSKXLO2tV7stx-p5hFifhKM";
-      const modelName = "gemini-2.5-flash";
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      const apiUrl = '/api/ai';
 
       const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer and UI/UX expert.
 Your task is to transform user prompts into complete, high-fidelity design structures.
