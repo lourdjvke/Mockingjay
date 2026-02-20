@@ -11,6 +11,7 @@ import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set
 import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
 import ContextMenu from './components/ContextMenu.tsx';
+import QuickTools from './components/QuickTools.tsx';
 
 interface SnapLine {
   type: 'vertical' | 'horizontal';
@@ -415,6 +416,7 @@ const App: React.FC = () => {
         strokeWidth: 0,
         strokePattern: 'solid',
         clipPath: null,
+        filter: null
     };
 
     const style = { ...defaultStyle, ...(el.style || {}) };
@@ -517,7 +519,7 @@ ELEMENT STRUCTURE - ALL FIELDS ARE REQUIRED FOR EACH ELEMENT:
   "name": "descriptive name",
   "box": { "x": number, "y": number, "width": number, "height": number, "rotation": 0 },
   "content": "text content or SVG path or image URL",
-  "style": { "color": "#hex or null", "backgroundColor": "#hex or null", "fontSize": "number or null", "fontFamily": "font or null", "fontWeight": "string or null", "textAlign": "string or null", "letterSpacing": "number or null", "lineHeight": "number or null", "borderRadius": "number or null", "opacity": 1, "strokeColor": "#hex or null", "strokeWidth": "number or null", "strokePattern": "string or null", "clipPath": "string or null" },
+  "style": { "color": "#hex or null", "backgroundColor": "#hex or null", "fontSize": "number or null", "fontFamily": "font or null", "fontWeight": "string or null", "textAlign": "string or null", "letterSpacing": "number or null", "lineHeight": "number or null", "borderRadius": "number or null", "opacity": 1, "strokeColor": "#hex or null", "strokeWidth": "number or null", "strokePattern": "string or null", "clipPath": "string or null", "filter": "css filter value or null" },
   "visible": true,
   "locked": false
 }
@@ -667,7 +669,7 @@ ELEMENT STRUCTURE - ALL FIELDS ARE REQUIRED FOR EACH ELEMENT:
   "name": "descriptive name",
   "box": { "x": number, "y": number, "width": number, "height": number, "rotation": 0 },
   "content": "text content or SVG path or image URL",
-  "style": { "color": "#hexcolor or null", "backgroundColor": "#hexcolor or null", "fontSize": "number (for text) or null", "fontFamily": "font name or null", "fontWeight": "string or null", "textAlign": "string or null", "letterSpacing": "number or null", "lineHeight": "number or null", "borderRadius": "number or null", "opacity": 1, "strokeColor": "#hexcolor or null", "strokeWidth": "number or null", "strokePattern": "'solid'|'dashed'|'dotted' or null", "clipPath": "CSS clip-path value or null" },
+  "style": { "color": "#hexcolor or null", "backgroundColor": "#hexcolor or null", "fontSize": "number (for text) or null", "fontFamily": "font name or null", "fontWeight": "string or null", "textAlign": "string or null", "letterSpacing": "number or null", "lineHeight": "number or null", "borderRadius": "number or null", "opacity": 1, "strokeColor": "#hexcolor or null", "strokeWidth": "number or null", "strokePattern": "'solid'|'dashed'|'dotted' or null", "clipPath": "CSS clip-path value or null", "filter": "css filter value or null" },
   "visible": true,
   "locked": false
 }
@@ -859,6 +861,14 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     }
   }, [currentPage, state.selectedElementId, triggerHaptic]);
 
+  const handleElementContextMenu = useCallback((id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setState(prev => ({ ...prev, selectedElementId: id }));
+    setContextMenu({ show: true, x: e.clientX, y: e.clientY });
+    setDragStart(null);
+  }, []);
+
   const deselectAll = () => setState(prev => ({ ...prev, selectedElementId: null }));
 
   const addElement = useCallback((element: Partial<DesignElement>) => {
@@ -869,7 +879,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       type: (element.type as any) || 'shape',
       box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 200, rotation: 0 },
       content: '',
-      style: { backgroundColor: '#FFFFFF', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: '400', textAlign: 'center' },
+      style: { backgroundColor: '#FFFFFF', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: '400', textAlign: 'center', filter: 'none' },
       visible: true,
       locked: false,
       ...element
@@ -927,6 +937,18 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     });
     triggerHaptic(5);
   }, [triggerHaptic]);
+
+  const handleApplyEffect = useCallback((effect: string) => {
+      if (!selectedElement) return;
+      let filterValue = 'none';
+      switch (effect) {
+          case 'grayscale': filterValue = 'grayscale(100%)'; break;
+          case 'sepia': filterValue = 'sepia(100%)'; break;
+          case 'invert': filterValue = 'invert(100%)'; break;
+          case 'motion-blur': filterValue = 'blur(8px)'; break;
+      }
+      updateElement(selectedElement.id, { style: { filter: filterValue } });
+  }, [selectedElement, updateElement]);
 
   const handlePointerMove = useCallback((e: PointerEvent) => {
     if (dragStart && longPressTimer.current) {
@@ -1121,23 +1143,22 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         x={contextMenu.x}
         y={contextMenu.y}
         isMobile={isMobile}
+        selectedElement={selectedElement}
         onClose={() => setContextMenu({ ...contextMenu, show: false })}
         onMoveForward={() => {
-            if (state.selectedElementId) {
-                onReorder(state.selectedElementId, 'up');
-            }
+            if (state.selectedElementId) onReorder(state.selectedElementId, 'up');
             setContextMenu({ ...contextMenu, show: false });
         }}
         onMoveBackward={() => {
-            if (state.selectedElementId) {
-                onReorder(state.selectedElementId, 'down');
-            }
+            if (state.selectedElementId) onReorder(state.selectedElementId, 'down');
             setContextMenu({ ...contextMenu, show: false });
         }}
         onCut={() => {
-            if (state.selectedElementId) {
-                deleteElement(state.selectedElementId);
-            }
+            if (state.selectedElementId) deleteElement(state.selectedElementId);
+            setContextMenu({ ...contextMenu, show: false });
+        }}
+        onApplyEffect={(effect) => {
+            handleApplyEffect(effect);
             setContextMenu({ ...contextMenu, show: false });
         }}
       />
@@ -1232,7 +1253,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
              />
            ))}
 
-           <div id="design-canvas" ref={canvasRef} onPointerDown={deselectAll} className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center bg-zinc-800 overflow-hidden"
+           <div id="design-canvas" ref={canvasRef} onPointerDown={deselectAll} onContextMenu={e => e.preventDefault()} className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center bg-zinc-800 overflow-hidden"
              style={{ 
                width: CANVAS_WIDTH, height: CANVAS_HEIGHT, transform: `scale(${scale})`,
                backgroundColor: currentPage?.background.startsWith('#') ? currentPage.background : undefined,
@@ -1242,7 +1263,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
            >
               {currentPage?.elements.map(el => (
                 <div key={el.id}>
-                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleSelect} onAutoResize={handleAutoResize} />
+                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleSelect} onAutoResize={handleAutoResize} onContextMenu={(e) => handleElementContextMenu(el.id, e)} />
                   {state.selectedElementId === el.id && !el.locked && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
                       {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
@@ -1360,30 +1381,17 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
         {isMobile && !isAiModalOpen && (isPwaInstalled || !deferredPrompt) && (
           <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen || (contextMenu.show && isMobile) ? 'translate-y-full' : 'translate-y-0'}`}>
-            <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
-                  {selectedElement ? (
-                    <>
-                      <button onClick={() => setIsBottomSheetOpen(true)} className="flex flex-col items-center gap-1 text-lime-400 p-2 min-w-[50px]"><Icons.Sparkles className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Style</span></button>
-                      <button onClick={() => setIsBottomSheetOpen(true)} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Layout className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Layer</span></button>
-                      <button onClick={() => deleteElement(selectedElement.id)} className="flex flex-col items-center gap-1 text-red-400 p-2 min-w-[50px]"><Icons.Trash2 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Delete</span></button>
-                    </>
-                  ) : (
-                    <>
-                      <button onClick={() => setIsBottomSheetOpen(true)} className="flex flex-col items-center gap-1 text-lime-400 p-2 min-w-[50px]"><Icons.Plus className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Add</span></button>
-                      <div className="flex gap-2 items-center">
-                         {state.themeColors.slice(0, 3).map(c => (
-                           <button key={c} onClick={() => updatePage({ background: c })} className={`w-8 h-8 rounded-full border ${currentPage?.background === c ? 'border-white' : 'border-white/20'}`} style={{ backgroundColor: c }} />
-                         ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-                <button onClick={() => setIsExportModalOpen(true)} className="bg-lime-400 p-3 rounded-full shrink-0 shadow-lg active:scale-90"><Icons.Download className="w-6 h-6 text-black" /></button>
-                <button onClick={() => setIsBottomSheetOpen(true)} className="bg-white/5 p-3 rounded-full shrink-0"><Icons.ChevronUp className="w-6 h-6 text-white" /></button>
-              </div>
-            </div>
+                <QuickTools
+                    selectedElement={selectedElement}
+                    updateElement={updateElement}
+                    onReorder={onReorder}
+                    onOpenSidebar={() => setIsBottomSheetOpen(true)}
+                    availableFonts={allFonts}
+                    themeColors={state.themeColors}
+                    onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
+                    deleteElement={deleteElement}
+                    updatePage={updatePage}
+                />
           </div>
         )}
 
