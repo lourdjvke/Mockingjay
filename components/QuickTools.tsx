@@ -1,13 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DesignElement, ElementStyle } from '../types';
 import { Icons } from './IconLibrary';
 
-// A simple, custom color picker component
-const CustomColorPicker = ({ color, onChange, onComplete }) => {
-    const colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#000000', '#FFFFFF'];
+const CustomColorPicker = ({ color, onChange, themeColors, onUpdateColors }) => {
     return (
-        <div className="flex flex-wrap gap-2 p-2 bg-gray-800 rounded-lg">
-            {colors.map(c => (
+        <div className="flex flex-wrap items-center gap-2 p-2 bg-gray-800 rounded-lg">
+            {themeColors.map(c => (
                 <button
                     key={c}
                     style={{ backgroundColor: c }}
@@ -15,7 +13,9 @@ const CustomColorPicker = ({ color, onChange, onComplete }) => {
                     onClick={() => onChange(c)}
                 />
             ))}
-            <input type="color" value={color} onChange={e => onChange(e.target.value)} onBlur={() => onComplete()} className="w-full h-8 mt-2" />
+            <button onClick={() => alert('Custom color picker coming soon!')} className="w-8 h-8 rounded-full border-2 border-dashed border-gray-600 flex items-center justify-center">
+                <Icons.Plus className="w-5 h-5 text-gray-400" />
+            </button>
         </div>
     );
 };
@@ -30,6 +30,7 @@ interface QuickToolsProps {
     onUpdateColors: (colors: string[]) => void;
     deleteElement: (id: string) => void;
     updatePage: (updates: any) => void;
+    onApplyEffect: (effect: string) => void;
 }
 
 const QuickTools: React.FC<QuickToolsProps> = ({
@@ -39,10 +40,16 @@ const QuickTools: React.FC<QuickToolsProps> = ({
     onOpenSidebar,
     availableFonts,
     themeColors,
+    onUpdateColors,
     deleteElement,
-    updatePage
+    updatePage,
+    onApplyEffect
 }) => {
     const [activeTool, setActiveTool] = useState<string | null>(null);
+
+    useEffect(() => {
+        setActiveTool(null);
+    }, [selectedElement?.id]);
 
     const handleStyleChange = (property: keyof ElementStyle, value: any) => {
         if (!selectedElement) return;
@@ -71,7 +78,7 @@ const QuickTools: React.FC<QuickToolsProps> = ({
                 );
             case 'fontSize':
                 return (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 text-white">
                         <button onClick={() => handleStyleChange('fontSize', (selectedElement.style.fontSize || 16) - 1)}><Icons.Minus className="w-5 h-5" /></button>
                         <input
                             type="range"
@@ -82,25 +89,37 @@ const QuickTools: React.FC<QuickToolsProps> = ({
                             className="w-full"
                         />
                         <button onClick={() => handleStyleChange('fontSize', (selectedElement.style.fontSize || 16) + 1)}><Icons.Plus className="w-5 h-5" /></button>
-                        <span className="text-xs font-bold">{selectedElement.style.fontSize || 16}px</span>
+                        <span className="text-xs font-bold w-12 text-center">{selectedElement.style.fontSize || 16}px</span>
                     </div>
                 );
             case 'color':
+                const prop = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor';
                 return (
                     <CustomColorPicker
-                        color={selectedElement.style.color}
-                        onChange={color => handleStyleChange('color', color)}
-                        onComplete={() => { }}
+                        color={selectedElement.style[prop]}
+                        onChange={color => handleStyleChange(prop, color)}
+                        themeColors={themeColors}
+                        onUpdateColors={onUpdateColors}
                     />
                 );
             case 'format':
                 return (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 text-white">
                         <button onClick={() => handleStyleChange('textAlign', 'left')} className={selectedElement.style.textAlign === 'left' ? 'text-lime-400' : ''}><Icons.AlignLeft className="w-5 h-5" /></button>
                         <button onClick={() => handleStyleChange('textAlign', 'center')} className={selectedElement.style.textAlign === 'center' ? 'text-lime-400' : ''}><Icons.AlignCenter className="w-5 h-5" /></button>
                         <button onClick={() => handleStyleChange('textAlign', 'right')} className={selectedElement.style.textAlign === 'right' ? 'text-lime-400' : ''}><Icons.AlignRight className="w-5 h-5" /></button>
                     </div>
                 );
+            case 'effects':
+                return (
+                    <div className="grid grid-cols-4 gap-2 p-2 text-white">
+                        <button onClick={() => onApplyEffect('none')} className="flex flex-col items-center gap-1 text-white/70 hover:text-white"><Icons.X className="w-5 h-5" /><span className="text-xs">None</span></button>
+                        <button onClick={() => onApplyEffect('grayscale')} className="flex flex-col items-center gap-1 text-white/70 hover:text-white"><Icons.Palette className="w-5 h-5" /><span className="text-xs">Grayscale</span></button>
+                        <button onClick={() => onApplyEffect('sepia')} className="flex flex-col items-center gap-1 text-white/70 hover:text-white"><Icons.Palette className="w-5 h-5" /><span className="text-xs">Sepia</span></button>
+                        <button onClick={() => onApplyEffect('invert')} className="flex flex-col items-center gap-1 text-white/70 hover:text-white"><Icons.Palette className="w-5 h-5" /><span className="text-xs">Invert</span></button>
+                        <button onClick={() => onApplyEffect('motion-blur')} className="flex flex-col items-center gap-1 text-white/70 hover:text-white"><Icons.Wind className="w-5 h-5" /><span className="text-xs">Blur</span></button>
+                    </div>
+                )
             default:
                 return null;
         }
@@ -135,6 +154,7 @@ const QuickTools: React.FC<QuickToolsProps> = ({
                     <>
                         <button onClick={() => onOpenSidebar()} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Image className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Replace</span></button>
                         <button onClick={() => setActiveTool(activeTool === 'effects' ? null : 'effects')} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Wand2 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Effects</span></button>
+                        <button onClick={() => onOpenSidebar()} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Layers className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Layer</span></button>
                     </>
                 );
             case 'shape':
@@ -142,13 +162,14 @@ const QuickTools: React.FC<QuickToolsProps> = ({
                     <>
                          <button onClick={() => setActiveTool(activeTool === 'color' ? null : 'color')} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Palette className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Color</span></button>
                          <button onClick={() => onOpenSidebar()} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Layers className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Style</span></button>
+                         <button onClick={() => onReorder(selectedElement.id, 'up')} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.ChevronUp className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Layer</span></button>
                     </>
                 );
             default:
                 return (
                     <>
                         <button onClick={() => onOpenSidebar()} className="flex flex-col items-center gap-1 text-lime-400 p-2 min-w-[50px]"><Icons.Sparkles className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Style</span></button>
-                        <button onClick={() => onOpenSidebar()} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Layout className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Layer</span></button>
+                        <button onClick={() => onOpenSidebar()} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Layers className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Layer</span></button>
                         {selectedElement && <button onClick={() => deleteElement(selectedElement.id)} className="flex flex-col items-center gap-1 text-red-400 p-2 min-w-[50px]"><Icons.Trash2 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Delete</span></button>}
                     </>
                 );
@@ -157,18 +178,21 @@ const QuickTools: React.FC<QuickToolsProps> = ({
 
 
     return (
-        <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl p-4">
+        <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl p-2">
             {activeTool && (
-                <div className="p-4 border-b border-white/10 mb-4">
+                <div className="p-2 border-b border-white/10 mb-2">
                     {renderActiveTool()}
                 </div>
             )}
-            <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
+            <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                     {getToolsForElement()}
                 </div>
-                {selectedElement && <button onClick={() => onReorder(selectedElement.id, 'up')} className="bg-white/5 p-3 rounded-full shrink-0"><Icons.ChevronUp className="w-6 h-6 text-white" /></button>}
-                <button onClick={() => onOpenSidebar()} className="bg-white/5 p-3 rounded-full shrink-0"><Icons.Menu className="w-6 h-6 text-white" /></button>
+                <div className="flex-shrink-0 flex items-center gap-1">
+                    {selectedElement && <button onClick={() => onReorder(selectedElement.id, 'down')} className="bg-white/5 p-3 rounded-full"><Icons.ChevronDown className="w-5 h-5 text-white" /></button>}
+                    {selectedElement && <button onClick={() => onReorder(selectedElement.id, 'up')} className="bg-white/5 p-3 rounded-full"><Icons.ChevronUp className="w-5 h-5 text-white" /></button>}
+                    <button onClick={onOpenSidebar} className="bg-white/5 p-3 rounded-full"><Icons.Menu className="w-5 h-5 text-white" /></button>
+                </div>
             </div>
         </div>
     );
