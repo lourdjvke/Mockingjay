@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { DesignElement, ElementStyle } from '../types';
 import { Icons } from './IconLibrary';
@@ -25,6 +26,7 @@ interface QuickToolsProps {
     updateElement: (id: string, updates: Partial<DesignElement>) => void;
     onReorder: (id: string, direction: 'up' | 'down') => void;
     onOpenSidebar: () => void;
+    onAddIcon: () => void;
     availableFonts: { name: string, value: string }[];
     themeColors: string[];
     onUpdateColors: (colors: string[]) => void;
@@ -38,6 +40,7 @@ const QuickTools: React.FC<QuickToolsProps> = ({
     updateElement,
     onReorder,
     onOpenSidebar,
+    onAddIcon,
     availableFonts,
     themeColors,
     onUpdateColors,
@@ -130,6 +133,7 @@ const QuickTools: React.FC<QuickToolsProps> = ({
             return (
                 <>
                     <button onClick={onOpenSidebar} className="flex flex-col items-center gap-1 text-lime-400 p-2 min-w-[50px]"><Icons.Plus className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Add</span></button>
+                    <button onClick={onAddIcon} className="flex flex-col items-center gap-1 text-lime-400 p-2 min-w-[50px]"><Icons.Shapes className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Icons</span></button>
                     <div className="flex gap-2 items-center">
                         {themeColors.slice(0, 3).map(c => (
                             <button key={c} onClick={() => updatePage({ background: c })} className={'w-8 h-8 rounded-full border border-white/20'} style={{ backgroundColor: c }} />
