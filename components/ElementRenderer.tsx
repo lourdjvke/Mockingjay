@@ -1,127 +1,113 @@
+import React, { useRef, useLayoutEffect, useState, useEffect } from 'react';
+import { DesignElement } from '../types';
+import ContentEditable from 'react-contenteditable';
 
-import React, { useRef, useEffect } from 'react';
-import { DesignElement } from '../types.ts';
-
-interface Props {
+interface ElementRendererProps {
   element: DesignElement;
   isSelected: boolean;
   onSelect: (id: string, e: React.PointerEvent) => void;
-  onAutoResize?: (id: string, newHeight: number) => void;
+  onAutoResize: (id: string, height: number) => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }
 
-const ElementRenderer: React.FC<Props> = ({ element, isSelected, onSelect, onAutoResize }) => {
-  const textRef = useRef<HTMLDivElement>(null);
+const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, onSelect, onAutoResize, onContextMenu }) => {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
-  useEffect(() => {
-    if (element.type === 'text' && textRef.current && onAutoResize) {
-      const scrollH = textRef.current.scrollHeight;
-      if (scrollH > element.box.height + 2) {
-        onAutoResize(element.id, scrollH);
-      }
+  useLayoutEffect(() => {
+    if (contentRef.current && (element.type === 'text' || element.type === 'icon')) {
+        const currentHeight = contentRef.current.offsetHeight;
+        if (currentHeight > element.box.height) {
+            onAutoResize(element.id, currentHeight);
+        }
     }
-  }, [element.content, element.style.fontSize, element.style.fontFamily, element.style.lineHeight, element.style.letterSpacing, element.box.width]);
+  }, [element.content, element.box.width, element.style.fontSize, onAutoResize, element.id, element.type]);
 
-  if (!element.visible) return null;
-
-  const isText = element.type === 'text';
-  const style: React.CSSProperties = {
-    position: 'absolute',
-    left: element.box.x,
-    top: element.box.y,
-    width: element.box.width,
-    height: isText ? undefined : element.box.height,
-    minHeight: isText ? element.box.height : undefined,
-    transform: `rotate(${element.box.rotation}deg)`,
-    opacity: element.style.opacity ?? 1,
-    cursor: 'move',
-    zIndex: isSelected ? 50 : 10,
-    userSelect: 'none',
-    touchAction: 'none'
+  const handleContentChange = (e: any) => {
+    // The logic for updating content is handled by the parent
+    // This just prevents errors
   };
 
-  const borderStyle: React.CSSProperties = {
-    borderRadius: `${element.style.borderRadius ?? 0}px`,
-    borderWidth: `${element.style.strokeWidth ?? 0}px`,
-    borderColor: element.style.strokeColor ?? '#000',
-    borderStyle: element.style.strokePattern ?? 'solid',
-    overflow: 'hidden',
-    clipPath: element.style.clipPath
-  };
+  const handleDoubleClick = () => {
+      if (element.type === 'text') {
+          setIsEditing(true);
+      }
+  }
 
-  const renderContent = () => {
+  const handleBlur = () => {
+      setIsEditing(false);
+  }
+
+  const renderElement = () => {
+    const sharedStyle: React.CSSProperties = {
+      position: 'absolute',
+      left: element.box.x,
+      top: element.box.y,
+      width: element.box.width,
+      height: element.box.height,
+      transform: `rotate(${element.box.rotation}deg)`,
+      opacity: element.style.opacity,
+      visibility: element.visible ? 'visible' : 'hidden',
+      filter: element.style.filter || 'none',
+    };
+
     switch (element.type) {
       case 'text':
         return (
-          <div
-            ref={textRef}
-            style={{
-              ...borderStyle,
-              color: element.style.color,
-              fontSize: element.style.fontSize,
-              fontFamily: element.style.fontFamily,
-              fontWeight: element.style.fontWeight,
-              textAlign: element.style.textAlign,
-              lineHeight: element.style.lineHeight,
-              letterSpacing: `${element.style.letterSpacing ?? 0}px`,
-              width: '100%',
-              minHeight: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: element.style.textAlign === 'center' ? 'center' : (element.style.textAlign === 'right' ? 'flex-end' : 'flex-start'),
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              padding: '8px',
-              backgroundColor: element.style.backgroundColor
-            }}
-          >
-            {element.content}
-          </div>
-        );
-      case 'shape':
-        return (
-          <div
-            style={{
-              ...borderStyle,
-              width: '100%',
-              height: '100%',
-              backgroundColor: element.style.backgroundColor
-            }}
-          />
+            <ContentEditable
+                html={element.content || ''}
+                disabled={!isEditing}
+                onChange={handleContentChange} // We'll implement proper update logic later
+                onBlur={handleBlur}
+                style={{
+                    ...sharedStyle,
+                    color: element.style.color,
+                    fontSize: element.style.fontSize,
+                    fontFamily: element.style.fontFamily,
+                    fontWeight: element.style.fontWeight as React.CSSProperties['fontWeight'],
+                    textAlign: element.style.textAlign as React.CSSProperties['textAlign'],
+                    letterSpacing: element.style.letterSpacing,
+                    lineHeight: element.style.lineHeight,
+                    backgroundColor: element.style.backgroundColor || 'transparent',
+                    borderRadius: element.style.borderRadius,
+                    padding: '10px', // Add some padding for better text editing
+                    outline: isEditing ? '2px solid #bef264' : 'none',
+                }}
+            />
         );
       case 'image':
-        return (
-          <div style={{ ...borderStyle, width: '100%', height: '100%' }}>
-            <img
-              src={element.content}
-              alt={element.name}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover'
-              }}
-              draggable={false}
-            />
-          </div>
-        );
-      case 'icon':
-        return (
-           <div 
-             style={{ ...borderStyle, width: '100%', height: '100%', color: element.style.color }}
-             dangerouslySetInnerHTML={{ __html: element.content }}
-           />
-        );
+        return <div style={{
+            ...sharedStyle, 
+            backgroundImage: `url(${element.content})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            borderRadius: element.style.borderRadius,
+        }} />;
+      case 'shape':
+        return <div style={{
+            ...sharedStyle, 
+            backgroundColor: element.style.backgroundColor,
+            borderRadius: element.style.borderRadius,
+            clipPath: element.style.clipPath,
+        }} />;
+     case 'icon':
+        return <div dangerouslySetInnerHTML={{ __html: element.content || '' }} style={{
+            ...sharedStyle,
+            fill: element.style.color
+        }} />;
       default:
-        return null;
+        return <div style={sharedStyle}>Unsupported Element</div>;
     }
   };
 
   return (
     <div 
-      style={style} 
-      onPointerDown={(e) => onSelect(element.id, e)}
-      className="group"
+        onPointerDown={(e) => onSelect(element.id, e)}
+        onDoubleClick={handleDoubleClick}
+        onContextMenu={onContextMenu}
+        ref={contentRef}
     >
-      {renderContent()}
+      {renderElement()}
     </div>
   );
 };
