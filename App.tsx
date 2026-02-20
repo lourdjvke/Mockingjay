@@ -10,6 +10,7 @@ import { domToPng } from 'modern-screenshot';
 import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove } from './firebase.ts';
 import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
+import ContextMenu from './components/ContextMenu.tsx';
 
 interface SnapLine {
   type: 'vertical' | 'horizontal';
@@ -39,6 +40,7 @@ const App: React.FC = () => {
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
   const [isBrandDnaOpen, setIsBrandDnaOpen] = useState(false);
   const [brandData, setBrandData] = useState(null);
+  const [contextMenu, setContextMenu] = useState<{ show: boolean; x: number; y: number; }>({ show: false, x: 0, y: 0 });
 
   // Firebase and Design-related state
   const [user, setUser] = useState<User | null>(null);
@@ -51,6 +53,7 @@ const App: React.FC = () => {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiImageInputRef = useRef<HTMLInputElement>(null);
+  const longPressTimer = useRef<number | null>(null);
 
   const allFonts = [...userFonts, ...BASE_FONTS];
 
@@ -835,9 +838,24 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     if (state.selectedElementId !== id) triggerHaptic(5);
     setState(prev => ({ ...prev, selectedElementId: id }));
     const element = currentPage.elements.find(el => el.id === id);
+
+    if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+    }
+
     if (element && !element.locked) {
-      setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
-      setElementStartPos({ ...element.box });
+        longPressTimer.current = window.setTimeout(() => {
+            setContextMenu({
+                show: true,
+                x: e.clientX,
+                y: e.clientY,
+            });
+            setDragStart(null); // Prevent dragging after context menu opens
+            longPressTimer.current = null;
+        }, 500);
+
+        setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
+        setElementStartPos({ ...element.box });
     }
   }, [currentPage, state.selectedElementId, triggerHaptic]);
 
@@ -911,7 +929,17 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   }, [triggerHaptic]);
 
   const handlePointerMove = useCallback((e: PointerEvent) => {
-    if (!dragStart || !elementStartPos || !state.selectedElementId) return;
+    if (dragStart && longPressTimer.current) {
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+      }
+    }
+
+    if (!dragStart || !elementStartPos || !state.selectedElementId || contextMenu.show) return;
+
     const dx = (e.clientX - dragStart.x) / scale;
     const dy = (e.clientY - dragStart.y) / scale;
     if (dragStart.type === 'move') {
@@ -948,9 +976,13 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       if (Math.abs(rotation % 45) < 5) rotation = Math.round(rotation / 45) * 45;
       updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation } });
     }
-  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement]);
+  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement, contextMenu.show]);
 
   const handlePointerUp = useCallback(() => {
+    if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+    }
     setDragStart(null);
     setElementStartPos(null);
     setSnapLines([]);
@@ -1084,6 +1116,32 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
+      <ContextMenu
+        show={contextMenu.show}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        isMobile={isMobile}
+        onClose={() => setContextMenu({ ...contextMenu, show: false })}
+        onMoveForward={() => {
+            if (state.selectedElementId) {
+                onReorder(state.selectedElementId, 'up');
+            }
+            setContextMenu({ ...contextMenu, show: false });
+        }}
+        onMoveBackward={() => {
+            if (state.selectedElementId) {
+                onReorder(state.selectedElementId, 'down');
+            }
+            setContextMenu({ ...contextMenu, show: false });
+        }}
+        onCut={() => {
+            if (state.selectedElementId) {
+                deleteElement(state.selectedElementId);
+            }
+            setContextMenu({ ...contextMenu, show: false });
+        }}
+      />
+
        {!user && !isAuthLoading && (
         <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center gap-8 animate-in fade-in duration-500">
           <div className="text-center space-y-2">
@@ -1148,7 +1206,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
         {isBrandDnaOpen && <BrandDna onClose={() => setIsBrandDnaOpen(false)} onStartCampaign={handleGenerateCampaign} />}
 
-        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${ (isBottomSheetOpen || (contextMenu.show && isMobile)) ? 'opacity-0' : 'opacity-100'}`}>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) })); triggerHaptic(2); }}><Icons.ArrowLeft className="w-5 h-5"/></button>
            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">{state.currentPageIndex + 1}/{state.pages.length}</span>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) })); triggerHaptic(2); }}><Icons.ArrowRight className="w-5 h-5"/></button>
@@ -1284,7 +1342,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         )}
 
         {isMobile && !isAiModalOpen && !isPwaInstalled && deferredPrompt && (
-          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? 'translate-y-full' : 'translate-y-0'}`}>
+          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen || (contextMenu.show && isMobile) ? 'translate-y-full' : 'translate-y-0'}`}>
             <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-lime-400/20 rounded-2xl shadow-2xl p-4">
               <button onClick={handlePwaInstall} className="w-full flex items-center gap-4">
                 <div className="w-12 h-12 bg-lime-400 rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(163,230,53,0.3)]">
@@ -1301,7 +1359,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         )}
 
         {isMobile && !isAiModalOpen && (isPwaInstalled || !deferredPrompt) && (
-          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? 'translate-y-full' : 'translate-y-0'}`}>
+          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen || (contextMenu.show && isMobile) ? 'translate-y-full' : 'translate-y-0'}`}>
             <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl p-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
