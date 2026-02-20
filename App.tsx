@@ -54,7 +54,6 @@ const App: React.FC = () => {
 
   const allFonts = [...userFonts, ...BASE_FONTS];
 
-  // Debounced save function with thumbnail generation
   const debouncedSave = useDebouncedCallback(async (designState: EditorState, designId: string) => {
     if (!user || !canvasRef.current) return;
 
@@ -64,7 +63,7 @@ const App: React.FC = () => {
         const thumbnail = await domToPng(canvasRef.current, {
             width: CANVAS_WIDTH,
             height: CANVAS_HEIGHT,
-            scale: 0.2, // Low scale for performance
+            scale: 0.2,
         });
 
         const designData = {
@@ -81,18 +80,16 @@ const App: React.FC = () => {
 
     } catch (error) {
         console.error("Failed to save design or generate thumbnail:", error);
-        setSaveStatus('idle'); // Ensure we always reset status on error
+        setSaveStatus('idle');
     }
   }, 3000);
 
-  // Autosave effect
   useEffect(() => {
     if (user && currentDesignId && !isAuthLoading && state !== INITIAL_STATE) {
       debouncedSave(state, currentDesignId);
     }
   }, [state, user, currentDesignId, isAuthLoading, debouncedSave]);
 
-  // Firebase auth listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
@@ -106,7 +103,6 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Load user's designs from Firebase
   useEffect(() => {
     if (!user) {
       setDesigns([]);
@@ -125,7 +121,6 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // Load brand data from Firebase
   useEffect(() => {
     if (!user) {
         setBrandData(null);
@@ -140,7 +135,6 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // Handle loading the initial design or creating a new one
   useEffect(() => {
     if (isAuthLoading || !user) return;
 
@@ -149,7 +143,6 @@ const App: React.FC = () => {
     if (designs.length > 0) {
       loadDesign(designs[0].id);
     } else if (designs.length === 0) {
-        // If there are no designs, create a new one, but don't save it until a change is made.
         createNewDesign();
     }
 }, [user, designs, currentDesignId, isAuthLoading]);
@@ -186,7 +179,6 @@ const App: React.FC = () => {
   const loadDesign = useCallback((designId: string) => {
     const designToLoad = designs.find(d => d.id === designId);
     if (designToLoad) {
-      // Ensure pages and elements arrays exist to prevent crashes from legacy data.
       const sanitizedPages = (designToLoad.pages || INITIAL_STATE.pages).map((page: Page) => ({
         ...page,
         elements: page.elements || [],
@@ -257,7 +249,6 @@ const App: React.FC = () => {
     loadStoredData();
   }, []);
 
-  // Added handleAddCustomFont to fix missing name error
   const handleAddCustomFont = useCallback(async (name: string, data: ArrayBuffer) => {
     try {
       await FontStore.saveFont(name, data);
@@ -275,7 +266,6 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Added handleDeleteCustomFont to fix missing name error
   const handleDeleteCustomFont = useCallback(async (name: string) => {
     try {
       await FontStore.deleteFont(name);
@@ -294,9 +284,7 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // PWA install prompt handling
   useEffect(() => {
-    // Check if already installed as PWA
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
       || (window.navigator as any).standalone === true;
     setIsPwaInstalled(isStandalone);
@@ -374,7 +362,6 @@ const App: React.FC = () => {
       };
       reader.readAsDataURL(file);
     });
-    // Reset input so same files can be re-selected
     e.target.value = '';
   };
 
@@ -407,6 +394,121 @@ const App: React.FC = () => {
       }
     }
     throw lastError;
+  };
+
+  const handleGenerateCampaign = async (brandDna, prompt, tags, images) => {
+    setIsBrandDnaOpen(false);
+    setIsAiLoading(true);
+    triggerHaptic(30);
+
+    try {
+      const apiUrl = '/api/ai';
+
+      const systemInstruction = `
+        You are Mockingjay, a world-class AI designer. Your task is to generate a multi-page design based on a user's brand DNA and a specific campaign prompt.
+
+        **Brand DNA Context:**
+        - Business Name: ${brandDna.businessName}
+        - Overview: ${brandDna.overview}
+        - Values: ${brandDna.values.join(', ')}
+        - Tone: ${brandDna.tone}
+        - Aesthetic: ${brandDna.aesthetic}
+        - Colors: ${brandDna.colors.join(', ')}
+        - Fonts: ${brandDna.fonts.join(', ')}
+
+        **Campaign Details:**
+        - User Prompt: ${prompt}
+        - Campaign Tags (Page Themes): ${tags.join(', ')}
+
+        **Instructions:**
+        1.  Generate a complete design with exactly ${tags.length} pages.
+        2.  Each page should be inspired by one of the campaign tags: [${tags.join(', ')}] respectively.
+        3.  All design elements (colors, fonts, text, imagery) MUST strictly adhere to the provided Brand DNA.
+        4.  If user-provided images are included, incorporate them intelligently into the design. Position them as specified in the placeholders (ATTACHED_IMAGE_0, ATTACHED_IMAGE_1, etc.).
+        5.  Return ONLY a raw JSON object representing the design. No markdown, no commentary.
+        6. Use reasonable borderRadius values (0-24px for rectangles, 999 for circles/pills). Do NOT use excessive values.
+        7. For optional style properties that are not applicable to an element, you MUST return them with a value of null.
+      `;
+
+      const userMessages = [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: systemInstruction }
+          ]
+        }
+      ];
+
+      if (images && images.length > 0) {
+        images.forEach((image, index) => {
+            userMessages[0].content.push({
+                type: "image_url",
+                image_url: { url: image }
+            });
+        });
+      }
+
+      const payload = {
+        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        messages: userMessages,
+        temperature: 0.1,
+        max_tokens: 8192,
+      };
+
+      const result = await fetchWithRetry(apiUrl, payload);
+
+      if (!result) {
+        throw new Error("Received an empty response from the AI service.");
+      }
+
+      const textResponse = result.choices?.[0]?.message?.content;
+
+      if (!textResponse) {
+        console.error("Invalid AI Response:", result);
+        throw new Error("No response content from API. The AI may be experiencing issues.");
+      }
+
+      let newState;
+      try {
+        const cleanedJson = sanitizeAiJson(textResponse);
+        newState = JSON.parse(cleanedJson);
+      } catch (parseErr) {
+        console.error("JSON parse error:", parseErr, "Raw response:", textResponse);
+        throw new Error("Failed to parse AI response as JSON");
+      }
+
+      if (!newState.pages || !Array.isArray(newState.pages) || newState.pages.length === 0) {
+        console.error("Invalid response structure:", newState);
+        throw new Error("AI response missing pages array");
+      }
+
+      if (images.length > 0) {
+        for (const page of newState.pages) {
+          if (page.elements) {
+            page.elements = page.elements.map((el: any) => {
+              if (typeof el.content === 'string' && el.content.startsWith('ATTACHED_IMAGE_')) {
+                const idx = parseInt(el.content.replace('ATTACHED_IMAGE_', ''), 10);
+                if (!isNaN(idx) && idx < images.length) {
+                  return { ...el, content: images[idx], type: 'image' };
+                }
+              }
+              return el;
+            });
+          }
+        }
+      }
+
+      setState(newState);
+      const newId = generateId();
+      setCurrentDesignId(newId);
+      triggerHaptic(50);
+
+    } catch (err: any) {
+      console.error("Campaign Generation Fail:", err);
+      alert(`AI Error: ${err?.message || "Unknown error"}. Please try again.`);
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   const handleAiRefine = async () => {
@@ -546,11 +648,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           content: [
             {
               type: "text",
-              text: `${systemInstruction}
-
-Current Editor State: ${JSON.stringify(state)}
-
-User Request: ${aiPrompt}`
+              text: `${systemInstruction}\n\nCurrent Editor State: ${JSON.stringify(state)}\n\nUser Request: ${aiPrompt}`
             }
           ]
         }
@@ -601,7 +699,6 @@ User Request: ${aiPrompt}`
         throw new Error("AI response missing pages array");
       }
 
-      // Replace ATTACHED_IMAGE placeholders with actual data URLs
       if (aiAttachedImages.length > 0) {
         for (const page of newState.pages) {
           if (page.elements) {
@@ -839,7 +936,6 @@ User Request: ${aiPrompt}`
 
     let fontStyleEl: HTMLStyleElement | null = null;
     try {
-      // Dynamically build the Google Fonts URL for embedding, ensuring all fonts are available for export.
       const fontFamilies = [
         'Inter:wght@300;400;500;600;700',
         'Playfair Display:ital,wght@0,400..900;1,400..900',
@@ -952,7 +1048,6 @@ User Request: ${aiPrompt}`
             try {
                 const importedState = JSON.parse(ev.target?.result as string);
                 if (importedState.pages) {
-                    // Create a new ID for the imported design to treat it as a new entity
                     const newId = generateId();
                     setState(importedState);
                     setCurrentDesignId(newId);
@@ -961,7 +1056,6 @@ User Request: ${aiPrompt}`
                 console.error("Failed to import design:", er);
                 alert("Failed to import design. The file might be corrupted or in the wrong format.");
             }
-            // Reset file input to allow re-importing the same file
             if (e.target) e.target.value = '';
         };
         reader.readAsText(file);
@@ -993,7 +1087,7 @@ User Request: ${aiPrompt}`
           </div>
         )}
 
-        {isBrandDnaOpen && <BrandDna onClose={() => setIsBrandDnaOpen(false)} />}
+        {isBrandDnaOpen && <BrandDna onClose={() => setIsBrandDnaOpen(false)} onStartCampaign={handleGenerateCampaign} />}
 
         <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) })); triggerHaptic(2); }}><Icons.ArrowLeft className="w-5 h-5"/></button>
@@ -1188,7 +1282,7 @@ User Request: ${aiPrompt}`
                   currentDesignId={currentDesignId}
                   loadDesign={loadDesign}
                   createNewDesign={createNewDesign}
-                  deleteDesign={deleteDesign} // Pass the new function
+                  deleteDesign={deleteDesign}
                   importDesign={() => fileInputRef.current?.click()}
                   openBrandDna={() => setIsBrandDnaOpen(true)}
                   selectedElement={selectedElement} 
@@ -1279,7 +1373,7 @@ User Request: ${aiPrompt}`
           currentDesignId={currentDesignId}
           loadDesign={loadDesign}
           createNewDesign={createNewDesign}
-          deleteDesign={deleteDesign} // Pass the new function
+          deleteDesign={deleteDesign}
           importDesign={() => fileInputRef.current?.click()}
           openBrandDna={() => setIsBrandDnaOpen(true)}
           selectedElement={selectedElement} 
