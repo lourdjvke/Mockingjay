@@ -1,27 +1,27 @@
-import React, { useState, useCallback, useRef, useEffect } from \'react\';
-import { EditorState, DesignElement, BoundingBox, Page, ElementStyle } from \'./types.ts\';
-import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from \'./constants.ts\';
-import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, embedGoogleFonts } from \'./utils.ts\';
-import Sidebar from \'./components/Sidebar.tsx\';
-import ElementRenderer from \'./components/ElementRenderer.tsx\';
-import { Icons } from \'./components/IconLibrary.tsx\';
-import BrandDna from \'./components/BrandDna.tsx\';
-import { domToPng } from \'modern-screenshot\';
-import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove } from \'./firebase.ts\';
-import type { User } from \'firebase/auth\';
-import { useDebouncedCallback } from \'use-debounce\';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { EditorState, DesignElement, BoundingBox, Page, ElementStyle } from './types.ts';
+import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
+import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, embedGoogleFonts } from './utils.ts';
+import Sidebar from './components/Sidebar.tsx';
+import ElementRenderer from './components/ElementRenderer.tsx';
+import { Icons } from './components/IconLibrary.tsx';
+import BrandDna from './components/BrandDna.tsx';
+import { domToPng } from 'modern-screenshot';
+import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove } from './firebase.ts';
+import type { User } from 'firebase/auth';
+import { useDebouncedCallback } from 'use-debounce';
 
 interface SnapLine {
-  type: \'vertical\' | \'horizontal\';
+  type: 'vertical' | 'horizontal';
   position: number;
 }
 
-type ExportStatus = \'idle\' | \'processing\' | \'success\' | \'error\';
-type SaveStatus = \'idle\' | \'saving\' | \'saved\';
+type ExportStatus = 'idle' | 'processing' | 'success' | 'error';
+type SaveStatus = 'idle' | 'saving' | 'saved';
 
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>(INITIAL_STATE);
-  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: \'move\' | \'resize\' | \'rotate\', handle?: string, initialAngle?: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: 'move' | 'resize' | 'rotate', handle?: string, initialAngle?: number } | null>(null);
   const [elementStartPos, setElementStartPos] = useState<BoundingBox | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
@@ -31,7 +31,7 @@ const App: React.FC = () => {
   const [scale, setScale] = useState(1);
   const [snapLines, setSnapLines] = useState<SnapLine[]>([]);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [exportStatus, setExportStatus] = useState<ExportStatus>(\'idle\');
+  const [exportStatus, setExportStatus] = useState<ExportStatus>('idle');
   const [userFonts, setUserFonts] = useState<{ name: string; value: string }[]>([]);
   const [recentImages, setRecentImages] = useState<string[]>([]);
   const [aiAttachedImages, setAiAttachedImages] = useState<string[]>([]);
@@ -45,7 +45,7 @@ const App: React.FC = () => {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [designs, setDesigns] = useState<any[]>([]);
   const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>(\'idle\');
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -57,7 +57,7 @@ const App: React.FC = () => {
   const debouncedSave = useDebouncedCallback(async (designState: EditorState, designId: string) => {
     if (!user || !canvasRef.current) return;
 
-    setSaveStatus(\'saving\');
+    setSaveStatus('saving');
 
     try {
         const thumbnail = await domToPng(canvasRef.current, {
@@ -75,12 +75,12 @@ const App: React.FC = () => {
         const dbRef = ref(database, `users/${user.uid}/designs/${designId}`);
         await set(dbRef, designData);
 
-        setSaveStatus(\'saved\');
-        setTimeout(() => setSaveStatus(\'idle\'), 2000);
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
 
     } catch (error) {
         console.error("Failed to save design or generate thumbnail:", error);
-        setSaveStatus(\'idle\');
+        setSaveStatus('idle');
     }
   }, 3000);
 
