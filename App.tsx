@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { EditorState, DesignElement, BoundingBox, Page } from './types.ts';
+import { EditorState, DesignElement, BoundingBox, Page, ElementStyle } from './types.ts';
 import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
 import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, embedGoogleFonts } from './utils.ts';
 import Sidebar from './components/Sidebar.tsx';
@@ -218,7 +218,7 @@ const App: React.FC = () => {
   };
 
   const injectFontFace = (name: string, base64: string) => {
-    const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
+    const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
     document.getElementById(styleId)?.remove();
     const style = document.createElement('style');
     style.id = styleId;
@@ -269,7 +269,7 @@ const App: React.FC = () => {
   const handleDeleteCustomFont = useCallback(async (name: string) => {
     try {
       await FontStore.deleteFont(name);
-      const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
+      const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
       document.getElementById(styleId)?.remove();
       setUserFonts(prev => prev.filter(f => f.name !== name));
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(5);
@@ -396,6 +396,72 @@ const App: React.FC = () => {
     throw lastError;
   };
 
+  const sanitizeElement = useCallback((el: any): DesignElement => {
+    const defaultStyle: ElementStyle = {
+        color: '#000000',
+        backgroundColor: null,
+        fontSize: 24,
+        fontFamily: "'Inter', sans-serif",
+        fontWeight: '400',
+        textAlign: 'left',
+        letterSpacing: 0,
+        lineHeight: 1.2,
+        borderRadius: 0,
+        opacity: 1,
+        strokeColor: null,
+        strokeWidth: 0,
+        strokePattern: 'solid',
+        clipPath: null,
+    };
+
+    // Start with default styles and merge AI-provided styles
+    const style = { ...defaultStyle, ...(el.style || {}) };
+
+    // Ensure core numeric properties are valid numbers
+    style.opacity = typeof style.opacity === 'number' ? style.opacity : 1;
+    style.borderRadius = typeof style.borderRadius === 'number' ? style.borderRadius : 0;
+    style.strokeWidth = typeof style.strokeWidth === 'number' ? style.strokeWidth : 0;
+    
+    // Type-specific style validation
+    if (el.type === 'text') {
+        style.fontSize = typeof style.fontSize === 'number' ? style.fontSize : 24;
+        style.fontFamily = style.fontFamily || (allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif");
+        style.fontWeight = style.fontWeight || '400';
+        style.textAlign = style.textAlign || 'left';
+        style.letterSpacing = typeof style.letterSpacing === 'number' ? style.letterSpacing : 0;
+        style.lineHeight = typeof style.lineHeight === 'number' ? style.lineHeight : 1.2;
+    } else {
+        // For non-text elements, nullify text-specific properties if they somehow exist
+        style.fontSize = null;
+        style.fontFamily = null;
+        style.fontWeight = null;
+        style.textAlign = null;
+        style.letterSpacing = null;
+        style.lineHeight = null;
+    }
+     if (el.type !== 'text' && el.type !== 'icon') {
+        style.color = null;
+    }
+
+
+    return {
+      id: el.id || generateId(),
+      name: el.name || 'AI Element',
+      type: el.type || 'shape',
+      box: {
+        x: typeof el.box?.x === 'number' ? el.box.x : 50,
+        y: typeof el.box?.y === 'number' ? el.box.y : 50,
+        width: typeof el.box?.width === 'number' && el.box.width > 0 ? el.box.width : 200,
+        height: typeof el.box?.height === 'number' && el.box.height > 0 ? el.box.height : 100,
+        rotation: typeof el.box?.rotation === 'number' ? el.box.rotation : 0,
+      },
+      content: el.content === undefined ? '' : el.content,
+      style,
+      visible: typeof el.visible === 'boolean' ? el.visible : true,
+      locked: typeof el.locked === 'boolean' ? el.locked : false,
+    };
+  }, [allFonts]);
+
   const handleGenerateCampaign = async (brandDna, prompt, tags, images) => {
     setIsBrandDnaOpen(false);
     setIsAiLoading(true);
@@ -485,7 +551,7 @@ const App: React.FC = () => {
       const sanitizedPages = aiResponse.pages.map((page: any) => ({
         id: page.id || generateId(),
         background: page.background || '#18181b',
-        elements: page.elements || [],
+        elements: (page.elements || []).map(sanitizeElement),
       }));
 
       if (images.length > 0) {
@@ -661,7 +727,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           content: [
             {
               type: "text",
-              text: `${systemInstruction}\n\nCurrent Editor State: ${JSON.stringify(state)}\n\nUser Request: ${aiPrompt}`
+              text: `${systemInstruction}\\n\\nCurrent Editor State: ${JSON.stringify(state)}\\n\\nUser Request: ${aiPrompt}`
             }
           ]
         }
@@ -698,19 +764,33 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
       console.log("Raw AI Response for debugging:", textResponse);
 
-      let newState;
+      let aiState;
       try {
         const cleanedJson = sanitizeAiJson(textResponse);
-        newState = JSON.parse(cleanedJson);
+        aiState = JSON.parse(cleanedJson);
       } catch (parseErr) {
         console.error("JSON parse error:", parseErr, "Raw response:", textResponse);
         throw new Error("Failed to parse AI response as JSON");
       }
 
-      if (!newState.pages || !Array.isArray(newState.pages) || newState.pages.length === 0) {
-        console.error("Invalid response structure:", newState);
+      if (!aiState.pages || !Array.isArray(aiState.pages) || aiState.pages.length === 0) {
+        console.error("Invalid response structure:", aiState);
         throw new Error("AI response missing pages array");
       }
+
+      const sanitizedPages = aiState.pages.map((page: any) => ({
+        id: page.id || generateId(),
+        background: page.background || '#18181b',
+        elements: (page.elements || []).map(sanitizeElement),
+      }));
+
+      const newState = {
+        ...aiState,
+        pages: sanitizedPages,
+        currentPageIndex: aiState.currentPageIndex || 0,
+        selectedElementId: aiState.selectedElementId || null,
+        themeColors: aiState.themeColors || state.themeColors,
+      };
 
       if (aiAttachedImages.length > 0) {
         for (const page of newState.pages) {
@@ -990,9 +1070,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
       const userFontStyles = document.querySelectorAll('style[id^="font-face-"]');
       let userFontCss = '';
-      userFontStyles.forEach(el => { userFontCss += el.textContent + '\n'; });
+      userFontStyles.forEach(el => { userFontCss += el.textContent + '\\n'; });
       if (userFontCss && fontStyleEl) {
-        fontStyleEl.textContent += '\n' + userFontCss;
+        fontStyleEl.textContent += '\\n' + userFontCss;
       } else if (userFontCss && !fontStyleEl) {
         fontStyleEl = document.createElement('style');
         fontStyleEl.setAttribute('data-export-fonts', 'true');
