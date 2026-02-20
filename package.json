@@ -36,6 +36,7 @@
     "@fontsource/satisfy": "^5.2.7",
     "@fontsource/special-elite": "^5.2.8",
     "@fontsource/unifrakturmaguntia": "^5.2.8",
+    "@iconify-json/lucide": "^1.2.92",
     "firebase": "^10.12.2",
     "lucide-react": "0.460.0",
     "modern-screenshot": "4.4.37",
