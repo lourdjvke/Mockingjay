@@ -1,27 +1,27 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { EditorState, DesignElement, BoundingBox, Page, ElementStyle } from './types.ts';
-import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
-import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, embedGoogleFonts } from './utils.ts';
-import Sidebar from './components/Sidebar.tsx';
-import ElementRenderer from './components/ElementRenderer.tsx';
-import { Icons } from './components/IconLibrary.tsx';
-import BrandDna from './components/BrandDna.tsx';
-import { domToPng } from 'modern-screenshot';
-import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove } from './firebase.ts';
-import type { User } from 'firebase/auth';
-import { useDebouncedCallback } from 'use-debounce';
+import React, { useState, useCallback, useRef, useEffect } from \'react\';
+import { EditorState, DesignElement, BoundingBox, Page, ElementStyle } from \'./types.ts\';
+import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from \'./constants.ts\';
+import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, embedGoogleFonts } from \'./utils.ts\';
+import Sidebar from \'./components/Sidebar.tsx\';
+import ElementRenderer from \'./components/ElementRenderer.tsx\';
+import { Icons } from \'./components/IconLibrary.tsx\';
+import BrandDna from \'./components/BrandDna.tsx\';
+import { domToPng } from \'modern-screenshot\';
+import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove } from \'./firebase.ts\';
+import type { User } from \'firebase/auth\';
+import { useDebouncedCallback } from \'use-debounce\';
 
 interface SnapLine {
-  type: 'vertical' | 'horizontal';
+  type: \'vertical\' | \'horizontal\';
   position: number;
 }
 
-type ExportStatus = 'idle' | 'processing' | 'success' | 'error';
-type SaveStatus = 'idle' | 'saving' | 'saved';
+type ExportStatus = \'idle\' | \'processing\' | \'success\' | \'error\';
+type SaveStatus = \'idle\' | \'saving\' | \'saved\';
 
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>(INITIAL_STATE);
-  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: 'move' | 'resize' | 'rotate', handle?: string, initialAngle?: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: \'move\' | \'resize\' | \'rotate\', handle?: string, initialAngle?: number } | null>(null);
   const [elementStartPos, setElementStartPos] = useState<BoundingBox | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
@@ -31,7 +31,7 @@ const App: React.FC = () => {
   const [scale, setScale] = useState(1);
   const [snapLines, setSnapLines] = useState<SnapLine[]>([]);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [exportStatus, setExportStatus] = useState<ExportStatus>('idle');
+  const [exportStatus, setExportStatus] = useState<ExportStatus>(\'idle\');
   const [userFonts, setUserFonts] = useState<{ name: string; value: string }[]>([]);
   const [recentImages, setRecentImages] = useState<string[]>([]);
   const [aiAttachedImages, setAiAttachedImages] = useState<string[]>([]);
@@ -45,7 +45,7 @@ const App: React.FC = () => {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [designs, setDesigns] = useState<any[]>([]);
   const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>(\'idle\');
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -57,7 +57,7 @@ const App: React.FC = () => {
   const debouncedSave = useDebouncedCallback(async (designState: EditorState, designId: string) => {
     if (!user || !canvasRef.current) return;
 
-    setSaveStatus('saving');
+    setSaveStatus(\'saving\');
 
     try {
         const thumbnail = await domToPng(canvasRef.current, {
@@ -75,12 +75,12 @@ const App: React.FC = () => {
         const dbRef = ref(database, `users/${user.uid}/designs/${designId}`);
         await set(dbRef, designData);
 
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2000);
+        setSaveStatus(\'saved\');
+        setTimeout(() => setSaveStatus(\'idle\'), 2000);
 
     } catch (error) {
         console.error("Failed to save design or generate thumbnail:", error);
-        setSaveStatus('idle');
+        setSaveStatus(\'idle\');
     }
   }, 3000);
 
@@ -414,15 +414,12 @@ const App: React.FC = () => {
         clipPath: null,
     };
 
-    // Start with default styles and merge AI-provided styles
     const style = { ...defaultStyle, ...(el.style || {}) };
 
-    // Ensure core numeric properties are valid numbers
     style.opacity = typeof style.opacity === 'number' ? style.opacity : 1;
     style.borderRadius = typeof style.borderRadius === 'number' ? style.borderRadius : 0;
     style.strokeWidth = typeof style.strokeWidth === 'number' ? style.strokeWidth : 0;
     
-    // Type-specific style validation
     if (el.type === 'text') {
         style.fontSize = typeof style.fontSize === 'number' ? style.fontSize : 24;
         style.fontFamily = style.fontFamily || (allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif");
@@ -431,7 +428,6 @@ const App: React.FC = () => {
         style.letterSpacing = typeof style.letterSpacing === 'number' ? style.letterSpacing : 0;
         style.lineHeight = typeof style.lineHeight === 'number' ? style.lineHeight : 1.2;
     } else {
-        // For non-text elements, nullify text-specific properties if they somehow exist
         style.fontSize = null;
         style.fontFamily = null;
         style.fontWeight = null;
@@ -470,38 +466,76 @@ const App: React.FC = () => {
     try {
       const apiUrl = '/api/ai';
 
-      const systemInstruction = `
-        You are Mockingjay, a world-class AI designer. Your task is to generate a multi-page design based on a user's brand DNA and a specific campaign prompt.
+      const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer specializing in brand campaigns.
+Your task is to generate a complete, multi-page design campaign based on a brand's DNA.
 
-        **Brand DNA Context:**
-        - Business Name: ${brandDna.businessName}
-        - Overview: ${brandDna.overview}
-        - Values: ${brandDna.values.join(', ')}
-        - Tone: ${brandDna.tone}
-        - Aesthetic: ${brandDna.aesthetic}
-        - Colors: ${brandDna.colors.join(', ')}
-        - Fonts: ${brandDna.fonts.join(', ')}
+**Brand DNA Context:**
+- Business Name: ${brandDna.businessName}
+- Overview: ${brandDna.overview}
+- Values: ${brandDna.values.join(', ')}
+- Tone: ${brandDna.tone}
+- Aesthetic: ${brandDna.aesthetic}
+- Colors: ${brandDna.colors.join(', ')}
+- Fonts: ${brandDna.fonts.join(', ')}
 
-        **Campaign Details:**
-        - User Prompt: ${prompt}
-        - Campaign Tags (Page Themes): ${tags.join(', ')}
+**Campaign Details:**
+- User Prompt: ${prompt}
+- Campaign Tags (Page Themes): ${tags.join(', ')}
 
-        **Instructions:**
-        1.  Generate a complete design with exactly ${tags.length} pages.
-        2.  Each page should be inspired by one of the campaign tags: [${tags.join(', ')}] respectively.
-        3.  All design elements (colors, fonts, text, imagery) MUST strictly adhere to the provided Brand DNA.
-        4.  If user-provided images are included, incorporate them intelligently into the design. Position them as specified in the placeholders (ATTACHED_IMAGE_0, ATTACHED_IMAGE_1, etc.).
-        5.  Return ONLY a raw JSON object representing the design. No markdown, no commentary.
-        6. Use reasonable borderRadius values (0-24px for rectangles, 999 for circles/pills). Do NOT use excessive values.
-        7. For optional style properties that are not applicable to an element, you MUST return them with a value of null.
-      `;
+**Instructions:**
+1.  Generate a complete design with exactly ${tags.length} pages.
+2.  Each page's design should be inspired by one of the campaign tags: [${tags.join(', ')}] respectively.
+3.  All design elements (colors, fonts, text, imagery) MUST strictly adhere to the provided Brand DNA.
+4.  The returned \`themeColors\` array MUST be populated with the brand's colors: [${brandDna.colors.join(', ')}].
+
+YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanation text before or after the JSON.
+Do NOT wrap in \`\`\`json code blocks. Return ONLY the raw JSON starting with { and ending with }.
+
+CRITICAL RULES:
+1. ALWAYS populate EVERY page with multiple elements (minimum 3-5 elements).
+2. NEVER return an empty page.
+3. Elements MUST have proper positioning, sizing, font families, colors, and spacing.
+4. Match the Canvas dimensions: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}.
+5. Use reasonable borderRadius values (0-24px for rectangles, 999 for circles/pills). Do NOT use excessive values.
+6. For optional style properties that are not applicable to an element, you MUST return them with a value of null.
+
+**NEW: PRIORITIZE IMAGE-CENTRIC LAYOUTS & MINIMAL TEXT**
+- **Layout 1 (Focus):** Full-screen image as the page background with minimal, high-contrast text overlaid.
+- **Layout 2 (Classic):** Text block at top, large image in the center, and a call-to-action (CTA) button at the bottom.
+- **Layout 3 (Dynamic):** Text block at the top, with a CTA and a smaller image placed at the bottom.
+- **General:** Use shapes as subtle accents. Keep text very short and impactful.
+
+AVAILABLE FONTS: ${allFonts.map(f => f.value).join(', ')}.
+
+ELEMENT STRUCTURE - ALL FIELDS ARE REQUIRED FOR EACH ELEMENT:
+{
+  "id": "unique_id",
+  "type": "text|shape|image|icon",
+  "name": "descriptive name",
+  "box": { "x": number, "y": number, "width": number, "height": number, "rotation": 0 },
+  "content": "text content or SVG path or image URL",
+  "style": { "color": "#hex or null", "backgroundColor": "#hex or null", "fontSize": "number or null", "fontFamily": "font or null", "fontWeight": "string or null", "textAlign": "string or null", "letterSpacing": "number or null", "lineHeight": "number or null", "borderRadius": "number or null", "opacity": 1, "strokeColor": "#hex or null", "strokeWidth": "number or null", "strokePattern": "string or null", "clipPath": "string or null" },
+  "visible": true,
+  "locked": false
+}
+
+RESPONSE FORMAT:
+{
+  "pages": [ { "id": "page_1", "background": "#colorhex or image_url", "elements": [ { ... } ] } ],
+  "currentPageIndex": 0,
+  "selectedElementId": null,
+  "themeColors": ["${brandDna.colors.join('", "')}"]
+}
+
+${images.length > 0 ? `
+USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design as image elements using placeholders like "ATTACHED_IMAGE_0".
+` : ''}
+`;
 
       const userMessages = [
         {
           role: "user",
-          content: [
-            { type: "text", text: systemInstruction }
-          ]
+          content: [ { type: "text", text: systemInstruction } ]
         }
       ];
 
@@ -574,7 +608,7 @@ const App: React.FC = () => {
         pages: sanitizedPages,
         currentPageIndex: 0,
         selectedElementId: null,
-        themeColors: aiResponse.themeColors || INITIAL_STATE.themeColors,
+        themeColors: aiResponse.themeColors && aiResponse.themeColors.length > 0 ? aiResponse.themeColors : brandDna.colors,
       };
 
       setState(newState);
@@ -615,6 +649,12 @@ CRITICAL RULES:
 7. Use reasonable borderRadius values (0-24px for rectangles, 999 for circles/pills). Do NOT use excessive values.
 8. For optional style properties that are not applicable to an element, you MUST return them with a value of null.
 
+**NEW: PRIORITIZE IMAGE-CENTRIC LAYOUTS & MINIMAL TEXT**
+- **Layout 1 (Focus):** Full-screen image as the page background with minimal, high-contrast text overlaid.
+- **Layout 2 (Classic):** Text block at top, large image in the center, and a call-to-action (CTA) button at the bottom.
+- **Layout 3 (Dynamic):** Text block at the top, with a CTA and a smaller image placed at the bottom.
+- **General:** Use shapes as subtle accents. Keep text very short and impactful.
+
 AVAILABLE FONTS: ${allFonts.map(f => f.value).join(', ')}.
 
 ELEMENT STRUCTURE - ALL FIELDS ARE REQUIRED FOR EACH ELEMENT:
@@ -624,88 +664,14 @@ ELEMENT STRUCTURE - ALL FIELDS ARE REQUIRED FOR EACH ELEMENT:
   "name": "descriptive name",
   "box": { "x": number, "y": number, "width": number, "height": number, "rotation": 0 },
   "content": "text content or SVG path or image URL",
-  "style": { // All style properties are required. Use null if not applicable.
-    "color": "#hexcolor or null",
-    "backgroundColor": "#hexcolor or null",
-    "fontSize": "number (for text) or null",
-    "fontFamily": "font name or null",
-    "fontWeight": "string or null",
-    "textAlign": "string or null",
-    "letterSpacing": "number or null",
-    "lineHeight": "number or null",
-    "borderRadius": "number or null",
-    "opacity": 1, // Must be a number
-    "strokeColor": "#hexcolor or null",
-    "strokeWidth": "number or null",
-    "strokePattern": "'solid'|'dashed'|'dotted' or null",
-    "clipPath": "CSS clip-path value or null"
-  },
+  "style": { "color": "#hexcolor or null", "backgroundColor": "#hexcolor or null", "fontSize": "number (for text) or null", "fontFamily": "font name or null", "fontWeight": "string or null", "textAlign": "string or null", "letterSpacing": "number or null", "lineHeight": "number or null", "borderRadius": "number or null", "opacity": 1, "strokeColor": "#hexcolor or null", "strokeWidth": "number or null", "strokePattern": "'solid'|'dashed'|'dotted' or null", "clipPath": "CSS clip-path value or null" },
   "visible": true,
   "locked": false
 }
-
-DESIGN PATTERNS BY REQUEST TYPE:
-
-FOR BRAND/COMPANY REQUESTS:
-1. Background color or image (applies to page.background)
-2. Large headline (40-70px) with brand name
-3. Tagline/subtitle (24-30px)
-4. 2-3 descriptive text elements (14-18px)
-5. Accent shapes or icons for visual interest (can use clipPath for unique shapes).
-6. All text in theme colors from user request
-
-FOR COLOR/STYLE REQUESTS:
-- Update ALL element colors to match the requested theme
-- If "purple" mentioned, use gradients of purple: #8B5CF6, #A78BFA, #DDD6FE
-- If "brand colors" requested, create a palette and apply consistently
-
-POSITIONING GUIDELINES:
-- Use margins of 20-40px from canvas edges
-- Space elements 15-20px apart
-- Center headline at x: ${Math.round(CANVAS_WIDTH / 4)}, y: 40
-- Place secondary elements below with proper spacing
-- Use full width (${CANVAS_WIDTH}) for visual elements
-
-An example of a shape element:
-{
-  "id": "n7bv9j3aw",
-  "name": "pill",
-  "type": "shape",
-  "box": { "x": 12, "y": 125, "width": 192, "height": 62, "rotation": 0 },
-  "content": "",
-  "style": { 
-    "color": null, 
-    "backgroundColor": "#2D6B58", 
-    "fontSize": null, 
-    "fontFamily": null, 
-    "fontWeight": null, 
-    "textAlign": null, 
-    "letterSpacing": null, 
-    "lineHeight": null, 
-    "borderRadius": 1000, 
-    "opacity": 1, 
-    "strokeColor": null, 
-    "strokeWidth": 0, 
-    "strokePattern": null, 
-    "clipPath": null 
-  },
-  "visible": true,
-  "locked": false
-}
-
 
 RESPONSE FORMAT:
-Return ONLY valid JSON matching this structure (NO markdown, NO code blocks):
 {
-  "pages": [
-    {
-      "id": "page_1",
-      "background": "#colorhex or image_url",
-      "elements": [
-        { element objects as defined above }
-      ]
-    }
-  ],
+  "pages": [ { "id": "page_1", "background": "#colorhex or image_url", "elements": [ { ... } ] } ],
   "currentPageIndex": 0,
   "selectedElementId": null,
   "themeColors": ["#color1", "#color2", "#color3", "#color4"]
