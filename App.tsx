@@ -947,7 +947,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           case 'invert': filterValue = 'invert(100%)'; break;
           case 'motion-blur': filterValue = 'blur(8px)'; break;
       }
-      updateElement(selectedElement.id, { style: { filter: filterValue } });
+      updateElement(selectedElement.id, { style: { ...selectedElement.style, filter: filterValue } });
   }, [selectedElement, updateElement]);
 
   const handlePointerMove = useCallback((e: PointerEvent) => {
@@ -1391,6 +1391,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
                     deleteElement={deleteElement}
                     updatePage={updatePage}
+                    onApplyEffect={handleApplyEffect}
                 />
           </div>
         )}
