@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getDatabase, ref, push, onValue, remove } from "firebase/database";
 import { 
   Beaker, 
@@ -18,16 +18,26 @@ import {
   Sparkles,
   Search,
   History,
-  Trash2
+  Trash2,
+  ArrowRight,
+  UploadCloud,
+  ImageIcon
 } from 'lucide-react';
 
-const BrandDna = ({ onClose }) => {
+const BrandDna = ({ onClose, onStartCampaign }) => {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
   const [brandData, setBrandData] = useState(null);
   const [images, setImages] = useState([]);
   const [history, setHistory] = useState([]);
+
+  // Campaign creation states
+  const [isCampaignMode, setIsCampaignMode] = useState(false);
+  const [campaignPrompt, setCampaignPrompt] = useState('');
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [campaignImages, setCampaignImages] = useState([]);
+  const campaignFileInputRef = useRef(null);
       
   const db = getDatabase();
       
@@ -98,7 +108,7 @@ const BrandDna = ({ onClose }) => {
       if (!response.ok) throw new Error(`Screenshot failed: ${response.status}`);
             
       const blob = await response.blob();
-            
+           
       const reader = new FileReader();
       const base64Promise = new Promise((resolve) => {
         reader.onloadend = () => resolve(reader.result);
@@ -146,7 +156,69 @@ const BrandDna = ({ onClose }) => {
   const removeImage = (id) => {
     setImages(images.filter(img => img.id !== id));
   };
+  
+  const AVAILABLE_TAGS = ["Social Media Post", "Website Banner", "Email Campaign", "Print Ad", "Digital Story"];
+
+  const toggleTag = (tag) => {
+    const isSelected = selectedTags.includes(tag);
+    if (isSelected) {
+      setSelectedTags(selectedTags.filter(t => t !== tag));
+    } else {
+      if (selectedTags.length < 3) {
+        setSelectedTags([...selectedTags, tag]);
+      } else {
+        alert("You can select up to 3 tags.");
+      }
+    }
+  };
+
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+    });
+  };
+
+  const handleCampaignImageUpload = (e) => {
+      const files = Array.from(e.target.files);
+      if (selectedTags.length === 0) {
+          alert("Please select campaign type tags first. The number of tags determines the number of images you can upload.");
+          return;
+      }
+      if (campaignImages.length + files.length > selectedTags.length) {
+          alert(`You can only upload up to ${selectedTags.length} image(s) for ${selectedTags.length} page(s).`);
+          return;
+      }
+      const newImages = files.map(file => ({
+          id: Date.now() + Math.random(),
+          file,
+          preview: URL.createObjectURL(file)
+      }));
+      setCampaignImages(prev => [...prev, ...newImages]);
+  };
+
+  const removeCampaignImage = (id) => {
+      setCampaignImages(prev => prev.filter(img => img.id !== id));
+  };
+
+  const handleCreateCampaign = async () => {
+    if (!campaignPrompt.trim()) {
+        alert("Please provide a prompt for your campaign.");
+        return;
+    }
+    if (selectedTags.length === 0) {
+        alert("Please select at least one campaign tag.");
+        return;
+    }
     
+    const imagePromises = campaignImages.map(imageFile => fileToBase64(imageFile.file));
+    const base64Images = await Promise.all(imagePromises);
+
+    onStartCampaign(brandData, campaignPrompt, selectedTags, base64Images);
+  };
+
   const EditableSection = ({ children, className = "" }) => (
     <div className={`group relative cursor-pointer ${className}`}>
       {children}
@@ -251,157 +323,253 @@ const BrandDna = ({ onClose }) => {
     }
       
     if (brandData) {
-      return (
-        <div className="min-h-screen bg-[#0a0a0a] text-gray-200 font-sans p-4 md:p-8">
-          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-12">
-            <div className="flex flex-col gap-2 w-full md:w-auto">
-              <div className="bg-[#1a1a1a] border border-gray-800 rounded-2xl p-3 flex items-center justify-between w-full md:w-64 shadow-xl">
-                <div className="flex items-center gap-3">
-                  <div className="bg-[#d4e157] p-1.5 rounded-lg text-black">
-                    <Beaker size={20} />
-                  </div>
-                  <span className="font-bold text-xl text-gray-100">Mockingjay</span>
-                  <span className="text-[10px] bg-gray-800 px-2 py-0.5 rounded-full text-gray-400 uppercase tracking-widest">DNA</span>
-                </div>
-                <X size={18} className="text-gray-500 cursor-pointer" onClick={onClose} />
-              </div>
-            </div>
-        
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => setBrandData(null)} // This will now show the initial screen
-                className="flex items-center gap-2 bg-[#1a1a1a] px-4 py-2 rounded-xl border border-gray-800 text-sm hover:bg-gray-800 transition-colors"
-              >
-                <Search size={16} />
-                New Scan
-              </button>
-              <div className="w-10 h-10 rounded-full border-2 border-[#d4e157] overflow-hidden bg-gray-700">
-                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${brandData.businessName}`} alt="User" />
-              </div>
-            </div>
-          </header>
-        
-          <main className="max-w-6xl mx-auto">
-            <div className="text-center mb-12">
-              <div className="flex justify-center mb-4 text-[#d4e157]">
-                <Sparkles size={40} />
-              </div>
-              <h1 className="text-4xl md:text-6xl font-serif italic mb-4 text-white">The DNA of {brandData.businessName}</h1>
-              <p className="text-gray-400 max-w-xl mx-auto text-sm md:text-base">
-                Generated from {brandData.url}. Review and refine your brand identity below.
-              </p>
-            </div>
-        
-            <div className="bg-[#1a1a1a] rounded-[2.5rem] p-6 md:p-10 border border-gray-800 shadow-2xl grid grid-cols-1 lg:grid-cols-12 gap-8">
-                  
-              <div className="lg:col-span-8 space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <EditableSection className="bg-[#262626] rounded-3xl p-8 border border-gray-700/50 flex flex-col justify-between">
-                    <div>
-                      <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">{brandData.businessName}</h2>
-                      <div className="flex items-center gap-2 text-[#d4e157]">
-                        <LinkIcon size={14} />
-                        <span className="text-xs font-mono">{brandData.url.replace(/(^\w+:|^)\/\//, '')}</span>
+        if (isCampaignMode) {
+            return (
+                <div className="min-h-screen bg-[#0a0a0a] text-gray-200 font-sans p-4 md:p-8 flex flex-col">
+                  <input type="file" ref={campaignFileInputRef} onChange={handleCampaignImageUpload} multiple accept="image/*" className="hidden" />
+                  <header className="flex justify-between items-center mb-12 flex-shrink-0">
+                    <button onClick={() => setIsCampaignMode(false)} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+                        <ArrowLeft size={18} />
+                        Back to Brand DNA
+                    </button>
+                    <div className="flex items-center gap-2 bg-gray-800/50 border border-gray-700/80 px-3 py-1 rounded-lg">
+                        <Megaphone size={16} className="text-[#d4e157]"/>
+                        <span className="text-sm font-bold text-white">New Campaign</span>
+                    </div>
+                  </header>
+    
+                  <main className="flex-grow max-w-4xl mx-auto w-full overflow-y-auto custom-scrollbar pr-2">
+                      <div className="space-y-10">
+                          <div>
+                              <label className="text-lg font-bold text-white mb-3 block">1. What's the campaign about?</label>
+                              <textarea
+                                  value={campaignPrompt}
+                                  onChange={(e) => setCampaignPrompt(e.target.value)}
+                                  placeholder="e.g., 'A summer sale campaign for our new line of eco-friendly sneakers. Emphasize sustainability and adventure.'"
+                                  className="w-full bg-[#1a1a1a] border border-gray-800 rounded-2xl py-4 px-5 text-white focus:outline-none focus:border-[#d4e157] transition-all"
+                                  rows="4"
+                              ></textarea>
+                          </div>
+    
+                          <div>
+                              <label className="text-lg font-bold text-white mb-3 block">2. Select Campaign Type (up to 3)</label>
+                              <div className="flex flex-wrap gap-3">
+                                  {AVAILABLE_TAGS.map(tag => (
+                                      <button
+                                          key={tag}
+                                          onClick={() => toggleTag(tag)}
+                                          className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${selectedTags.includes(tag) ? 'bg-[#d4e157] text-black border-[#d4e157]' : 'bg-transparent border-gray-700 hover:border-gray-500'}`}
+                                      >
+                                          {tag}
+                                      </button>
+                                  ))}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-2">This determines the number of pages/variations to be generated.</p>
+                          </div>
+    
+                          <div>
+                              <label className="text-lg font-bold text-white mb-3 block">3. Attach Images (Optional)</label>
+                              <div className={`grid gap-4 ${campaignImages.length > 0 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-1'}`}>
+                                  {campaignImages.map(image => (
+                                      <div key={image.id} className="aspect-square rounded-xl overflow-hidden group relative border border-gray-800">
+                                          <img src={image.preview} alt="Campaign upload preview" className="w-full h-full object-cover" />
+                                          <button onClick={() => removeCampaignImage(image.id)} className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all">
+                                              <X size={14}/>
+                                          </button>
+                                      </div>
+                                  ))}
+                                  {selectedTags.length > 0 && campaignImages.length < selectedTags.length && (
+                                     <div
+                                        onClick={() => campaignFileInputRef.current?.click()}
+                                        className="aspect-square rounded-xl border-2 border-dashed border-gray-700 flex flex-col items-center justify-center text-gray-500 hover:border-[#d4e157] hover:text-[#d4e157] cursor-pointer transition-all"
+                                    >
+                                        <UploadCloud size={32} />
+                                        <span className="text-sm mt-2 font-medium">Upload Image</span>
+                                        <span className="text-xs mt-1">({campaignImages.length}/{selectedTags.length})</span>
+                                    </div>
+                                  )}
+                              </div>
+                               {selectedTags.length === 0 && <p className="text-sm text-gray-600 italic mt-2">Please select a campaign type to enable image uploads.</p>}
+                          </div>
                       </div>
-                    </div>
-                    <div className="mt-6">
-                       <p className="text-gray-400 text-sm leading-relaxed">
-                        {brandData.overview}
-                      </p>
-                    </div>
-                  </EditableSection>
-        
-                  <div className="bg-[#3a3d2e]/40 rounded-3xl p-6 border border-[#d4e157]/20 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-[#3a3d2e]/60 transition-colors h-full min-h-[180px]">
-                    <Plus size={24} className="text-[#d4e157]" />
-                    <span className="text-[#d4e157] font-bold text-sm">Upload Logo</span>
-                  </div>
-                </div>
-        
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <EditableSection className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
-                    <div className="flex items-center gap-2 mb-4 text-[#d4e157]">
-                       <ShieldCheck size={16} />
-                       <span className="text-[10px] uppercase font-bold tracking-widest">Values</span>
-                    </div>
-                    <ul className="text-sm text-gray-300 space-y-2">
-                      {brandData.values?.map((v, i) => <li key={i}>• {v}</li>)}
-                    </ul>
-                  </EditableSection>
-        
-                  <EditableSection className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
-                    <div className="flex items-center gap-2 mb-4 text-[#d4e157]">
-                       <MessageSquare size={16} />
-                       <span className="text-[10px] uppercase font-bold tracking-widest">Tone</span>
-                    </div>
-                    <p className="text-sm text-gray-300 italic">"{brandData.tone}"</p>
-                  </EditableSection>
-        
-                  <EditableSection className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
-                    <div className="flex items-center gap-2 mb-4 text-[#d4e157]">
-                       <Eye size={16} />
-                       <span className="text-[10px] uppercase font-bold tracking-widest">Aesthetic</span>
-                    </div>
-                    <p className="text-sm text-gray-300 capitalize">{brandData.aesthetic}</p>
-                  </EditableSection>
-                </div>
-        
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
-                    <span className="text-gray-500 text-[10px] uppercase tracking-widest block mb-6 font-bold">Brand Colors</span>
-                    <div className="flex justify-between items-center">
-                      {brandData.colors?.map((hex) => (
-                        <div key={hex} className="flex flex-col items-center gap-2 group/color cursor-pointer">
-                          <div className="w-10 h-10 rounded-full border border-gray-700 shadow-inner group-hover/color:scale-110 transition-transform" style={{ backgroundColor: hex }}></div>
-                          <span className="text-[8px] font-mono text-gray-500 uppercase">{hex}</span>
-                        </div>
-                      ))}
-                      <div className="w-10 h-10 rounded-full border border-dashed border-gray-700 flex items-center justify-center text-gray-600 hover:text-[#d4e157] cursor-pointer">
-                        <Plus size={14} />
-                      </div>
-                    </div>
-                  </div>
-        
-                  <div className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
-                    <span className="text-gray-500 text-[10px] uppercase tracking-widest block mb-4 font-bold">Identified Fonts</span>
-                    <div className="space-y-2">
-                      {brandData.fonts?.map((f, i) => (
-                        <div key={i} className="flex items-center justify-between group/font cursor-pointer">
-                          <p className="text-sm font-medium text-white group-hover/font:text-[#d4e157] transition-colors">{f}</p>
-                          <span className="text-[8px] bg-white/5 px-2 py-1 rounded text-gray-500">Font {i+1}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-        
-              <div className="lg:col-span-4 bg-[#262626] rounded-[2rem] p-6 border border-gray-700/50 flex flex-col h-full relative">
-                <span className="text-gray-500 text-[10px] uppercase tracking-widest font-bold mb-6">Asset Discovery</span>
-                <div className="grid grid-cols-2 gap-3 overflow-y-auto max-h-[600px] pr-2 custom-scrollbar">
-                  {images.map((img) => (
-                    <div key={img.id} className="aspect-square rounded-2xl overflow-hidden group relative border border-white/5">
-                      <img src={img.url} className="w-full h-full object-cover grayscale-[0.3] group-hover:grayscale-0 transition-all duration-500" alt="" />
-                      <button onClick={() => removeImage(img.id)} className="absolute top-2 right-2 bg-black/70 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80">
-                        <X size={14} className="text-white" />
+                  </main>
+    
+                  <footer className="mt-12 text-center flex-shrink-0">
+                      <button
+                          onClick={handleCreateCampaign}
+                          className="bg-[#d4e157] text-black font-bold text-lg px-12 py-4 rounded-2xl hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-[#d4e157]/20 flex items-center gap-3 mx-auto"
+                      >
+                          <Sparkles size={20} />
+                          Create Campaign
                       </button>
+                  </footer>
+                  <style dangerouslySetInnerHTML={{ __html: `
+                    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                    .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+                  `}} />
+                </div>
+            );
+        }
+      return (
+        <>
+            <div className="min-h-screen bg-[#0a0a0a] text-gray-200 font-sans p-4 md:p-8">
+              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-12">
+                <div className="flex flex-col gap-2 w-full md:w-auto">
+                  <div className="bg-[#1a1a1a] border border-gray-800 rounded-2xl p-3 flex items-center justify-between w-full md:w-64 shadow-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-[#d4e157] p-1.5 rounded-lg text-black">
+                        <Beaker size={20} />
+                      </div>
+                      <span className="font-bold text-xl text-gray-100">Mockingjay</span>
+                      <span className="text-[10px] bg-gray-800 px-2 py-0.5 rounded-full text-gray-400 uppercase tracking-widest">DNA</span>
                     </div>
-                  ))}
-                  <div className="aspect-square rounded-2xl border border-dashed border-gray-700 flex flex-col items-center justify-center gap-2 text-gray-500 hover:border-[#d4e157] hover:text-[#d4e157] transition-all cursor-pointer">
-                    <Plus size={20} />
-                    <span className="text-[10px]">Add Asset</span>
+                    <X size={18} className="text-gray-500 cursor-pointer" onClick={onClose} />
                   </div>
                 </div>
-              </div>
+            
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => { setBrandData(null); setIsCampaignMode(false); }}
+                    className="flex items-center gap-2 bg-[#1a1a1a] px-4 py-2 rounded-xl border border-gray-800 text-sm hover:bg-gray-800 transition-colors"
+                  >
+                    <Search size={16} />
+                    New Scan
+                  </button>
+                  <div className="w-10 h-10 rounded-full border-2 border-[#d4e157] overflow-hidden bg-gray-700">
+                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${brandData.businessName}`} alt="User" />
+                  </div>
+                </div>
+              </header>
+            
+              <main className="max-w-6xl mx-auto">
+                <div className="text-center mb-12">
+                  <div className="flex justify-center mb-4 text-[#d4e157]">
+                    <Sparkles size={40} />
+                  </div>
+                  <h1 className="text-4xl md:text-6xl font-serif italic mb-4 text-white">The DNA of {brandData.businessName}</h1>
+                  <p className="text-gray-400 max-w-xl mx-auto text-sm md:text-base">
+                    Generated from {brandData.url}. Review and refine your brand identity below.
+                  </p>
+                </div>
+            
+                <div className="bg-[#1a1a1a] rounded-[2.5rem] p-6 md:p-10 border border-gray-800 shadow-2xl grid grid-cols-1 lg:grid-cols-12 gap-8">
+                      
+                  <div className="lg:col-span-8 space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <EditableSection className="bg-[#262626] rounded-3xl p-8 border border-gray-700/50 flex flex-col justify-between">
+                        <div>
+                          <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">{brandData.businessName}</h2>
+                          <div className="flex items-center gap-2 text-[#d4e157]">
+                            <LinkIcon size={14} />
+                            <span className="text-xs font-mono">{brandData.url.replace(/(^\w+:|^)\/\//, '')}</span>
+                          </div>
+                        </div>
+                        <div className="mt-6">
+                           <p className="text-gray-400 text-sm leading-relaxed">
+                            {brandData.overview}
+                          </p>
+                        </div>
+                      </EditableSection>
+            
+                      <div className="bg-[#3a3d2e]/40 rounded-3xl p-6 border border-[#d4e157]/20 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-[#3a3d2e]/60 transition-colors h-full min-h-[180px]">
+                        <Plus size={24} className="text-[#d4e157]" />
+                        <span className="text-[#d4e157] font-bold text-sm">Upload Logo</span>
+                      </div>
+                    </div>
+            
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <EditableSection className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
+                        <div className="flex items-center gap-2 mb-4 text-[#d4e157]">
+                           <ShieldCheck size={16} />
+                           <span className="text-[10px] uppercase font-bold tracking-widest">Values</span>
+                        </div>
+                        <ul className="text-sm text-gray-300 space-y-2">
+                          {brandData.values?.map((v, i) => <li key={i}>• {v}</li>)}
+                        </ul>
+                      </EditableSection>
+            
+                      <EditableSection className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
+                        <div className="flex items-center gap-2 mb-4 text-[#d4e157]">
+                           <MessageSquare size={16} />
+                           <span className="text-[10px] uppercase font-bold tracking-widest">Tone</span>
+                        </div>
+                        <p className="text-sm text-gray-300 italic">"{brandData.tone}"</p>
+                      </EditableSection>
+            
+                      <EditableSection className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
+                        <div className="flex items-center gap-2 mb-4 text-[#d4e157]">
+                           <Eye size={16} />
+                           <span className="text-[10px] uppercase font-bold tracking-widest">Aesthetic</span>
+                        </div>
+                        <p className="text-sm text-gray-300 capitalize">{brandData.aesthetic}</p>
+                      </EditableSection>
+                    </div>
+            
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
+                        <span className="text-gray-500 text-[10px] uppercase tracking-widest block mb-6 font-bold">Brand Colors</span>
+                        <div className="flex justify-between items-center">
+                          {brandData.colors?.map((hex) => (
+                            <div key={hex} className="flex flex-col items-center gap-2 group/color cursor-pointer">
+                              <div className="w-10 h-10 rounded-full border border-gray-700 shadow-inner group-hover/color:scale-110 transition-transform" style={{ backgroundColor: hex }}></div>
+                              <span className="text-[8px] font-mono text-gray-500 uppercase">{hex}</span>
+                            </div>
+                          ))}
+                          <div className="w-10 h-10 rounded-full border border-dashed border-gray-700 flex items-center justify-center text-gray-600 hover:text-[#d4e157] cursor-pointer">
+                            <Plus size={14} />
+                          </div>
+                        </div>
+                      </div>
+            
+                      <div className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
+                        <span className="text-gray-500 text-[10px] uppercase tracking-widest block mb-4 font-bold">Identified Fonts</span>
+                        <div className="space-y-2">
+                          {brandData.fonts?.map((f, i) => (
+                            <div key={i} className="flex items-center justify-between group/font cursor-pointer">
+                              <p className="text-sm font-medium text-white group-hover/font:text-[#d4e157] transition-colors">{f}</p>
+                              <span className="text-[8px] bg-white/5 px-2 py-1 rounded text-gray-500">Font {i+1}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+            
+                  <div className="lg:col-span-4 bg-[#262626] rounded-[2rem] p-6 border border-gray-700/50 flex flex-col h-full relative">
+                    <span className="text-gray-500 text-[10px] uppercase tracking-widest font-bold mb-6">Asset Discovery</span>
+                    <div className="grid grid-cols-2 gap-3 overflow-y-auto max-h-[600px] pr-2 custom-scrollbar">
+                      {images.map((img) => (
+                        <div key={img.id} className="aspect-square rounded-2xl overflow-hidden group relative border border-white/5">
+                          <img src={img.url} className="w-full h-full object-cover grayscale-[0.3] group-hover:grayscale-0 transition-all duration-500" alt="" />
+                          <button onClick={() => removeImage(img.id)} className="absolute top-2 right-2 bg-black/70 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80">
+                            <X size={14} className="text-white" />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="aspect-square rounded-2xl border border-dashed border-gray-700 flex flex-col items-center justify-center gap-2 text-gray-500 hover:border-[#d4e157] hover:text-[#d4e157] transition-all cursor-pointer">
+                        <Plus size={20} />
+                        <span className="text-[10px]">Add Asset</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            
+              <style dangerouslySetInnerHTML={{ __html: `
+                @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
+                .font-serif { font-family: 'Instrument Serif', serif; }
+                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+              `}} />
             </div>
-          </main>
-        
-          <style dangerouslySetInnerHTML={{ __html: `
-            @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
-            .font-serif { font-family: 'Instrument Serif', serif; }
-            .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-            .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-          `}} />
-        </div>
+            <button
+                onClick={() => setIsCampaignMode(true)}
+                className="fixed z-[2001] bottom-8 right-8 bg-[#d4e157] text-black px-8 py-4 rounded-2xl font-bold text-lg hover:scale-105 active:scale-[0.98] transition-all shadow-2xl shadow-[#d4e157]/30 flex items-center gap-3"
+            >
+                <Megaphone size={22} />
+                Create a Campaign!
+            </button>
+        </>
       );
     }
     return null;
@@ -414,4 +582,4 @@ const BrandDna = ({ onClose }) => {
   )
 };
     
-export default BrandDna;
+export default BrandDna; 
