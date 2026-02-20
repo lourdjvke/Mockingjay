@@ -468,22 +468,28 @@ const App: React.FC = () => {
         throw new Error("No response content from API. The AI may be experiencing issues.");
       }
 
-      let newState;
+      let aiResponse;
       try {
         const cleanedJson = sanitizeAiJson(textResponse);
-        newState = JSON.parse(cleanedJson);
+        aiResponse = JSON.parse(cleanedJson);
       } catch (parseErr) {
         console.error("JSON parse error:", parseErr, "Raw response:", textResponse);
         throw new Error("Failed to parse AI response as JSON");
       }
 
-      if (!newState.pages || !Array.isArray(newState.pages) || newState.pages.length === 0) {
-        console.error("Invalid response structure:", newState);
-        throw new Error("AI response missing pages array");
+      if (!aiResponse.pages || !Array.isArray(aiResponse.pages) || aiResponse.pages.length === 0) {
+        console.error("Invalid response structure:", aiResponse);
+        throw new Error("AI response missing or empty pages array");
       }
 
+      const sanitizedPages = aiResponse.pages.map((page: any) => ({
+        id: page.id || generateId(),
+        background: page.background || '#18181b',
+        elements: page.elements || [],
+      }));
+
       if (images.length > 0) {
-        for (const page of newState.pages) {
+        for (const page of sanitizedPages) {
           if (page.elements) {
             page.elements = page.elements.map((el: any) => {
               if (typeof el.content === 'string' && el.content.startsWith('ATTACHED_IMAGE_')) {
@@ -497,6 +503,13 @@ const App: React.FC = () => {
           }
         }
       }
+      
+      const newState: EditorState = {
+        pages: sanitizedPages,
+        currentPageIndex: 0,
+        selectedElementId: null,
+        themeColors: aiResponse.themeColors || INITIAL_STATE.themeColors,
+      };
 
       setState(newState);
       const newId = generateId();
