@@ -13,7 +13,6 @@ import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
 import ContextMenu from './components/ContextMenu.tsx';
 import QuickTools from './components/QuickTools.tsx';
-import IconExplorer from './components/IconExplorer.tsx';
 
 interface SnapLine {
   type: 'vertical' | 'horizontal';
@@ -44,7 +43,6 @@ const App: React.FC = () => {
   const [isBrandDnaOpen, setIsBrandDnaOpen] = useState(false);
   const [brandData, setBrandData] = useState(null);
   const [contextMenu, setContextMenu] = useState<{ show: boolean; x: number; y: number; }>({ show: false, x: 0, y: 0 });
-  const [isIconExplorerOpen, setIsIconExplorerOpen] = useState(false);
 
   // Firebase and Design-related state
   const [user, setUser] = useState<User | null>(null);
@@ -1163,13 +1161,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
-      {isIconExplorerOpen && (
-        <IconExplorer
-          onSelectIcon={onAddIcon}
-          onClose={() => setIsIconExplorerOpen(false)}
-          isMobile={isMobile}
-        />
-      )}
       <ContextMenu
         show={contextMenu.show}
         x={contextMenu.x}
@@ -1418,7 +1409,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     updateElement={updateElement}
                     onReorder={onReorder}
                     onOpenSidebar={() => setIsBottomSheetOpen(true)}
-                    onAddIcon={() => setIsIconExplorerOpen(true)}
+                    onAddIcon={onAddIcon}
                     availableFonts={allFonts}
                     themeColors={state.themeColors}
                     onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
@@ -1460,7 +1451,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                   onAddShape={onAddShape}
                   onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); setIsBottomSheetOpen(false); }}
-                  onAddIcon={() => setIsIconExplorerOpen(true)}
+                  onAddIcon={onAddIcon}
                   onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
                 />
               </div>
@@ -1552,7 +1543,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
           onAddShape={onAddShape}
           onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
-          onAddIcon={() => setIsIconExplorerOpen(true)}
+          onAddIcon={onAddIcon}
           onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
         />
       )}
