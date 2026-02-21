@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Icons } from './IconLibrary.tsx';
 import { DesignElement, Page } from '../types.ts';
@@ -54,7 +53,6 @@ interface SidebarProps {
   onAddText: (type: 'Header' | 'Subheader' | 'Paragraph') => void;
   onAddShape: (type: string) => void;
   onAddImage: (src: string) => void;
-  onAddIcon: (iconName: string) => void; 
   onColorChange: (color: string) => void;
   onReorder: (id: string, direction: 'up' | 'down') => void;
   onAddCustomFont: (name: string, data: ArrayBuffer) => void;
@@ -84,7 +82,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   onAddText,
   onAddShape,
   onAddImage,
-  onAddIcon,
   onColorChange,
   onReorder,
   onAddCustomFont,
@@ -282,14 +279,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         <Section title="Assets" id="image" icon={<Icons.Plus className="w-4 h-4" />} isOpen={openSections.image} onToggle={toggleSection}>
            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                 <button onClick={() => imageUploadRef.current?.click()} className="w-full bg-zinc-800 p-4 rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-zinc-700 transition-colors active:scale-95 border border-white/5 font-bold uppercase tracking-wider">
-                    <Icons.ImageIcon className="w-5 h-5 text-lime-400"/> Device Image
-                 </button>
-                 <button onClick={onAddIcon} className="w-full bg-zinc-800 p-4 rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-zinc-700 transition-colors active:scale-95 border border-white/5 font-bold uppercase tracking-wider">
-                    <Icons.Shapes className="w-5 h-5 text-lime-400"/> Icon Library
-                 </button>
-              </div>
+              <button onClick={() => imageUploadRef.current?.click()} className="w-full bg-zinc-800 p-4 rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-zinc-700 transition-colors active:scale-95 border border-white/5 font-bold uppercase tracking-wider">
+                 <Icons.ImageIcon className="w-5 h-5 text-lime-400"/> Device Image
+              </button>
               <div className="grid grid-cols-3 gap-2">
                 {SHAPES.map(shape => (
                   <button key={shape.id} onClick={() => { triggerHaptic(5); onAddShape(shape.id); }} className="bg-zinc-800/50 p-3 rounded-xl flex flex-col items-center gap-2 hover:bg-zinc-700 transition-colors active:scale-90 border border-white/5">
@@ -342,7 +334,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         )}
                       </div>
                       <div className="w-full bg-zinc-900 border border-white/10 rounded-xl p-3 focus-within:border-lime-400/50 transition-colors">
-                        <textarea defaultValue={selectedElement.content} onBlur={(e) => updateElement(selectedElement.id, { content: e.target.value })} onChange={(e) => updateElement(selectedElement.id, { content: e.target.value })} className="bg-transparent border-none outline-none w-full text-sm font-medium resize-none h-20 text-white" placeholder="Type something..." />
+                        <textarea defaultValue={selectedElement.content} onBlur={(e) => updateElement(selectedElement.id, { content: e.target.value })} onChange={(e) => updateElement(selectedElement.id, { content: e.target.value })} className="bg-transparent border-none outline-none w-full text-sm font-medium resize-none h-20 text-white" placeholder="Type something..."/>
                       </div>
                       <div className="flex items-end gap-3">
                          <div className="flex-1 space-y-2">
