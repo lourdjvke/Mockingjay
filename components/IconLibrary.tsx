@@ -21,9 +21,8 @@ for (const [name, icon] of Object.entries(lucideIcons.icons)) {
             strokeLinecap="round" 
             strokeLinejoin="round"
             {...props}
+            dangerouslySetInnerHTML={{ __html: icon.body }}
         >
-            {/* @ts-ignore */}
-            <path d={icon.body} />
         </svg>
     );
 }
@@ -51,8 +50,8 @@ const IconWrapper = ({ icon, name }: { icon: { body: string }, name: string }) =
     height="1em" 
     viewBox="0 0 24 24"
     className="w-full h-full"
+    dangerouslySetInnerHTML={{ __html: icon.body.replace(/<path/g, '<path fill="currentColor"')}}
   >
-    <path fill="currentColor" d={icon.body} />
   </svg>
 );
 
@@ -95,8 +94,7 @@ const IconLibrary: React.FC<IconLibraryProps> = ({ onIconSelect }) => {
             className="p-2 rounded-lg hover:bg-zinc-700 cursor-pointer flex items-center justify-center"
             title={name}
             onClick={() => {
-                {/* @ts-ignore */}
-                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="${icon.body}" /></svg>`;
+                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">${icon.body}</svg>`;
                 onIconSelect({ name, svg });
             }}
           >
