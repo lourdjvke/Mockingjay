@@ -369,35 +369,19 @@ const App: React.FC = () => {
     e.target.value = '';
   };
 
-  const fetchWithRetry = async (url: string, payload: any, retries = 5): Promise<any> => {
-    let lastError: any;
-    for (let i = 0; i < retries; i++) {
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+  const fetchWithRetry = async (url: string, payload: any): Promise<any> => {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
 
-        if (response.ok) return await response.json();
-
-        const errData = await response.json();
-        lastError = new Error(errData.error || `Request failed with status ${response.status}`);
-        
-        if (response.status === 429 || response.status >= 500) {
-          const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
-          await new Promise(res => setTimeout(res, delay));
-          continue;
-        }
-        
-        throw lastError;
-      } catch (err) {
-        lastError = err;
-        if (i === retries - 1) throw lastError;
-        await new Promise(res => setTimeout(res, 1000));
-      }
+    if (response.ok) {
+        return await response.json();
     }
-    throw lastError;
+
+    const errData = await response.json().catch(() => ({ error: `Request failed with status ${response.status}` }));
+    throw new Error(errData.error || `Request failed with status ${response.status}`);
   };
 
   const sanitizeElement = useCallback((el: any): DesignElement => {
