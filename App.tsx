@@ -12,6 +12,7 @@ import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
 import ContextMenu from './components/ContextMenu.tsx';
 import QuickTools from './components/QuickTools.tsx';
+import Share from './components/Share.tsx';
 
 interface SnapLine {
   type: 'vertical' | 'horizontal';
@@ -23,7 +24,7 @@ type SaveStatus = 'idle' | 'saving' | 'saved';
 
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>(INITIAL_STATE);
-  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: 'move' | 'resize' | 'rotate', handle?: string, initialAngle?: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: 'move' | 'resize' | 'rotate' | 'swipe', handle?: string, initialAngle?: number } | null>(null);
   const [elementStartPos, setElementStartPos] = useState<BoundingBox | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
@@ -37,11 +38,13 @@ const App: React.FC = () => {
   const [userFonts, setUserFonts] = useState<{ name: string; value: string }[]>([]);
   const [recentImages, setRecentImages] = useState<string[]>([]);
   const [aiAttachedImages, setAiAttachedImages] = useState<string[]>([]);
+  const [useImageAsReference, setUseImageAsReference] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
   const [isBrandDnaOpen, setIsBrandDnaOpen] = useState(false);
   const [brandData, setBrandData] = useState(null);
   const [contextMenu, setContextMenu] = useState<{ show: boolean; x: number; y: number; }>({ show: false, x: 0, y: 0 });
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Firebase and Design-related state
   const [user, setUser] = useState<User | null>(null);
@@ -349,19 +352,18 @@ const App: React.FC = () => {
   const handleAiImageAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    const maxImages = 4;
-    const remaining = maxImages - aiAttachedImages.length;
-    const toProcess = Array.from(files).slice(0, remaining);
+    const toProcess = Array.from(files).slice(0, useImageAsReference ? 1 : 4 - aiAttachedImages.length);
 
     toProcess.forEach(file => {
       const reader = new FileReader();
       reader.onload = (ev) => {
         const dataUrl = ev.target?.result as string;
         if (dataUrl) {
-          setAiAttachedImages(prev => {
-            if (prev.length >= maxImages) return prev;
-            return [...prev, dataUrl];
-          });
+          if (useImageAsReference) {
+            setAiAttachedImages([dataUrl]);
+          } else {
+            setAiAttachedImages(prev => [...prev, dataUrl]);
+          }
         }
       };
       reader.readAsDataURL(file);
@@ -644,7 +646,7 @@ USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design
         });
       }
 
-      const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer and UI/UX expert.
+      let systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer and UI/UX expert.
 Your task is to transform user prompts into complete, high-fidelity design structures.
 ALWAYS generate RICH content with multiple elements. Never generate empty or minimal designs.
 
@@ -701,6 +703,22 @@ For each attached image, create an image element with type "image" and set conte
 - Third image: "ATTACHED_IMAGE_2"
 - Fourth image: "ATTACHED_IMAGE_3"
 Position them prominently in the design with good sizing (at least 200x200).` : ''}`;
+
+      if (useImageAsReference) {
+        systemInstruction = `You are "Mockingjay AI", a specialist in design replication and adaptation. 
+Your task is to analyze an attached image and recreate its key elements (layout, text, colors, shapes) within the Mockingjay design editor. 
+You must use the available tools to approximate the design as closely as possible, but do not copy it pixel-for-pixel. Capture the essence.
+
+Key elements to identify and recreate:
+- Headline Text: Identify the main heading, its approximate position, and font style.
+- Body Text: Recreate any significant paragraphs or text blocks.
+- Images: Use the placeholder "ATTACHED_IMAGE_0" to represent the main image in the reference.
+- Color Palette: Extract the primary colors and apply them to the background and elements.
+- Shapes: Replicate any prominent shapes or graphic elements.
+- Call-to-Action (CTA): If a button or link is present, recreate it.
+
+YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanation text.`;
+      }
 
       const userMessages = [
         {
@@ -872,20 +890,36 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     }
 
     if (element && !element.locked) {
-        longPressTimer.current = window.setTimeout(() => {
-            setContextMenu({
-                show: true,
-                x: e.clientX,
-                y: e.clientY,
-            });
-            setDragStart(null); // Prevent dragging after context menu opens
-            longPressTimer.current = null;
-        }, 500);
-
-        setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
-        setElementStartPos({ ...element.box });
+        if (isMobile) {
+            // On mobile, selection happens on tap, not drag
+            if (dragStart?.type !== 'swipe') {
+                setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
+                setElementStartPos({ ...element.box });
+            }
+        } else {
+            longPressTimer.current = window.setTimeout(() => {
+                setContextMenu({
+                    show: true,
+                    x: e.clientX,
+                    y: e.clientY,
+                });
+                setDragStart(null); // Prevent dragging after context menu opens
+                longPressTimer.current = null;
+            }, 500);
+    
+            setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
+            setElementStartPos({ ...element.box });
+        }
     }
-  }, [currentPage, state.selectedElementId, triggerHaptic]);
+  }, [currentPage, state.selectedElementId, triggerHaptic, isMobile, dragStart]);
+
+  const handleCanvasPointerDown = (e: React.PointerEvent) => {
+    if (isMobile && !selectedElement && state.pages.length > 1) {
+        setDragStart({ x: e.clientX, y: e.clientY, type: 'swipe' });
+    } else {
+        deselectAll();
+    }
+  };
 
   const handleElementContextMenu = useCallback((id: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -986,10 +1020,25 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       }
     }
 
-    if (!dragStart || !elementStartPos || !state.selectedElementId || contextMenu.show) return;
+    if (!dragStart || contextMenu.show) return;
 
     const dx = (e.clientX - dragStart.x) / scale;
     const dy = (e.clientY - dragStart.y) / scale;
+
+    if (dragStart.type === 'swipe' && isMobile) {
+        const swipeThreshold = 50;
+        if (dx > swipeThreshold) {
+            setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) }));
+            setDragStart(null);
+        } else if (dx < -swipeThreshold) {
+            setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) }));
+            setDragStart(null);
+        }
+        return;
+    }
+
+    if (!elementStartPos || !state.selectedElementId) return;
+
     if (dragStart.type === 'move') {
       const newX = elementStartPos.x + dx;
       const newY = elementStartPos.y + dy;
@@ -1024,7 +1073,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       if (Math.abs(rotation % 45) < 5) rotation = Math.round(rotation / 45) * 45;
       updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation } });
     }
-  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement, contextMenu.show]);
+  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement, contextMenu.show, isMobile]);
 
   const handlePointerUp = useCallback(() => {
     if (longPressTimer.current) {
@@ -1189,6 +1238,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         }}
       />
 
+      <Share show={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} designId={currentDesignId} />
+
        {!user && !isAuthLoading && (
         <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center gap-8 animate-in fade-in duration-500">
           <div className="text-center space-y-2">
@@ -1264,7 +1315,11 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
               {saveStatus === 'idle' && <Icons.Plus className="w-5 h-5" />}
             </button>
            <button className="p-1.5 bg-gradient-to-tr from-lime-600 to-lime-400 rounded-full text-black hover:rotate-12 transition-all shadow-[0_0_15px_rgba(163,230,53,0.4)]" onClick={() => { setIsAiModalOpen(true); triggerHaptic(10); }}><Icons.Wand2 className="w-4 h-4" /></button>
-           <button className="p-1 text-red-400/60 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
+           {selectedElement ? (
+            <button className="p-1 text-red-400/60 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
+           ) : (
+            <button className="p-1 text-white/60 hover:text-white transition-colors" onClick={() => setIsShareModalOpen(true)}><Icons.Share2 className="w-5 h-5"/></button>
+           )}
         </div>
 
         <div ref={workspaceRef} className="flex-1 flex items-center justify-center relative overflow-hidden">
@@ -1279,7 +1334,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
              />
            ))}
 
-           <div id="design-canvas" ref={canvasRef} onPointerDown={deselectAll} onContextMenu={e => e.preventDefault()} className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center bg-zinc-800 overflow-hidden"
+           <div id="design-canvas" ref={canvasRef} onPointerDown={handleCanvasPointerDown} onContextMenu={e => e.preventDefault()} className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center bg-zinc-800 overflow-hidden"
              style={{ 
                width: CANVAS_WIDTH, height: CANVAS_HEIGHT, transform: `scale(${scale})`,
                backgroundColor: currentPage?.background.startsWith('#') ? currentPage.background : undefined,
@@ -1343,12 +1398,23 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     disabled={isAiLoading}
                     className="w-full bg-white/5 border border-white/10 rounded-2xl h-16 pl-12 pr-14 text-sm focus:outline-none focus:border-lime-400 transition-all placeholder:text-white/20"
                   />
-                  <button onClick={() => aiImageInputRef.current?.click()} disabled={aiAttachedImages.length >= 4} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors disabled:opacity-30">
+                  <button onClick={() => aiImageInputRef.current?.click()} disabled={useImageAsReference ? aiAttachedImages.length >= 1 : aiAttachedImages.length >= 4} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors disabled:opacity-30">
                     <Icons.Paperclip className="w-5 h-5" />
                   </button>
                   <button onClick={handleAiRefine} disabled={isAiLoading} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-zinc-800' : 'bg-lime-400 text-black active:scale-90 hover:shadow-[0_0_15px_rgba(163,230,53,0.5)]'}`}>
                     {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
                   </button>
+                </div>
+                <div className="flex items-center gap-4 mt-4">
+                    <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer">
+                        <input type="checkbox" checked={useImageAsReference} onChange={e => {
+                            setUseImageAsReference(e.target.checked);
+                            if (e.target.checked) {
+                                setAiAttachedImages(prev => prev.slice(0, 1));
+                            }
+                        }} className="form-checkbox h-4 w-4 rounded bg-white/10 text-lime-500 border-white/20 focus:ring-lime-500" />
+                        Use Image as Reference
+                    </label>
                 </div>
                 {aiAttachedImages.length > 0 && (
                   <div className="flex gap-2 mt-3">
@@ -1360,7 +1426,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                         </button>
                       </div>
                     ))}
-                    {aiAttachedImages.length < 4 && (
+                    {aiAttachedImages.length < (useImageAsReference ? 1 : 4) && (
                       <button onClick={() => aiImageInputRef.current?.click()} className="w-14 h-14 rounded-xl border border-dashed border-white/10 flex items-center justify-center text-white/20 hover:text-white/40 hover:border-white/20 transition-colors">
                         <Icons.Plus className="w-5 h-5" />
                       </button>
