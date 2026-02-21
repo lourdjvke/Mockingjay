@@ -222,7 +222,7 @@ const App: React.FC = () => {
   };
 
   const injectFontFace = (name: string, base64: string) => {
-    const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
+    const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
     document.getElementById(styleId)?.remove();
     const style = document.createElement('style');
     style.id = styleId;
@@ -273,7 +273,7 @@ const App: React.FC = () => {
   const handleDeleteCustomFont = useCallback(async (name: string) => {
     try {
       await FontStore.deleteFont(name);
-      const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
+      const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
       document.getElementById(styleId)?.remove();
       setUserFonts(prev => prev.filter(f => f.name !== name));
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(5);
@@ -637,6 +637,29 @@ USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design
     try {
       const apiUrl = '/api/ai';
 
+      const base64Map: { [key: string]: string } = {};
+      let placeholderIndex = 0;
+      const cleansedState = JSON.parse(JSON.stringify(state));
+
+      if (cleansedState.pages && Array.isArray(cleansedState.pages)) {
+        cleansedState.pages.forEach((page: Page) => {
+            if (page.background && typeof page.background === 'string' && page.background.startsWith('data:image')) {
+                const placeholder = `__BASE64_PLACEHOLDER_${placeholderIndex++}__`;
+                base64Map[placeholder] = page.background;
+                page.background = placeholder;
+            }
+            if (page.elements && Array.isArray(page.elements)) {
+                page.elements.forEach((element: DesignElement) => {
+                    if (element.type === 'image' && element.content && typeof element.content === 'string' && element.content.startsWith('data:image')) {
+                        const placeholder = `__BASE64_PLACEHOLDER_${placeholderIndex++}__`;
+                        base64Map[placeholder] = element.content;
+                        element.content = placeholder;
+                    }
+                });
+            }
+        });
+      }
+
       const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer and UI/UX expert.
 Your task is to transform user prompts into complete, high-fidelity design structures.
 ALWAYS generate RICH content with multiple elements. Never generate empty or minimal designs.
@@ -682,7 +705,10 @@ RESPONSE FORMAT:
   "themeColors": ["#color1", "#color2", "#color3", "#color4"]
 }
 
-REMEMBER: Never generate empty pages. Always fill pages with rich, varied content.${aiAttachedImages.length > 0 ? `
+REMEMBER: Never generate empty pages. Always fill pages with rich, varied content.
+The user's current design contains placeholders for images in the format __BASE64_PLACEHOLDER_X__. If you wish to retain an image in the updated design, you must use its corresponding placeholder in the 'content' for image elements or 'background' for pages.
+
+${aiAttachedImages.length > 0 ? `
 
 USER HAS ATTACHED ${aiAttachedImages.length} IMAGE(S). You MUST include them in the design as image elements.
 For each attached image, create an image element with type "image" and set content to the placeholder:
@@ -698,7 +724,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           content: [
             {
               type: "text",
-              text: `${systemInstruction}\\n\\nCurrent Editor State: ${JSON.stringify(state)}\\n\\nUser Request: ${aiPrompt}`
+              text: `${systemInstruction}\n\nCurrent Editor State: ${JSON.stringify(cleansedState)}\n\nUser Request: ${aiPrompt}`
             }
           ]
         }
@@ -739,6 +765,22 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       try {
         const cleanedJson = sanitizeAiJson(textResponse);
         aiState = JSON.parse(cleanedJson);
+        
+        if (aiState.pages && Array.isArray(aiState.pages)) {
+            aiState.pages.forEach((page: any) => {
+                if (page.background && typeof page.background === 'string' && base64Map[page.background]) {
+                    page.background = base64Map[page.background];
+                }
+                if (page.elements && Array.isArray(page.elements)) {
+                    page.elements.forEach((element: any) => {
+                        if (element.content && typeof element.content === 'string' && base64Map[element.content]) {
+                            element.content = base64Map[element.content];
+                        }
+                    });
+                }
+            });
+        }
+
       } catch (parseErr) {
         console.error("JSON parse error:", parseErr, "Raw response:", textResponse);
         throw new Error("Failed to parse AI response as JSON");
@@ -1090,9 +1132,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
       const userFontStyles = document.querySelectorAll('style[id^="font-face-"]');
       let userFontCss = '';
-      userFontStyles.forEach(el => { userFontCss += el.textContent + '\\n'; });
+      userFontStyles.forEach(el => { userFontCss += el.textContent + '\n'; });
       if (userFontCss && fontStyleEl) {
-        fontStyleEl.textContent += '\\n' + userFontCss;
+        fontStyleEl.textContent += '\n' + userFontCss;
       } else if (userFontCss && !fontStyleEl) {
         fontStyleEl = document.createElement('style');
         fontStyleEl.setAttribute('data-export-fonts', 'true');
