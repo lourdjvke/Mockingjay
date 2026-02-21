@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { EditorState, DesignElement, BoundingBox, Page, ElementStyle } from './types.ts';
 import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
@@ -223,7 +222,7 @@ const App: React.FC = () => {
   };
 
   const injectFontFace = (name: string, base64: string) => {
-    const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
+    const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
     document.getElementById(styleId)?.remove();
     const style = document.createElement('style');
     style.id = styleId;
@@ -274,7 +273,7 @@ const App: React.FC = () => {
   const handleDeleteCustomFont = useCallback(async (name: string) => {
     try {
       await FontStore.deleteFont(name);
-      const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
+      const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
       document.getElementById(styleId)?.remove();
       setUserFonts(prev => prev.filter(f => f.name !== name));
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(5);
@@ -370,45 +369,33 @@ const App: React.FC = () => {
     e.target.value = '';
   };
 
-  const fetchWithRetry = async (url: string, payload: any, retries = 5, timeout = 45000): Promise<any> => {
+  const fetchWithRetry = async (url: string, payload: any, retries = 5): Promise<any> => {
     let lastError: any;
     for (let i = 0; i < retries; i++) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
 
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-                signal: controller.signal
-            });
+        if (response.ok) return await response.json();
 
-            clearTimeout(timeoutId);
-
-            if (response.ok) return await response.json();
-
-            const errData = await response.json().catch(() => ({ error: `Request failed with status ${response.status}` }));
-            lastError = new Error(errData.error || `Request failed with status ${response.status}`);
-            
-            if (response.status === 429 || response.status >= 500) {
-                const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
-                await new Promise(res => setTimeout(res, delay));
-                continue;
-            }
-            
-            throw lastError;
-        } catch (err) {
-            clearTimeout(timeoutId);
-            lastError = err;
-            if (err.name === 'AbortError') {
-                lastError = new Error(`Request timed out after ${timeout / 1000} seconds.`);
-            } 
-            if (i === retries - 1) throw lastError;
-            
-            const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
-            await new Promise(res => setTimeout(res, delay));
+        const errData = await response.json();
+        lastError = new Error(errData.error || `Request failed with status ${response.status}`);
+        
+        if (response.status === 429 || response.status >= 500) {
+          const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+          await new Promise(res => setTimeout(res, delay));
+          continue;
         }
+        
+        throw lastError;
+      } catch (err) {
+        lastError = err;
+        if (i === retries - 1) throw lastError;
+        await new Promise(res => setTimeout(res, 1000));
+      }
     }
     throw lastError;
   };
@@ -542,7 +529,7 @@ RESPONSE FORMAT:
   "pages": [ { "id": "page_1", "background": "#colorhex or image_url", "elements": [ { ... } ] } ],
   "currentPageIndex": 0,
   "selectedElementId": null,
-  "themeColors": ["${brandDna.colors.join('", "')}"],
+  "themeColors": ["${brandDna.colors.join('", "')}"]
 }
 
 ${images.length > 0 ? `
@@ -711,7 +698,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           content: [
             {
               type: "text",
-              text: `${systemInstruction}\n\nCurrent Editor State: ${JSON.stringify(state)}\n\nUser Request: ${aiPrompt}`
+              text: `${systemInstruction}\\n\\nCurrent Editor State: ${JSON.stringify(state)}\\n\\nUser Request: ${aiPrompt}`
             }
           ]
         }
@@ -932,16 +919,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     });
   }, [addElement, state.themeColors]);
 
-  const onAddIcon = useCallback((iconName: string) => {
-    addElement({
-      type: 'icon',
-      name: iconName,
-      content: iconName, // Changed from passing the full SVG to just the name
-      style: { color: state.themeColors[0] || '#FFFFFF' },
-      box: { x: (CANVAS_WIDTH - 100) / 2, y: (CANVAS_HEIGHT - 100) / 2, width: 100, height: 100, rotation: 0 }
-    });
-  }, [addElement, state.themeColors]);
-
   const onReorder = useCallback((id: string, direction: 'up' | 'down') => {
     setState(prev => {
       const newPages = [...prev.pages];
@@ -1113,9 +1090,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
       const userFontStyles = document.querySelectorAll('style[id^="font-face-"]');
       let userFontCss = '';
-      userFontStyles.forEach(el => { userFontCss += el.textContent + '\n'; });
+      userFontStyles.forEach(el => { userFontCss += el.textContent + '\\n'; });
       if (userFontCss && fontStyleEl) {
-        fontStyleEl.textContent += '\n' + userFontCss;
+        fontStyleEl.textContent += '\\n' + userFontCss;
       } else if (userFontCss && !fontStyleEl) {
         fontStyleEl = document.createElement('style');
         fontStyleEl.setAttribute('data-export-fonts', 'true');
@@ -1286,7 +1263,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
            >
               {currentPage?.elements.map(el => (
                 <div key={el.id}>
-                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleSelect} onAutoResize={handleAutoResize} onContextMenu={(e) => handleElementContextMenu(el.id, e)} updateElement={updateElement} />
+                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleSelect} onAutoResize={handleAutoResize} onContextMenu={(e) => handleElementContextMenu(el.id, e)} />
                   {state.selectedElementId === el.id && !el.locked && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
                       {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
@@ -1409,7 +1386,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     updateElement={updateElement}
                     onReorder={onReorder}
                     onOpenSidebar={() => setIsBottomSheetOpen(true)}
-                    onAddIcon={onAddIcon}
                     availableFonts={allFonts}
                     themeColors={state.themeColors}
                     onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
@@ -1451,7 +1427,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                   onAddShape={onAddShape}
                   onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); setIsBottomSheetOpen(false); }}
-                  onAddIcon={onAddIcon}
                   onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
                 />
               </div>
@@ -1540,10 +1515,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           onAddCustomFont={handleAddCustomFont}
           onDeleteCustomFont={handleDeleteCustomFont}
           onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
-          onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); }}
+          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
           onAddShape={onAddShape}
-          onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); }}
-          onAddIcon={onAddIcon}
+          onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
           onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
         />
       )}
