@@ -1,6 +1,7 @@
 
-import React, { useRef, useLayoutEffect, useState, useEffect } from 'react';
+import React, { useRef, useLayoutEffect, useState } from 'react';
 import { DesignElement } from '../types';
+import { Icons } from './IconLibrary';
 
 interface ElementRendererProps {
   element: DesignElement;
@@ -9,6 +10,10 @@ interface ElementRendererProps {
   onAutoResize: (id: string, height: number) => void;
   onContextMenu: (e: React.MouseEvent) => void;
   updateElement: (id: string, updates: Partial<DesignElement>) => void;
+}
+
+const toPascalCase = (str: string) => {
+    return str.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
 }
 
 const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, onSelect, onAutoResize, onContextMenu, updateElement }) => {
@@ -91,7 +96,8 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
             clipPath: element.style.clipPath,
         }} />;
      case 'icon':
-        const IconComponent = (Icons as any)[element.content || ''];
+        const iconName = toPascalCase(element.content || '');
+        const IconComponent = (Icons as any)[iconName];
         if (IconComponent) {
             return <div style={sharedStyle}><IconComponent style={{ color: element.style.color, width: '100%', height: '100%' }} /></div>
         }
