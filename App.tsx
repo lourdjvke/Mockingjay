@@ -223,7 +223,7 @@ const App: React.FC = () => {
   };
 
   const injectFontFace = (name: string, base64: string) => {
-    const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
+    const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
     document.getElementById(styleId)?.remove();
     const style = document.createElement('style');
     style.id = styleId;
@@ -274,7 +274,7 @@ const App: React.FC = () => {
   const handleDeleteCustomFont = useCallback(async (name: string) => {
     try {
       await FontStore.deleteFont(name);
-      const styleId = `font-face-${name.replace(/\\s+/g, '-').toLowerCase()}`;
+      const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
       document.getElementById(styleId)?.remove();
       setUserFonts(prev => prev.filter(f => f.name !== name));
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(5);
@@ -542,7 +542,7 @@ RESPONSE FORMAT:
   "pages": [ { "id": "page_1", "background": "#colorhex or image_url", "elements": [ { ... } ] } ],
   "currentPageIndex": 0,
   "selectedElementId": null,
-  "themeColors": ["${brandDna.colors.join('", "')}"]
+  "themeColors": ["${brandDna.colors.join('", "')}"],
 }
 
 ${images.length > 0 ? `
@@ -711,7 +711,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           content: [
             {
               type: "text",
-              text: `${systemInstruction}\\n\\nCurrent Editor State: ${JSON.stringify(state)}\\n\\nUser Request: ${aiPrompt}`
+              text: `${systemInstruction}\n\nCurrent Editor State: ${JSON.stringify(state)}\n\nUser Request: ${aiPrompt}`
             }
           ]
         }
@@ -936,7 +936,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     addElement({
       type: 'icon',
       name: iconName,
-      content: iconName,
+      content: iconName, // Changed from passing the full SVG to just the name
       style: { color: state.themeColors[0] || '#FFFFFF' },
       box: { x: (CANVAS_WIDTH - 100) / 2, y: (CANVAS_HEIGHT - 100) / 2, width: 100, height: 100, rotation: 0 }
     });
@@ -1113,9 +1113,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
       const userFontStyles = document.querySelectorAll('style[id^="font-face-"]');
       let userFontCss = '';
-      userFontStyles.forEach(el => { userFontCss += el.textContent + '\\n'; });
+      userFontStyles.forEach(el => { userFontCss += el.textContent + '\n'; });
       if (userFontCss && fontStyleEl) {
-        fontStyleEl.textContent += '\\n' + userFontCss;
+        fontStyleEl.textContent += '\n' + userFontCss;
       } else if (userFontCss && !fontStyleEl) {
         fontStyleEl = document.createElement('style');
         fontStyleEl.setAttribute('data-export-fonts', 'true');
@@ -1540,9 +1540,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           onAddCustomFont={handleAddCustomFont}
           onDeleteCustomFont={handleDeleteCustomFont}
           onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
-          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
+          onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); }}
           onAddShape={onAddShape}
-          onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
+          onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); }}
           onAddIcon={onAddIcon}
           onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
         />
