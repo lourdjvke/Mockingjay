@@ -1,6 +1,6 @@
+
 import React, { useRef, useLayoutEffect, useState, useEffect } from 'react';
 import { DesignElement } from '../types';
-import ContentEditable from 'react-contenteditable';
 
 interface ElementRendererProps {
   element: DesignElement;
@@ -8,9 +8,10 @@ interface ElementRendererProps {
   onSelect: (id: string, e: React.PointerEvent) => void;
   onAutoResize: (id: string, height: number) => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  updateElement: (id: string, updates: Partial<DesignElement>) => void;
 }
 
-const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, onSelect, onAutoResize, onContextMenu }) => {
+const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, onSelect, onAutoResize, onContextMenu, updateElement }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -23,9 +24,8 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
     }
   }, [element.content, element.box.width, element.style.fontSize, onAutoResize, element.id, element.type]);
 
-  const handleContentChange = (e: any) => {
-    // The logic for updating content is handled by the parent
-    // This just prevents errors
+  const handleContentChange = (e: React.FocusEvent<HTMLDivElement>) => {
+    updateElement(element.id, { content: e.currentTarget.innerHTML });
   };
 
   const handleDoubleClick = () => {
@@ -34,8 +34,9 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
       }
   }
 
-  const handleBlur = () => {
+  const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
       setIsEditing(false);
+      handleContentChange(e);
   }
 
   const renderElement = () => {
@@ -54,10 +55,9 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
     switch (element.type) {
       case 'text':
         return (
-            <ContentEditable
-                html={element.content || ''}
-                disabled={!isEditing}
-                onChange={handleContentChange} // We'll implement proper update logic later
+            <div
+                contentEditable={isEditing}
+                dangerouslySetInnerHTML={{ __html: element.content || '' }}
                 onBlur={handleBlur}
                 style={{
                     ...sharedStyle,
@@ -70,7 +70,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
                     lineHeight: element.style.lineHeight,
                     backgroundColor: element.style.backgroundColor || 'transparent',
                     borderRadius: element.style.borderRadius,
-                    padding: '10px', // Add some padding for better text editing
+                    padding: '10px',
                     outline: isEditing ? '2px solid #bef264' : 'none',
                 }}
             />
@@ -91,10 +91,11 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
             clipPath: element.style.clipPath,
         }} />;
      case 'icon':
-        return <div dangerouslySetInnerHTML={{ __html: element.content || '' }} style={{
-            ...sharedStyle,
-            fill: element.style.color
-        }} />;
+        const IconComponent = (Icons as any)[element.content || ''];
+        if (IconComponent) {
+            return <div style={sharedStyle}><IconComponent style={{ color: element.style.color, width: '100%', height: '100%' }} /></div>
+        }
+        return <div style={sharedStyle}>?</div>;
       default:
         return <div style={sharedStyle}>Unsupported Element</div>;
     }
