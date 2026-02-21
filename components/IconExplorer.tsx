@@ -1,4 +1,4 @@
-'''
+
 import React, { useState, useMemo } from 'react';
 import * as LucideIcons from 'lucide-react';
 
@@ -79,4 +79,3 @@ const IconExplorer: React.FC<IconExplorerProps> = ({ onSelectIcon, onClose, isMo
 };
 
 export default IconExplorer;
-'''
