@@ -11,7 +11,10 @@ interface IconExplorerProps {
 const IconExplorer: React.FC<IconExplorerProps> = ({ onSelectIcon, onClose, isMobile }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const allIconNames = useMemo(() => Object.keys(LucideIcons).filter(key => key !== 'createLucideIcon' && key !== 'icons' && key !== 'AlertTriangle'), []);
+  const allIconNames = useMemo(() => 
+    Object.keys(LucideIcons).filter(key => 
+      LucideIcons[key] && typeof LucideIcons[key] === 'object' && (LucideIcons[key].displayName || LucideIcons[key].render)
+    ), []);
 
   const filteredIcons = useMemo(() => {
     if (!searchTerm) {
@@ -56,6 +59,7 @@ const IconExplorer: React.FC<IconExplorerProps> = ({ onSelectIcon, onClose, isMo
           <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
             {filteredIcons.map(iconName => {
               const IconComponent = LucideIcons[iconName];
+              if (!IconComponent) return null;
               return (
                 <div
                   key={iconName}
@@ -75,3 +79,4 @@ const IconExplorer: React.FC<IconExplorerProps> = ({ onSelectIcon, onClose, isMo
 };
 
 export default IconExplorer;
+'''
