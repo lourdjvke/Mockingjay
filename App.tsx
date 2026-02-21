@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { EditorState, DesignElement, BoundingBox, Page, ElementStyle } from './types.ts';
 import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
@@ -12,6 +13,7 @@ import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
 import ContextMenu from './components/ContextMenu.tsx';
 import QuickTools from './components/QuickTools.tsx';
+import IconExplorer from './components/IconExplorer.tsx';
 
 interface SnapLine {
   type: 'vertical' | 'horizontal';
@@ -42,6 +44,7 @@ const App: React.FC = () => {
   const [isBrandDnaOpen, setIsBrandDnaOpen] = useState(false);
   const [brandData, setBrandData] = useState(null);
   const [contextMenu, setContextMenu] = useState<{ show: boolean; x: number; y: number; }>({ show: false, x: 0, y: 0 });
+  const [isIconExplorerOpen, setIsIconExplorerOpen] = useState(false);
 
   // Firebase and Design-related state
   const [user, setUser] = useState<User | null>(null);
@@ -369,33 +372,45 @@ const App: React.FC = () => {
     e.target.value = '';
   };
 
-  const fetchWithRetry = async (url: string, payload: any, retries = 5): Promise<any> => {
+  const fetchWithRetry = async (url: string, payload: any, retries = 5, timeout = 45000): Promise<any> => {
     let lastError: any;
     for (let i = 0; i < retries; i++) {
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-        if (response.ok) return await response.json();
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: controller.signal
+            });
 
-        const errData = await response.json();
-        lastError = new Error(errData.error || `Request failed with status ${response.status}`);
-        
-        if (response.status === 429 || response.status >= 500) {
-          const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
-          await new Promise(res => setTimeout(res, delay));
-          continue;
+            clearTimeout(timeoutId);
+
+            if (response.ok) return await response.json();
+
+            const errData = await response.json().catch(() => ({ error: `Request failed with status ${response.status}` }));
+            lastError = new Error(errData.error || `Request failed with status ${response.status}`);
+            
+            if (response.status === 429 || response.status >= 500) {
+                const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                await new Promise(res => setTimeout(res, delay));
+                continue;
+            }
+            
+            throw lastError;
+        } catch (err) {
+            clearTimeout(timeoutId);
+            lastError = err;
+            if (err.name === 'AbortError') {
+                lastError = new Error(`Request timed out after ${timeout / 1000} seconds.`);
+            } 
+            if (i === retries - 1) throw lastError;
+            
+            const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+            await new Promise(res => setTimeout(res, delay));
         }
-        
-        throw lastError;
-      } catch (err) {
-        lastError = err;
-        if (i === retries - 1) throw lastError;
-        await new Promise(res => setTimeout(res, 1000));
-      }
     }
     throw lastError;
   };
@@ -919,6 +934,16 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     });
   }, [addElement, state.themeColors]);
 
+  const onAddIcon = useCallback((iconName: string) => {
+    addElement({
+      type: 'icon',
+      name: iconName,
+      content: iconName,
+      style: { color: state.themeColors[0] || '#FFFFFF' },
+      box: { x: (CANVAS_WIDTH - 100) / 2, y: (CANVAS_HEIGHT - 100) / 2, width: 100, height: 100, rotation: 0 }
+    });
+  }, [addElement, state.themeColors]);
+
   const onReorder = useCallback((id: string, direction: 'up' | 'down') => {
     setState(prev => {
       const newPages = [...prev.pages];
@@ -1138,6 +1163,13 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
+      {isIconExplorerOpen && (
+        <IconExplorer
+          onSelectIcon={onAddIcon}
+          onClose={() => setIsIconExplorerOpen(false)}
+          isMobile={isMobile}
+        />
+      )}
       <ContextMenu
         show={contextMenu.show}
         x={contextMenu.x}
@@ -1386,6 +1418,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     updateElement={updateElement}
                     onReorder={onReorder}
                     onOpenSidebar={() => setIsBottomSheetOpen(true)}
+                    onAddIcon={() => setIsIconExplorerOpen(true)}
                     availableFonts={allFonts}
                     themeColors={state.themeColors}
                     onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
@@ -1427,6 +1460,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                   onAddShape={onAddShape}
                   onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); setIsBottomSheetOpen(false); }}
+                  onAddIcon={() => setIsIconExplorerOpen(true)}
                   onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
                 />
               </div>
@@ -1518,6 +1552,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
           onAddShape={onAddShape}
           onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
+          onAddIcon={() => setIsIconExplorerOpen(true)}
           onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
         />
       )}
