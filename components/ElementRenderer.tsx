@@ -10,7 +10,8 @@ interface ElementRendererProps {
     onUpdate: (id: string, updates: Partial<DesignElement>) => void;
 }
 
-const getTextHeight = (element: DesignElement) => {
+// Helper to calculate the required height for a given piece of HTML content
+const getTextHeight = (element: DesignElement, content: string) => {
     const tempDiv = document.createElement('div');
     Object.assign(tempDiv.style, {
         width: `${element.box.width}px`,
@@ -27,8 +28,9 @@ const getTextHeight = (element: DesignElement) => {
         top: '-9999px',
         left: '-9999px',
     });
-    const cleansedContent = (element.content || '').replace(/^(<br\s*\/?>|\s|&nbsp;)+|(<br\s*\/?>|\s|&nbsp;)+$/g, "");
-    tempDiv.innerHTML = cleansedContent || '&nbsp;';
+    // Sanitize the content before measuring to get an accurate height
+    const cleansedContent = content.replace(/^(<br\s*\/?>|\s|&nbsp;)+|(<br\s*\/?>|\s|&nbsp;)+$/g, "");
+    tempDiv.innerHTML = cleansedContent || '&nbsp;'; // Use &nbsp; to ensure height for empty content
     document.body.appendChild(tempDiv);
     const height = tempDiv.scrollHeight;
     document.body.removeChild(tempDiv);
@@ -37,7 +39,10 @@ const getTextHeight = (element: DesignElement) => {
 
 const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, isEditing, onSelect, onUpdate }) => {
     const textRef = useRef<HTMLDivElement>(null);
+    const isEditingRef = useRef(false);
 
+    // CRITICAL: This effect syncs external state (from props) to the editable div,
+    // but it ONLY runs when we are NOT editing. This is the main guard against caret jumping.
     useLayoutEffect(() => {
         const div = textRef.current;
         if (div && !isEditing && div.innerHTML !== element.content) {
@@ -45,34 +50,51 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
         }
     }, [element.content, isEditing]);
 
+    // This effect implements the auto-resizing functionality while the user is typing.
     useEffect(() => {
-        if (element.type === 'text') {
-            const requiredHeight = getTextHeight(element);
-            if (element.box.height < requiredHeight) {
-                onUpdate(element.id, { box: { ...element.box, height: requiredHeight } });
-            }
-        }
-    }, [element.content, element.box.width, element.style]);
+        if (!isEditing || !textRef.current) return;
 
+        const div = textRef.current;
+        const handleInput = () => {
+            const newHeight = getTextHeight(element, div.innerHTML);
+            // We only call onUpdate to adjust the height. The content itself is not updated
+            // in the parent state until blur. This prevents re-renders from killing the caret.
+            if (Math.abs(newHeight - element.box.height) > 1) {
+                onUpdate(element.id, { box: { ...element.box, height: newHeight } });
+            }
+        };
+
+        div.addEventListener('input', handleInput);
+        return () => div.removeEventListener('input', handleInput);
+        
+    }, [isEditing, onUpdate, element]); // Note: `element` dependency is key for `getTextHeight`
+
+    // This effect focuses the div and places the cursor at the end, but only
+    // when we *first* enter editing mode.
     useEffect(() => {
-        if (isEditing && textRef.current) {
+        const justStartedEditing = isEditing && !isEditingRef.current;
+        if (justStartedEditing && textRef.current) {
             textRef.current.focus();
-            const range = document.createRange();
             const sel = window.getSelection();
             if (sel) {
+                const range = document.createRange();
                 range.selectNodeContents(textRef.current);
-                range.collapse(false);
+                range.collapse(false); // collapse to the end
                 sel.removeAllRanges();
                 sel.addRange(range);
             }
         }
+        // Sync our ref with the prop for the next render.
+        isEditingRef.current = isEditing;
     }, [isEditing]);
 
+    // On blur, we finalize the edit. We cleanse the content and send both the
+    // final content and the final height to the parent.
     const handleBlur = () => {
         if (textRef.current && isEditing) {
             const newContent = textRef.current.innerHTML;
             const cleansedContent = newContent.replace(/^(<br\s*\/?>|\s|&nbsp;)+|(<br\s*\/?>|\s|&nbsp;)+$/g, "");
-            const newHeight = getTextHeight({ ...element, content: cleansedContent });
+            const newHeight = getTextHeight(element, cleansedContent);
 
             onUpdate(element.id, {
                 content: cleansedContent,
