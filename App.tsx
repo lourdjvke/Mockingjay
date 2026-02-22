@@ -1459,7 +1459,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
                   </button>
                 </div>
-                <div className="flex items-center justify-between mt-4">
+                {/* <div className="flex items-center justify-between mt-4">
                     <label className="flex items-center cursor-pointer">
                         <div className="relative">
                             <input type="checkbox" className="sr-only" checked={useImageAsReference} onChange={e => {
@@ -1475,7 +1475,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                             Use Image as Reference
                         </div>
                     </label>
-                </div>
+                </div> */}
                 {aiAttachedImages.length > 0 && (
                   <div className="flex gap-2 mt-3">
                     {aiAttachedImages.map((img, i) => (
