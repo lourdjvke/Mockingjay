@@ -60,7 +60,6 @@ const PricingModal = ({ show, onClose, onSelectPlan }) => {
   );
 };
 
-
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>(INITIAL_STATE);
   const [dragStart, setDragStart] = useState<{ x: number, y: number, type: 'move' | 'resize' | 'rotate' | 'swipe', handle?: string, initialAngle?: number } | null>(null);
@@ -84,6 +83,7 @@ const App: React.FC = () => {
   const [brandData, setBrandData] = useState(null);
   const [contextMenu, setContextMenu] = useState<{ show: boolean; x: number; y: number; }>({ show: false, x: 0, y: 0 });
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [editingElementId, setEditingElementId] = useState<string | null>(null);
 
   // Firebase and Design-related state
   const [user, setUser] = useState<User | null>(null);
@@ -100,6 +100,7 @@ const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiImageInputRef = useRef<HTMLInputElement>(null);
   const longPressTimer = useRef<number | null>(null);
+  const lastTap = useRef(0);
 
   const allFonts = [...userFonts, ...BASE_FONTS];
 
@@ -115,7 +116,7 @@ const App: React.FC = () => {
   }, []);
 
   const payWithPaystack = (amountToPay) => {
-    if (!window.PaystackPop) {
+    if (!(window as any).PaystackPop) {
       alert("Paystack SDK not loaded yet. Please wait.");
       return;
     }
@@ -126,7 +127,7 @@ const App: React.FC = () => {
 
     setPaymentLoading(true);
 
-    const handler = window.PaystackPop.setup({
+    const handler = (window as any).PaystackPop.setup({
       key: "pk_live_8bfda55664a1327e5d47c4acc6767c123514b826", // Replace with your public key
       email: user.email,
       amount: amountToPay * 100, // Amount in Kobo
@@ -1046,16 +1047,17 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   const updateElement = useCallback((id: string, updates: Partial<DesignElement>) => {
     setState(prev => {
-      const newPages = [...prev.pages];
-      const page = newPages[prev.currentPageIndex];
-      page.elements = page.elements.map(el => {
-        if (el.id === id) {
-          const newStyle = updates.style ? { ...el.style, ...updates.style } : el.style;
-          return { ...el, ...updates, style: newStyle };
-        }
-        return el;
-      });
-      return { ...prev, pages: newPages };
+        const newPages = [...prev.pages];
+        const page = newPages[prev.currentPageIndex];
+        page.elements = page.elements.map(el => {
+            if (el.id === id) {
+                const newBox = updates.box ? { ...el.box, ...updates.box } : el.box;
+                const newStyle = updates.style ? { ...el.style, ...updates.style } : el.style;
+                return { ...el, ...updates, box: newBox, style: newStyle };
+            }
+            return el;
+        });
+        return { ...prev, pages: newPages };
     });
   }, []);
 
@@ -1072,17 +1074,27 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     const element = currentPage.elements.find(el => el.id === id);
     if (!element) return;
 
-    const wasSelected = state.selectedElementId === id;
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTap.current;
 
-    if (!wasSelected) {
+    if (isMobile && element.type === 'text' && timeSinceLastTap < 300) {
+        setEditingElementId(id);
+        setDragStart(null);
+        return;
+    }
+
+    lastTap.current = now;
+
+    if (state.selectedElementId !== id) {
         setState(prev => ({ ...prev, selectedElementId: id }));
+        setEditingElementId(isMobile ? null : id);
         triggerHaptic(5);
     }
 
-    if (element.locked) return;
+    if (element.locked || (isMobile && editingElementId === id)) return;
 
     if (isMobile) {
-        if (wasSelected) {
+        if (state.selectedElementId === id) {
             setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
             setElementStartPos({ ...element.box });
         }
@@ -1095,7 +1107,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
         setElementStartPos({ ...element.box });
     }
-  }, [state.selectedElementId, currentPage, isMobile, triggerHaptic, contextMenu.show]);
+  }, [state.selectedElementId, currentPage, isMobile, triggerHaptic, editingElementId]);
+
 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
     if (e.target !== e.currentTarget) return;
@@ -1115,7 +1128,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     setDragStart(null);
   }, []);
 
-  const deselectAll = () => setState(prev => ({ ...prev, selectedElementId: null }));
+  const deselectAll = () => {
+      setState(prev => ({ ...prev, selectedElementId: null }));
+      setEditingElementId(null);
+  }
 
   const addElement = useCallback((element: Partial<DesignElement>) => {
     const defaultFont = allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif";
@@ -1281,19 +1297,14 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     };
   }, [handlePointerMove, handlePointerUp]);
 
-  const handleAutoResize = useCallback((id: string, newHeight: number) => {
-    setState(prev => {
-      const newPages = [...prev.pages];
-      const page = newPages[prev.currentPageIndex];
-      page.elements = page.elements.map(el => {
-        if (el.id === id && newHeight > el.box.height) {
-          return { ...el, box: { ...el.box, height: newHeight } };
-        }
-        return el;
-      });
-      return { ...prev, pages: newPages };
+  const handleTextUpdate = (id: string, content: string, newHeight: number) => {
+    const cleansedContent = content.replace(/^(\s*<br\s*\/?>\s*)+|(\s*<br\s*\/?>\s*)+$/g, '');
+    updateElement(id, {
+        content: cleansedContent,
+        box: { ...selectedElement.box, height: newHeight }
     });
-  }, []);
+    setEditingElementId(null);
+  };
 
   const saveToPublicTemplates = async () => {
     if (!canvasRef.current || !currentDesignId) return;
@@ -1592,7 +1603,14 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
            >
               {currentPage?.elements.map(el => (
                 <div key={el.id}>
-                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleElementPointerDown} onAutoResize={handleAutoResize} onContextMenu={(e) => handleElementContextMenu(el.id, e)} />
+                  <ElementRenderer 
+                    element={el} 
+                    isSelected={state.selectedElementId === el.id} 
+                    isEditing={editingElementId === el.id}
+                    onSelect={handleElementPointerDown} 
+                    onUpdate={handleTextUpdate} 
+                    onContextMenu={(e) => handleElementContextMenu(el.id, e)} 
+                  />
                   {state.selectedElementId === el.id && !el.locked && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
                       {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
