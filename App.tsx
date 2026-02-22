@@ -24,7 +24,8 @@ type SaveStatus = 'idle' | 'saving' | 'saved';
 
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>(INITIAL_STATE);
-  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: 'move' | 'resize' | 'rotate' | 'swipe', handle?: string, initialAngle?: number } | null>(null);
+  const [editingElementId, setEditingElementId] = useState<string | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: 'move' | 'resize' | 'rotate' | 'swipe', handle?: string, initialAngle?: number, initialFontSize?: number, initialWidth?: number } | null>(null);
   const [elementStartPos, setElementStartPos] = useState<BoundingBox | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
@@ -58,6 +59,7 @@ const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiImageInputRef = useRef<HTMLInputElement>(null);
   const longPressTimer = useRef<number | null>(null);
+  const clickTimeout = useRef<number | null>(null);
 
   const allFonts = [...userFonts, ...BASE_FONTS];
 
@@ -913,17 +915,24 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   const updateElement = useCallback((id: string, updates: Partial<DesignElement>) => {
     setState(prev => {
-      const newPages = [...prev.pages];
-      const page = newPages[prev.currentPageIndex];
-      page.elements = page.elements.map(el => {
-        if (el.id === id) {
-          const newStyle = updates.style ? { ...el.style, ...updates.style } : el.style;
-          const newBox = updates.box ? { ...el.box, ...updates.box } : el.box;
-          return { ...el, ...updates, style: newStyle, box: newBox };
-        }
-        return el;
-      });
-      return { ...prev, pages: newPages };
+        const newPages = prev.pages.map((page, index) => {
+            if (index !== prev.currentPageIndex) {
+                return page;
+            }
+            return {
+                ...page,
+                elements: page.elements.map(el => {
+                    if (el.id === id) {
+                        const newStyle = updates.style ? { ...el.style, ...updates.style } : el.style;
+                        const newBox = updates.box ? { ...el.box, ...updates.box } : el.box;
+                        return { ...el, ...updates, style: newStyle, box: newBox };
+                    }
+                    return el;
+                })
+            };
+        });
+
+        return { ...prev, pages: newPages };
     });
   }, []);
 
@@ -938,39 +947,51 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   const handleElementPointerDown = useCallback((id: string, e: React.PointerEvent) => {
     e.stopPropagation();
     const element = currentPage.elements.find(el => el.id === id);
-    if (!element) return;
+    if (!element || element.locked) return;
 
-    const wasSelected = state.selectedElementId === id;
-
-    if (!wasSelected) {
-        setState(prev => ({ ...prev, selectedElementId: id }));
-        triggerHaptic(5);
-    }
-
-    if (element.locked) return;
-
-    if (isMobile) {
-        if (wasSelected) {
-            setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
-            setElementStartPos({ ...element.box });
+    if (clickTimeout.current) {
+        // Double click
+        clearTimeout(clickTimeout.current);
+        clickTimeout.current = null;
+        if (element.type === 'text') {
+            setEditingElementId(id);
+            setState(prev => ({ ...prev, selectedElementId: null }));
         }
     } else {
-        longPressTimer.current = window.setTimeout(() => {
-            setContextMenu({ show: true, x: e.clientX, y: e.clientY });
-            setDragStart(null);
-            longPressTimer.current = null;
-        }, 500);
-        setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
-        setElementStartPos({ ...element.box });
+        // Single click
+        clickTimeout.current = window.setTimeout(() => {
+            clickTimeout.current = null;
+            setEditingElementId(null);
+            setState(prev => ({ ...prev, selectedElementId: id }));
+            triggerHaptic(5);
+
+            if (isMobile) {
+                setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
+                setElementStartPos({ ...element.box });
+            } else {
+                longPressTimer.current = window.setTimeout(() => {
+                    setContextMenu({ show: true, x: e.clientX, y: e.clientY });
+                    setDragStart(null);
+                    longPressTimer.current = null;
+                }, 500);
+                setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
+                setElementStartPos({ ...element.box });
+            }
+        }, 250);
     }
-  }, [state.selectedElementId, currentPage, isMobile, triggerHaptic, contextMenu.show]);
+  }, [currentPage, isMobile, triggerHaptic]);
 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
     if (e.target !== e.currentTarget) return;
 
     if (state.selectedElementId) {
-        deselectAll();
-    } else if (isMobile && state.pages.length > 1) {
+        setState(prev => ({ ...prev, selectedElementId: null }));
+    }
+    if (editingElementId) {
+        setEditingElementId(null);
+    }
+    
+    if (isMobile && state.pages.length > 1) {
         setDragStart({ x: e.clientX, y: e.clientY, type: 'swipe' });
     }
   };
@@ -979,11 +1000,15 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     e.preventDefault();
     e.stopPropagation();
     setState(prev => ({ ...prev, selectedElementId: id }));
+    setEditingElementId(null);
     setContextMenu({ show: true, x: e.clientX, y: e.clientY });
     setDragStart(null);
   }, []);
 
-  const deselectAll = () => setState(prev => ({ ...prev, selectedElementId: null }));
+  const deselectAll = () => {
+      setState(prev => ({ ...prev, selectedElementId: null }));
+      setEditingElementId(null);
+  }
 
   const addElement = useCallback((element: Partial<DesignElement>) => {
     const defaultFont = allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif";
@@ -1064,6 +1089,25 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       updateElement(selectedElement.id, { style: { ...selectedElement.style, filter: filterValue } });
   }, [selectedElement, updateElement]);
 
+  const getCursorForHandle = (handle: string): string => {
+      switch (handle) {
+          case 'n':
+          case 's':
+              return 'ns-resize';
+          case 'e':
+          case 'w':
+              return 'ew-resize';
+          case 'nw':
+          case 'se':
+              return 'nwse-resize';
+          case 'ne':
+          case 'sw':
+              return 'nesw-resize';
+          default:
+              return 'auto';
+      }
+  };
+
   const handlePointerMove = useCallback((e: PointerEvent) => {
     if (dragStart && longPressTimer.current) {
       const dx = e.clientX - dragStart.x;
@@ -1093,6 +1137,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     }
 
     if (!elementStartPos || !state.selectedElementId) return;
+    const element = currentPage.elements.find(el => el.id === state.selectedElementId);
+    if (!element) return;
 
     if (dragStart.type === 'move') {
       const newX = elementStartPos.x + dx;
@@ -1111,13 +1157,40 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     } else if (dragStart.type === 'resize' && dragStart.handle) {
       const h = dragStart.handle;
       let { x, y, width, height } = elementStartPos;
-      if (h.includes('e')) width += dx;
-      if (h.includes('w')) { width -= dx; x += dx; }
-      if (h.includes('s')) height += dy;
-      if (h.includes('n')) { height -= dy; y += dy; }
-      width = Math.max(10, width);
-      height = Math.max(10, height);
-      updateElement(state.selectedElementId, { box: { ...elementStartPos, x, y, width, height } });
+      
+      if (element.type === 'text') {
+          if (h.length === 2) { // Corner resize
+              let newWidth = width;
+              if (h.includes('e')) newWidth += dx;
+              if (h.includes('w')) newWidth -= dx;
+              
+              const scaleFactor = newWidth / (dragStart.initialWidth || width);
+              const newFontSize = Math.max(8, (dragStart.initialFontSize || element.style.fontSize || 24) * scaleFactor);
+              
+              if (h.includes('w')) x = elementStartPos.x + elementStartPos.width - newWidth;
+              if (h.includes('n')) y = elementStartPos.y + elementStartPos.height - height; // Height is auto
+
+              updateElement(element.id, {
+                  box: { ...element.box, width: newWidth, x },
+                  style: { ...element.style, fontSize: newFontSize },
+              });
+          } else { // Side resize (e, w)
+              let newWidth = width;
+              if (h.includes('e')) newWidth += dx;
+              if (h.includes('w')) { newWidth -= dx; x += dx; }
+              newWidth = Math.max(50, newWidth); 
+              updateElement(element.id, { box: { ...element.box, x, width: newWidth } });
+          }
+      } else {
+          if (h.includes('e')) width += dx;
+          if (h.includes('w')) { width -= dx; x += dx; }
+          if (h.includes('s')) height += dy;
+          if (h.includes('n')) { height -= dy; y += dy; }
+          width = Math.max(10, width);
+          height = Math.max(10, height);
+          updateElement(state.selectedElementId, { box: { ...elementStartPos, x, y, width, height } });
+      }
+
     } else if (dragStart.type === 'rotate') {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
@@ -1128,7 +1201,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       if (Math.abs(rotation % 45) < 5) rotation = Math.round(rotation / 45) * 45;
       updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation } });
     }
-  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement, contextMenu.show, isMobile]);
+  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement, contextMenu.show, isMobile, currentPage]);
 
   const handlePointerUp = useCallback(() => {
     if (longPressTimer.current) {
@@ -1441,18 +1514,29 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
            >
               {currentPage?.elements.map(el => (
                 <div key={el.id}>
-                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleElementPointerDown} updateElement={updateElement} onContextMenu={(e) => handleElementContextMenu(el.id, e)} />
+                  <ElementRenderer 
+                    element={el} 
+                    isSelected={state.selectedElementId === el.id} 
+                    isEditing={editingElementId === el.id}
+                    onSelect={handleElementPointerDown} 
+                    updateElement={updateElement} 
+                    onContextMenu={(e) => handleElementContextMenu(el.id, e)} 
+                  />
                   {state.selectedElementId === el.id && !el.locked && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
                       {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
-                        let s: React.CSSProperties = {};
-                        if (h === 'nw') s = { top: '-12px', left: '-12px' }; if (h === 'ne') s = { top: '-12px', right: '-12px' };
-                        if (h === 'sw') s = { bottom: '-12px', left: '-12px' }; if (h === 'se') s = { bottom: '-12px', right: '-12px' };
-                        if (h === 'n') s = { top: '-12px', left: '50%', transform: 'translateX(-50%)' }; if (h === 's') s = { bottom: '-12px', left: '50%', transform: 'translateX(-50%)' };
-                        if (h === 'e') s = { right: '-12px', top: '50%', transform: 'translateY(-50%)' }; if (h === 'w') s = { left: '-12px', top: '50%', transform: 'translateY(-50%)' };
+                        let s: React.CSSProperties = { cursor: getCursorForHandle(h) };
+                        if (h === 'nw') { s.top = '-12px'; s.left = '-12px' }; 
+                        if (h === 'ne') { s.top = '-12px'; s.right = '-12px' };
+                        if (h === 'sw') { s.bottom = '-12px'; s.left = '-12px' }; 
+                        if (h === 'se') { s.bottom = '-12px'; s.right = '-12px' };
+                        if (h === 'n') { s.top = '-12px'; s.left = '50%'; s.transform = 'translateX(-50%)' }; 
+                        if (h === 's') { s.bottom = '-12px'; s.left = '50%'; s.transform = 'translateX(-50%)' };
+                        if (h === 'e') { s.right = '-12px'; s.top = '50%'; s.transform = 'translateY(-50%)' }; 
+                        if (h === 'w') { s.left = '-12px'; s.top = '50%'; s.transform = 'translateY(-50%)' };
                         const isC = h.length === 2;
                         return (
-                          <div key={h} onPointerDown={(e) => { e.stopPropagation(); setDragStart({ x: e.clientX, y: e.clientY, type: 'resize', handle: h }); setElementStartPos({...el.box}); triggerHaptic(5); }}
+                          <div key={h} onPointerDown={(e) => { e.stopPropagation(); setDragStart({ x: e.clientX, y: e.clientY, type: 'resize', handle: h, initialFontSize: el.style.fontSize || 24, initialWidth: el.box.width }); setElementStartPos({...el.box}); triggerHaptic(5); }}
                             style={s} className={`absolute bg-white border-2 border-lime-400 pointer-events-auto shadow-lg ${isC ? 'w-6 h-6 rounded-full' : 'w-10 h-3 rounded-sm'} z-50 hover:scale-110 transition-transform`}
                           />
                         );
