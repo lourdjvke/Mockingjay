@@ -107,7 +107,6 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
                         contentEditable={isEditing}
                         suppressContentEditableWarning={true}
                         onBlur={handleBlur}
-                        onPointerDown={(e) => e.stopPropagation()}
                         style={{
                             width: '100%',
                             height: '100%',
