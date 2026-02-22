@@ -918,7 +918,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       page.elements = page.elements.map(el => {
         if (el.id === id) {
           const newStyle = updates.style ? { ...el.style, ...updates.style } : el.style;
-          return { ...el, ...updates, style: newStyle };
+          const newBox = updates.box ? { ...el.box, ...updates.box } : el.box;
+          return { ...el, ...updates, style: newStyle, box: newBox };
         }
         return el;
       });
@@ -1147,20 +1148,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       window.removeEventListener('pointerup', handlePointerUp);
     };
   }, [handlePointerMove, handlePointerUp]);
-
-  const handleAutoResize = useCallback((id: string, newHeight: number) => {
-    setState(prev => {
-      const newPages = [...prev.pages];
-      const page = newPages[prev.currentPageIndex];
-      page.elements = page.elements.map(el => {
-        if (el.id === id && newHeight > el.box.height) {
-          return { ...el, box: { ...el.box, height: newHeight } };
-        }
-        return el;
-      });
-      return { ...prev, pages: newPages };
-    });
-  }, []);
 
   const saveToPublicTemplates = async () => {
     if (!canvasRef.current || !currentDesignId) return;
@@ -1454,7 +1441,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
            >
               {currentPage?.elements.map(el => (
                 <div key={el.id}>
-                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleElementPointerDown} onAutoResize={handleAutoResize} onContextMenu={(e) => handleElementContextMenu(el.id, e)} />
+                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleElementPointerDown} updateElement={updateElement} onContextMenu={(e) => handleElementContextMenu(el.id, e)} />
                   {state.selectedElementId === el.id && !el.locked && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
                       {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
