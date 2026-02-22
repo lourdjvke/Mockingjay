@@ -7,7 +7,7 @@ import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
 import BrandDna from './components/BrandDna.tsx';
 import { domToPng } from 'modern-screenshot';
-import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove } from './firebase.ts';
+import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove, update } from './firebase.ts';
 import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
 import ContextMenu from './components/ContextMenu.tsx';
@@ -21,6 +21,21 @@ interface SnapLine {
 
 type ExportStatus = 'idle' | 'processing' | 'success' | 'error';
 type SaveStatus = 'idle' | 'saving' | 'saved';
+
+const AI_COST = 150;
+const PAYSTACK_PUBLIC_KEY = 'pk_live_8bfda55664a1327e5d47c4acc6767c123514b826';
+
+const PRICING_OPTIONS = [
+    { amount: 500, credits: 500, label: "Basic" },
+    { amount: 1000, credits: 1200, label: "Standard" },
+    { amount: 3500, credits: 4000, label: "Premium" },
+];
+
+declare global {
+    interface Window {
+        PaystackPop: any;
+    }
+}
 
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>(INITIAL_STATE);
@@ -53,6 +68,7 @@ const App: React.FC = () => {
   const [designs, setDesigns] = useState<any[]>([]);
   const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [ugCredit, setUgCredit] = useState(0);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -99,6 +115,12 @@ const App: React.FC = () => {
     }
   }, [state, user, currentDesignId, isAuthLoading, debouncedSave]);
 
+    useEffect(() => {
+        const script = document.createElement("script");
+        script.src = "https://js.paystack.co/v1/inline.js";
+        document.body.appendChild(script);
+    }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
@@ -107,6 +129,7 @@ const App: React.FC = () => {
         setState(INITIAL_STATE);
         setCurrentDesignId(null);
         setDesigns([]);
+        setUgCredit(0);
       }
     });
     return () => unsubscribe();
@@ -115,19 +138,29 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!user) {
       setDesigns([]);
+      setUgCredit(0);
       return;
     }
     const designsRef = ref(database, `users/${user.uid}/designs`);
-    const unsubscribe = onValue(designsRef, (snapshot) => {
+    const creditRef = ref(database, `users/${user.uid}/ugcredit`);
+
+    const designsUnsubscribe = onValue(designsRef, (snapshot) => {
       const data = snapshot.val();
       const userDesigns = data
-        ? Object.keys(data)
-          .map(key => ({ id: key, ...data[key] }))
-          .sort((a, b) => b.lastModified - a.lastModified)
+        ? Object.keys(data).map(key => ({ id: key, ...data[key] })).sort((a, b) => b.lastModified - a.lastModified)
         : [];
       setDesigns(userDesigns);
     });
-    return () => unsubscribe();
+
+    const creditUnsubscribe = onValue(creditRef, (snapshot) => {
+        const credit = snapshot.val();
+        setUgCredit(typeof credit === 'number' ? credit : 0);
+    });
+
+    return () => {
+        designsUnsubscribe();
+        creditUnsubscribe();
+    }
   }, [user]);
 
   useEffect(() => {
@@ -164,6 +197,29 @@ const App: React.FC = () => {
       alert("Could not sign in with Google. Please try again.");
     }
   };
+
+  const handlePurchase = (amount: number, credits: number) => {
+    if (!user || !window.PaystackPop) return;
+
+    const paystack = new window.PaystackPop();
+    paystack.newTransaction({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: user.email,
+        amount: amount * 100, // Amount in kobo
+        currency: 'NGN',
+        ref: 'ug-' + generateId(),
+        onSuccess: async () => {
+            const userRef = ref(database, `users/${user.uid}`);
+            const snapshot = await get(child(userRef, 'ugcredit'));
+            const currentCredit = snapshot.val() || 0;
+            await set(child(userRef, 'ugcredit'), currentCredit + credits);
+            alert('Purchase successful! Your credits have been added.');
+        },
+        onCancel: () => {
+            alert('Transaction was cancelled.');
+        }
+    });
+  }
 
   const createNewDesign = useCallback(() => {
     const newId = generateId();
@@ -502,6 +558,10 @@ const App: React.FC = () => {
   }, [allFonts]);
 
   const handleGenerateCampaign = async (brandDna, prompt, tags, images) => {
+    if (ugCredit < AI_COST) {
+        alert('You have insufficient credits to perform this action.');
+        return;
+    }
     setIsBrandDnaOpen(false);
     setIsAiLoading(true);
     triggerHaptic(30);
@@ -656,6 +716,10 @@ USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design
         aiPrompt: prompt,
       };
 
+      const newCredit = (ugCredit || 0) - AI_COST;
+      const creditRef = ref(database, `users/${user.uid}/ugcredit`);
+      await set(creditRef, newCredit);
+
       setState(newState);
       const newId = generateId();
       setCurrentDesignId(newId);
@@ -670,6 +734,10 @@ USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design
   };
 
   const handleAiRefine = async () => {
+    if (ugCredit < AI_COST) {
+        alert('You have insufficient credits to perform this action.');
+        return;
+    }
     if (!aiPrompt.trim() && aiAttachedImages.length === 0) return;
     setIsAiLoading(true);
     triggerHaptic(30);
@@ -887,6 +955,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
       const pageAdded = newState.pages.length > state.pages.length;
       const targetPageIndex = pageAdded ? newState.pages.length - 1 : (newState.currentPageIndex || 0);
+
+      const newCredit = (ugCredit || 0) - AI_COST;
+      const creditRef = ref(database, `users/${user.uid}/ugcredit`);
+      await set(creditRef, newCredit);
 
       setState({
         ...newState,
@@ -1377,6 +1449,13 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
+       <style>{`
+        @keyframes shimmer {
+          100% {
+            transform: translateX(100%);
+          }
+        }
+      `}</style>
       <ContextMenu
         show={contextMenu.show}
         x={contextMenu.x}
@@ -1559,72 +1638,84 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         {isAiModalOpen && (
           <div className="absolute inset-x-0 bottom-0 z-[200] p-4 animate-in slide-in-from-bottom duration-500">
              <div className="bg-lime-900/40 backdrop-blur-3xl border border-lime-400/30 rounded-[24px] p-6 md:p-8 shadow-[0_40px_100px_rgba(0,0,0,0.9)]">
-                <div className="flex items-center gap-3 mb-6">
-                   <div className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.4)]">
-                      <Icons.Wand2 className="w-5 h-5 text-black" />
+                <div className="flex items-center justify-between gap-3 mb-6">
+                   <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.4)]">
+                            <Icons.Wand2 className="w-5 h-5 text-black" />
+                        </div>
+                        <div className="space-y-0.5">
+                            <h3 className="text-xs md:text-sm font-black uppercase tracking-widest text-white italic">Mockingjay Intelligence</h3>
+                            <p className="text-white/40 text-[8px] md:text-[9px] font-bold uppercase tracking-widest">Global Design Engine v3.1</p>
+                        </div>
                    </div>
-                   <div className="space-y-0.5">
-                      <h3 className="text-xs md:text-sm font-black uppercase tracking-widest text-white italic">Mockingjay Intelligence</h3>
-                      <p className="text-white/40 text-[8px] md:text-[9px] font-bold uppercase tracking-widest">Global Design Engine v3.1</p>
+                   <div className="flex items-center gap-2 bg-black/20 border border-white/10 px-4 py-2 rounded-full">
+                        <Icons.Sparkles className="w-4 h-4 text-lime-400" />
+                        <span className="text-lg font-bold text-white">{ugCredit}</span>
                    </div>
                 </div>
-                <input type="file" ref={aiImageInputRef} className="hidden" accept="image/*" multiple onChange={handleAiImageAttach} />
-                <div className="relative">
-                  <input 
-                    autoFocus
-                    placeholder={useImageAsReference ? 'Describe the style or content to recreate...' : 'e.g., \'Advertise my noodle brand\''}
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAiRefine()}
-                    disabled={isAiLoading}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl h-16 pl-12 pr-14 text-sm focus:outline-none focus:border-lime-400 transition-all placeholder:text-white/20"
-                  />
-                  <button onClick={() => aiImageInputRef.current?.click()} disabled={useImageAsReference ? aiAttachedImages.length >= 1 : aiAttachedImages.length >= 4} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors disabled:opacity-30">
-                    <Icons.Paperclip className="w-5 h-5" />
-                  </button>
-                  <button onClick={handleAiRefine} disabled={isAiLoading || (useImageAsReference && aiAttachedImages.length === 0)} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-zinc-800' : 'bg-lime-400 text-black active:scale-90 hover:shadow-[0_0_15px_rgba(163,230,53,0.5)]'} disabled:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed`}>
-                    {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
-                  </button>
-                </div>
-                {/* <div className="flex items-center justify-between mt-4">
-                    <label className="flex items-center cursor-pointer">
+                {ugCredit < AI_COST ? (
+                    <div className="text-center">
+                        <h4 className="text-white font-bold text-lg mb-2">You need more tokens!</h4>
+                        <p className="text-white/50 text-sm mb-6">Each AI generation costs {AI_COST} tokens. Please top up to continue.</p>
+                        <div className="grid md:grid-cols-3 gap-4">
+                            {PRICING_OPTIONS.map(opt => (
+                                <button 
+                                    key={opt.amount}
+                                    onClick={() => handlePurchase(opt.amount, opt.credits)}
+                                    className="relative overflow-hidden w-full p-5 bg-zinc-800/80 rounded-2xl border border-white/10 text-left transition-all hover:border-lime-400/50 hover:bg-zinc-800/50 active:scale-95 group"
+                                >
+                                    <span className="absolute top-0 left-0 -translate-x-full w-full h-full bg-gradient-to-r from-transparent via-lime-400/30 to-transparent animate-[shimmer_2.5s_infinite] group-hover:animate-[shimmer_2s_infinite]" />
+                                    <div className="text-sm text-white/50 font-bold uppercase tracking-widest">{opt.label}</div>
+                                    <div className="text-3xl text-white font-bold my-1">{opt.credits.toLocaleString()} <span className="text-lg text-lime-400">Tokens</span></div>
+                                    <div className="text-lg text-white/80 font-bold">₦{opt.amount.toLocaleString()}</div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <input type="file" ref={aiImageInputRef} className="hidden" accept="image/*" multiple onChange={handleAiImageAttach} />
                         <div className="relative">
-                            <input type="checkbox" className="sr-only" checked={useImageAsReference} onChange={e => {
-                                setUseImageAsReference(e.target.checked);
-                                if (e.target.checked) {
-                                    setAiAttachedImages(prev => prev.slice(0, 1));
-                                }
-                            }} />
-                            <div className={`block w-10 h-5 rounded-full transition-colors ${useImageAsReference ? 'bg-lime-400' : 'bg-zinc-700'}`}></div>
-                            <div className={`dot absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform ${useImageAsReference ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                        </div>
-                        <div className="ml-3 text-xs text-white/50 font-medium">
-                            Use Image as Reference
-                        </div>
-                    </label>
-                </div> */}
-                {aiAttachedImages.length > 0 && (
-                  <div className="flex gap-2 mt-3">
-                    {aiAttachedImages.map((img, i) => (
-                      <div key={i} className="relative w-14 h-14 rounded-xl overflow-hidden border border-white/10 group">
-                        <img src={img} alt={`Attachment ${i + 1}`} className="w-full h-full object-cover" />
-                        <button onClick={() => setAiAttachedImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Icons.X className="w-4 h-4 text-white" />
+                        <input 
+                            autoFocus
+                            placeholder={useImageAsReference ? 'Describe the style or content to recreate...' : 'e.g., \'Advertise my noodle brand\''}
+                            value={aiPrompt}
+                            onChange={(e) => setAiPrompt(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAiRefine()}
+                            disabled={isAiLoading}
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl h-16 pl-12 pr-14 text-sm focus:outline-none focus:border-lime-400 transition-all placeholder:text-white/20"
+                        />
+                        <button onClick={() => aiImageInputRef.current?.click()} disabled={useImageAsReference ? aiAttachedImages.length >= 1 : aiAttachedImages.length >= 4} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors disabled:opacity-30">
+                            <Icons.Paperclip className="w-5 h-5" />
                         </button>
-                      </div>
-                    ))}
-                    {aiAttachedImages.length < (useImageAsReference ? 1 : 4) && (
-                      <button onClick={() => aiImageInputRef.current?.click()} className="w-14 h-14 rounded-xl border border-dashed border-white/10 flex items-center justify-center text-white/20 hover:text-white/40 hover:border-white/20 transition-colors">
-                        <Icons.Plus className="w-5 h-5" />
-                      </button>
-                    )}
-                  </div>
+                        <button onClick={handleAiRefine} disabled={isAiLoading || (useImageAsReference && aiAttachedImages.length === 0)} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-zinc-800' : 'bg-lime-400 text-black active:scale-90 hover:shadow-[0_0_15px_rgba(163,230,53,0.5)]'} disabled:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed`}>
+                            {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
+                        </button>
+                        </div>
+                        {aiAttachedImages.length > 0 && (
+                        <div className="flex gap-2 mt-3">
+                            {aiAttachedImages.map((img, i) => (
+                            <div key={i} className="relative w-14 h-14 rounded-xl overflow-hidden border border-white/10 group">
+                                <img src={img} alt={`Attachment ${i + 1}`} className="w-full h-full object-cover" />
+                                <button onClick={() => setAiAttachedImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Icons.X className="w-4 h-4 text-white" />
+                                </button>
+                            </div>
+                            ))}
+                            {aiAttachedImages.length < (useImageAsReference ? 1 : 4) && (
+                            <button onClick={() => aiImageInputRef.current?.click()} className="w-14 h-14 rounded-xl border border-dashed border-white/10 flex items-center justify-center text-white/20 hover:text-white/40 hover:border-white/20 transition-colors">
+                                <Icons.Plus className="w-5 h-5" />
+                            </button>
+                            )}
+                        </div>
+                        )}
+                        <div className="mt-6 flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                        {['Poster for a film festival', 'Minimalist clothing brand ad', 'Vibrant gig poster style', 'Luxury brand announcement', 'Vintage typography layout'].map(s => (
+                            <button key={s} onClick={() => setAiPrompt(s)} className="shrink-0 bg-white/5 border border-white/5 px-5 py-2.5 rounded-full text-[10px] font-bold uppercase hover:bg-white/10 hover:border-white/20 transition-all text-white/60 hover:text-white">{s}</button>
+                        ))}
+                        </div>
+                    </>
                 )}
-                <div className="mt-6 flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                   {['Poster for a film festival', 'Minimalist clothing brand ad', 'Vibrant gig poster style', 'Luxury brand announcement', 'Vintage typography layout'].map(s => (
-                     <button key={s} onClick={() => setAiPrompt(s)} className="shrink-0 bg-white/5 border border-white/5 px-5 py-2.5 rounded-full text-[10px] font-bold uppercase hover:bg-white/10 hover:border-white/20 transition-all text-white/60 hover:text-white">{s}</button>
-                   ))}
-                </div>
                 <button onClick={() => { setIsAiModalOpen(false); setAiAttachedImages([]); }} className="w-full mt-8 text-[10px] font-black uppercase text-white/20 hover:text-white/60 transition-colors tracking-[0.4em]">Abort Engine Session</button>
              </div>
           </div>
