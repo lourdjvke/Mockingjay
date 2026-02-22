@@ -1,20 +1,19 @@
 import React, { useRef, useEffect, useLayoutEffect } from 'react';
-import { DesignElement } from '../types';
+import { DesignElement, BoundingBox } from '../types';
 import { Icons } from './IconLibrary';
 
 interface ElementRendererProps {
     element: DesignElement;
-    isSelected: boolean;
     isEditing: boolean;
     onSelect: (id: string, e: React.PointerEvent<HTMLDivElement>) => void;
-    onUpdate: (id: string, updates: Partial<DesignElement>) => void;
+    onFinishEdit: (id: string, updates: Partial<DesignElement>) => void;
 }
 
-// Helper to calculate the required height for a given piece of HTML content
-const getTextHeight = (element: DesignElement, content: string) => {
+// This utility calculates the required height for a given piece of HTML content and element style.
+const getTextHeight = (element: DesignElement, content: string, width: number) => {
     const tempDiv = document.createElement('div');
     Object.assign(tempDiv.style, {
-        width: `${element.box.width}px`,
+        width: `${width}px`,
         padding: '10px',
         boxSizing: 'border-box',
         fontFamily: element.style.fontFamily || 'inherit',
@@ -28,21 +27,21 @@ const getTextHeight = (element: DesignElement, content: string) => {
         top: '-9999px',
         left: '-9999px',
     });
-    // Sanitize the content before measuring to get an accurate height
     const cleansedContent = content.replace(/^(<br\s*\/?>|\s|&nbsp;)+|(<br\s*\/?>|\s|&nbsp;)+$/g, "");
-    tempDiv.innerHTML = cleansedContent || '&nbsp;'; // Use &nbsp; to ensure height for empty content
+    tempDiv.innerHTML = cleansedContent || '&nbsp;';
     document.body.appendChild(tempDiv);
     const height = tempDiv.scrollHeight;
     document.body.removeChild(tempDiv);
     return height;
 };
 
-const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, isEditing, onSelect, onUpdate }) => {
-    const textRef = useRef<HTMLDivElement>(null);
+const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isEditing, onSelect, onFinishEdit }) => {
+    const containerRef = useRef<HTMLDivElement>(null); // Ref for the main container div
+    const textRef = useRef<HTMLDivElement>(null);      // Ref for the contentEditable div
     const isEditingRef = useRef(false);
 
-    // CRITICAL: This effect syncs external state (from props) to the editable div,
-    // but it ONLY runs when we are NOT editing. This is the main guard against caret jumping.
+    // This effect syncs the editable div's content from props, but ONLY when not editing.
+    // This prevents external changes from overriding the user's typing.
     useLayoutEffect(() => {
         const div = textRef.current;
         if (div && !isEditing && div.innerHTML !== element.content) {
@@ -50,24 +49,29 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
         }
     }, [element.content, isEditing]);
 
-    // This effect implements the auto-resizing functionality while the user is typing.
+    // This is the auto-resizing effect. It runs ONLY when editing starts.
     useEffect(() => {
-        if (!isEditing || !textRef.current) return;
+        if (!isEditing || !textRef.current || !containerRef.current) return;
 
-        const div = textRef.current;
+        const textDiv = textRef.current;
+        const containerDiv = containerRef.current;
+
         const handleInput = () => {
-            const newHeight = getTextHeight(element, div.innerHTML);
-            // We only call onUpdate to adjust the height. The content itself is not updated
-            // in the parent state until blur. This prevents re-renders from killing the caret.
-            if (Math.abs(newHeight - element.box.height) > 1) {
-                onUpdate(element.id, { box: { ...element.box, height: newHeight } });
+            // On every input, calculate the new required height.
+            const newHeight = getTextHeight(element, textDiv.innerHTML, element.box.width);
+
+            // Directly manipulate the DOM to change the container's height. 
+            // This is imperative and breaks out of the React render cycle, which is
+            // CRITICAL to preventing the caret jump. No setState is called here.
+            if (Math.abs(newHeight - containerDiv.offsetHeight) > 1) {
+                containerDiv.style.height = `${newHeight}px`;
             }
         };
 
-        div.addEventListener('input', handleInput);
-        return () => div.removeEventListener('input', handleInput);
+        textDiv.addEventListener('input', handleInput);
+        return () => textDiv.removeEventListener('input', handleInput);
         
-    }, [isEditing, onUpdate, element]); // Note: `element` dependency is key for `getTextHeight`
+    }, [isEditing, element]); // Dependency on `element` is safe here, as it only runs once on edit start.
 
     // This effect focuses the div and places the cursor at the end, but only
     // when we *first* enter editing mode.
@@ -84,21 +88,22 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
                 sel.addRange(range);
             }
         }
-        // Sync our ref with the prop for the next render.
         isEditingRef.current = isEditing;
     }, [isEditing]);
 
-    // On blur, we finalize the edit. We cleanse the content and send both the
-    // final content and the final height to the parent.
+    // When the user clicks away, finalize the edit.
     const handleBlur = () => {
-        if (textRef.current && isEditing) {
-            const newContent = textRef.current.innerHTML;
-            const cleansedContent = newContent.replace(/^(<br\s*\/?>|\s|&nbsp;)+|(<br\s*\/?>|\s|&nbsp;)+$/g, "");
-            const newHeight = getTextHeight(element, cleansedContent);
+        if (textRef.current && containerRef.current && isEditing) {
+            const finalContent = textRef.current.innerHTML;
+            const cleansedContent = finalContent.replace(/^(<br\s*\/?>|\s|&nbsp;)+|(<br\s*\/?>|\s|&nbsp;)+$/g, "");
+            
+            // Get the final height directly from the DOM node.
+            const finalHeight = containerRef.current.offsetHeight;
 
-            onUpdate(element.id, {
+            // Call the parent with the complete, final update. This is the ONLY update sent.
+            onFinishEdit(element.id, {
                 content: cleansedContent,
-                box: { ...element.box, height: newHeight },
+                box: { ...element.box, height: finalHeight },
             });
         }
     };
@@ -154,6 +159,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
 
     return (
         <div
+            ref={containerRef} // Attach ref to the container
             style={containerStyle}
             onPointerDown={(e) => onSelect(element.id, e)}
         >
