@@ -83,21 +83,9 @@ export const Icons = {
       <line x1="14" y1="11" x2="14" y2="17"></line>
     </svg>
   ),
-  Wand2: (props: React.SVGProps<SVGSVGElement>) => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.71 0L11.5 9.51l8.84 8.84 7.11-7.11a1.21 1.21 0 0 0 0-1.71l-1.28-1.28zM12 12l-2-2"></path>
-      <path d="M9 9 2.16 2.16a1.21 1.21 0 0 0-1.71 0L.29 2.32a1.21 1.21 0 0 0 0 1.71l8.13 8.13"></path>
-      <path d="M14 4 4 14"></path>
-      <path d="M15 11h.01"></path>
-      <path d="M11 15h.01"></path>
-      <path d="M6 20h.01"></path>
-      <path d="M20 6h.01"></path>
-    </svg>
-  ),
-  Sparkles: (props: React.SVGProps<SVGSVGElement>) => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <path d="m12 3-1.16 4.34-4.34 1.16 4.34 1.16L12 14l1.16-4.34 4.34-1.16-4.34-1.16L12 3z"/>
-        <path d="M3.5 15.5.5 16l3 3.5 1-3.5-3-1zm16-7L16.5.5l-1 3 3.5 3 1-3.5z"/>
+  Magic: (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M.827 6.533L5.011 5.01L6.533.827a.497.497 0 0 1 .934 0L8.99 5.011l4.184 1.522a.497.497 0 0 1 0 .934L8.989 8.99l-1.522 4.184a.497.497 0 0 1-.934 0L5.01 8.989L.827 7.467a.497.497 0 0 1 0-.934"/>
     </svg>
   ),
   Undo2: (props: React.SVGProps<SVGSVGElement>) => (
