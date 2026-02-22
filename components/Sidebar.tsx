@@ -53,7 +53,6 @@ interface SidebarProps {
   onAddText: (type: 'Header' | 'Subheader' | 'Paragraph') => void;
   onAddShape: (type: string) => void;
   onAddImage: (src: string) => void;
-  onColorChange: (color: string) => void;
   onReorder: (id: string, direction: 'up' | 'down') => void;
   onAddCustomFont: (name: string, data: ArrayBuffer) => void;
   onDeleteCustomFont: (name: string) => void;
@@ -82,7 +81,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   onAddText,
   onAddShape,
   onAddImage,
-  onColorChange,
   onReorder,
   onAddCustomFont,
   onDeleteCustomFont,
@@ -116,8 +114,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleColorClick = (color: string) => {
+    if (!selectedElement) return;
     triggerHaptic(5);
-    onColorChange(color);
+    const propertyToUpdate = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor';
+    updateElement(selectedElement.id, { style: { ...selectedElement.style, [propertyToUpdate]: color } });
   };
 
   const handleAddColor = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -169,6 +169,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'star', label: 'Star', icon: <div className="w-5 h-5 bg-white/20" style={{ clipPath: 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)' }} /> },
     { id: 'parallelogram', label: 'Para', icon: <div className="w-5 h-5 bg-white/20" style={{ clipPath: 'polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%)' }} /> },
   ];
+
+  const showFillColor = selectedElement && selectedElement.type !== 'text' && selectedElement.type !== 'image' && selectedElement.type !== 'icon';
 
   return (
     <div className={`${isMobile ? 'w-full' : 'w-[380px]'} h-full bg-[#111] ${isMobile ? '' : 'border-l'} border-white/10 flex flex-col select-none overflow-hidden`}>
@@ -362,7 +364,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <div className="flex items-center gap-2">
                     <div className="flex-1 flex gap-2 bg-zinc-900 p-2 rounded-xl border border-white/5 overflow-x-auto no-scrollbar">
                       {themeColors.map(color => (
-                        <button key={color} onClick={() => handleColorClick(color)} style={{ backgroundColor: color }} className={`w-7 h-7 rounded-full shrink-0 border-2 ${selectedElement.style.color === color || selectedElement.style.backgroundColor === color ? 'border-white' : 'border-transparent'} active:scale-90 transition-all`}/>
+                        <button key={color} onClick={() => handleColorClick(color)} style={{ backgroundColor: color }} className={`w-7 h-7 rounded-full shrink-0 border-2 ${selectedElement.style.color === color || (showFillColor && selectedElement.style.backgroundColor === color) ? 'border-white' : 'border-transparent'} active:scale-90 transition-all`}/>
                       ))}
                     </div>
                   </div>
@@ -375,10 +377,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold"><span>Opacity</span><span>{Math.round((selectedElement.style.opacity ?? 1) * 100)}%</span></div>
                     <input type="range" min="0" max="1" step="0.01" value={selectedElement.style.opacity ?? 1} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, opacity: parseFloat(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
                   </div>
-                  <div className="space-y-2">
+                  {showFillColor && <div className="space-y-2">
                     <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold"><span>Roundness</span><span>{selectedElement.style.borderRadius ?? 0}px</span></div>
                     <input type="range" min="0" max="200" step="1" value={selectedElement.style.borderRadius ?? 0} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, borderRadius: parseInt(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
-                  </div>
+                  </div>}
                   <div className="space-y-2">
                     <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold"><span>Border</span><span>{selectedElement.style.strokeWidth ?? 0}px</span></div>
                     <input type="range" min="0" max="30" step="1" value={selectedElement.style.strokeWidth ?? 0} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, strokeWidth: parseInt(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
