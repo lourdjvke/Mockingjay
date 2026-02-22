@@ -71,6 +71,11 @@ export async function onRequest({ request, env }) {
         - Create visual rhythm by spacing elements 20-30px apart.
         - The main headline should command attention, often placed at a key focal point, not just centered at the top.
         - Guide the viewer\'s eye with a clear visual hierarchy.
+
+        ADVANCED LAYOUT & OVERLAPPING:
+        - Elements must not overlap unless it is intentional for layering (e.g., text on a shape).
+        - For intentional overlapping, like placing text in the center of a shape, calculate the center of the container shape and place the text element\'s center at the same coordinate. An object is perfectly centered if its center (x + width/2, y + height/2) matches the container\'s center.
+        - For text elements, the height of the element\'s bounding box should be just enough to contain the text. Do not add extra vertical padding. The height should grow or shrink as the text content wraps or reduces.
   
         The output must be a flawless JSON object. Do not include any text, code block markers, or markdown before or after the JSON object.
   
