@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Icons } from './IconLibrary';
 import { toDataURL } from 'qrcode';
-import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface ShareProps {
   show: boolean;
@@ -31,22 +31,33 @@ const Share: React.FC<ShareProps> = ({ show, onClose, designId, uid, onScanSucce
 
   useEffect(() => {
     if (!show) {
-      if (scannerRef.current && scannerRef.current.isScanning) {
-        scannerRef.current.stop().catch(err => console.error("Scanner stop error:", err));
+      if (scannerRef.current?.isScanning) {
+        scannerRef.current.stop().catch(err => console.error("Scanner stop on close failed:", err));
       }
-      setMode('show'); // Reset to default mode on close
       return;
     }
 
     if (mode === 'scan') {
+      const handleSuccess = (decodedText: string) => {
+        if (scannerRef.current?.isScanning) {
+          scannerRef.current.stop()
+            .then(() => {
+              onScanSuccess(decodedText);
+              onClose();
+            })
+            .catch(err => {
+              console.error("Scanner stop after success failed:", err);
+              // Fallback to ensure UI doesn't get stuck
+              onScanSuccess(decodedText);
+              onClose();
+            });
+        }
+      };
+
       const startScanner = async () => {
         if (!readerRef.current) return;
         
-        if (scannerRef.current && scannerRef.current.isScanning) {
-          await scannerRef.current.stop();
-        }
-
-        const html5QrCode = new Html5Qrcode(readerRef.current.id);
+        const html5QrCode = new Html5Qrcode(readerRef.current.id, /* verbose=*/ false);
         scannerRef.current = html5QrCode;
 
         try {
@@ -57,34 +68,27 @@ const Share: React.FC<ShareProps> = ({ show, onClose, designId, uid, onScanSucce
             await html5QrCode.start(
               cameraId,
               { fps: 10, qrbox: { width: 250, height: 250 } },
-              (decodedText) => {
-                onScanSuccess(decodedText);
-                onClose();
-              },
-              (errorMessage) => { /* ignore errors */ }
+              handleSuccess,
+              (errorMessage) => { /* ignore scan failure */ }
             );
           } else {
             setCameraPermission('denied');
           }
         } catch (err) {
-          console.error("Camera init error:", err);
+          console.error("Camera permission or start error:", err);
           setCameraPermission('denied');
         }
       };
 
       startScanner();
-
-    } else {
-      if (scannerRef.current && scannerRef.current.isScanning) {
-        scannerRef.current.stop().catch(err => console.error("Scanner cleanup stop error:", err));
-      }
-    }
+    } 
 
     return () => {
-      if (scannerRef.current && scannerRef.current.isScanning) {
-         try {
-          scannerRef.current.stop();
-        } catch (err) { /* silent fail */ }
+      if (scannerRef.current?.isScanning) {
+        scannerRef.current.stop().catch(err => {
+           // This error is expected if the success handler already stopped it.
+           // console.log("Cleanup stop failed, likely already stopped.");
+        });
       }
     };
   }, [show, mode, onScanSuccess, onClose]);
@@ -98,18 +102,18 @@ const Share: React.FC<ShareProps> = ({ show, onClose, designId, uid, onScanSucce
           <div id="qr-reader" ref={readerRef} className="w-full h-full absolute top-0 left-0"></div>
           {cameraPermission === 'denied' && (
               <div className="z-10 text-center p-4 bg-black/50 rounded-lg">
-                  <p className="text-white font-semibold">Camera permission denied.</p>
-                  <p className="text-white/60 text-sm">Please enable camera access in your browser settings to scan QR codes.</p>
+                  <p className="text-white font-semibold">Camera Permission Denied</p>
+                  <p className="text-white/60 text-sm">Please enable camera access in your browser settings to continue.</p>
               </div>
           )}
           {cameraPermission === 'prompt' && (
               <div className="z-10 flex flex-col items-center justify-center gap-4">
                   <Icons.Camera className="w-12 h-12 text-white/30" />
-                  <p className="text-white/60 text-sm font-medium">Requesting camera access...</p>
+                  <p className="text-white/60 text-sm font-medium">Requesting Camera...</p>
               </div>
           )}
           <div className="absolute inset-0 border-[12px] border-black/30 rounded-[32px] shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"></div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250px] h-[250px] border-4 border-dashed border-white/40 rounded-3xl animate-pulse"></div>
+          {cameraPermission === 'granted' && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250px] h-[250px] border-4 border-dashed border-white/40 rounded-3xl animate-pulse"></div>}
         </div>
       );
     }
