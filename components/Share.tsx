@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Icons } from './IconLibrary';
-import QRCode from 'qrcode';
+import { toDataURL } from 'qrcode';
 
 interface ShareProps {
   show: boolean;
@@ -13,7 +13,7 @@ const Share: React.FC<ShareProps> = ({ show, onClose, designId }) => {
 
   useEffect(() => {
     if (show && designId) {
-      QRCode.toDataURL(designId, { width: 300, color: { dark: '#000000', light: '#FFFFFF' } })
+      toDataURL(designId, { width: 300, color: { dark: '#000000', light: '#FFFFFF' } })
         .then(url => {
           setQrCode(url);
         })
