@@ -402,12 +402,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           </>
         )}
       </div>
-
-      <div className="p-5 border-t border-white/10 space-y-3">
-         <button onClick={() => (window as any).dispatchEvent(new CustomEvent('open-export-modal'))} className="w-full bg-lime-400 text-black h-12 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-lime-300 transition-all active:scale-95 shadow-[0_10px_30px_rgba(163,230,53,0.2)] italic uppercase tracking-tighter">
-            <Icons.Download className="w-5 h-5" /> SNAP EXPORT
-         </button>
-      </div>
     </div>
   );
 };
