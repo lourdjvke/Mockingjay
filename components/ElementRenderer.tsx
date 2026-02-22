@@ -29,28 +29,42 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
     }, [isEditing]);
 
     useEffect(() => {
-        if (textRef.current && element.content !== textRef.current.innerHTML) {
+        if (element.type === 'text' && textRef.current && element.content !== textRef.current.innerHTML) {
             textRef.current.innerHTML = element.content || '';
         }
-    }, [element.content]);
+    }, [element.content, element.type]);
 
     // Auto-resizing logic for text elements.
     useEffect(() => {
-        if (element.type === 'text' && textRef.current) {
-            const checkResize = () => {
-                if (!textRef.current) return;
-                const currentHeight = textRef.current.scrollHeight;
-                if (currentHeight > 1 && currentHeight !== element.box.height) {
-                    updateElement(element.id, { box: { ...element.box, height: currentHeight } });
-                }
-            };
-            // We need to check resize on multiple events to ensure it's always correct.
-            checkResize(); // Initial check
-            const observer = new MutationObserver(checkResize);
-            observer.observe(textRef.current, { childList: true, subtree: true, characterData: true });
-            return () => observer.disconnect();
+        if (element.type !== 'text' || !textRef.current) {
+            return;
         }
-    }, [element.id, element.type, element.box, element.style.fontSize, element.style.lineHeight, updateElement]);
+
+        const checkResize = () => {
+            if (!textRef.current) return;
+            // The scrollHeight is the true height of the content.
+            const currentHeight = textRef.current.scrollHeight;
+            // Only update if the height has meaningfully changed, to avoid infinite loops.
+            if (currentHeight > 1 && Math.abs(currentHeight - element.box.height) > 2) {
+                updateElement(element.id, { box: { ...element.box, height: currentHeight } });
+            }
+        };
+
+        // For AI generated content, the initial render might not be correct, so we delay the check.
+        const timeoutId = setTimeout(checkResize, 50);
+
+        const observer = new MutationObserver(checkResize);
+        observer.observe(textRef.current, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+        });
+
+        return () => {
+            clearTimeout(timeoutId);
+            observer.disconnect();
+        };
+    }, [element.id, element.type, element.content, element.box.width, element.style?.fontSize, element.style?.lineHeight, updateElement]);
 
 
     const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
@@ -72,7 +86,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
         visibility: element.visible ? 'visible' : 'hidden',
         pointerEvents: 'auto',
         userSelect: 'none',
-        ...element.style,
+        ...(element.style || {}),
     };
 
     const renderContent = () => {
@@ -101,7 +115,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
                 return <img src={element.content} alt={element.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} draggable="false" />;
             case 'icon':
                 const IconComponent = Icons[element.content as keyof typeof Icons] || Icons.HelpCircle;
-                return <IconComponent style={{ color: element.style.color, width: '100%', height: '100%' }} />;
+                return <IconComponent style={{ color: element.style?.color || '#000', width: '100%', height: '100%' }} />;
             case 'shape':
             default:
                 return null;
@@ -121,25 +135,44 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
 };
 
 const areEqual = (prevProps: ElementRendererProps, nextProps: ElementRendererProps) => {
-    if (prevProps.isSelected !== nextProps.isSelected || prevProps.isEditing !== nextProps.isEditing) return false;
-    if (prevProps.element.id !== nextProps.element.id) return false;
+    // Quick checks for common updates
+    if (
+        prevProps.isSelected !== nextProps.isSelected ||
+        prevProps.isEditing !== nextProps.isEditing ||
+        prevProps.element.id !== nextProps.element.id
+    ) {
+        return false;
+    }
 
-    if ((nextProps.isSelected || nextProps.isEditing) && nextProps.element.type === 'text') {
-        const prev = prevProps.element;
-        const next = nextProps.element;
-        const shouldUpdate = 
-            prev.box.x !== next.box.x ||
-            prev.box.y !== next.box.y ||
-            prev.box.width !== next.box.width ||
-            prev.box.rotation !== next.box.rotation ||
-            JSON.stringify(prev.style) !== JSON.stringify(next.style) ||
-            prev.visible !== next.visible ||
-            prev.locked !== next.locked;
-            
-        return !shouldUpdate;
+    // If style objects are different, we need to re-render
+    if (JSON.stringify(prevProps.element.style) !== JSON.stringify(nextProps.element.style)) {
+        return false;
+    }
+
+    // If box properties affecting render are different, re-render
+    if (
+        prevProps.element.box.x !== nextProps.element.box.x ||
+        prevProps.element.box.y !== nextProps.element.box.y ||
+        prevProps.element.box.width !== nextProps.element.box.width ||
+        prevProps.element.box.height !== nextProps.element.box.height ||
+        prevProps.element.box.rotation !== nextProps.element.box.rotation
+    ) {
+        return false;
     }
     
-    return JSON.stringify(prevProps.element) === JSON.stringify(nextProps.element);
+    // For non-text elements, compare content directly.
+    if (prevProps.element.type !== 'text' && prevProps.element.content !== nextProps.element.content) {
+        return false;
+    }
+    
+    // For text elements, we let the internal state of contentEditable handle it mostly
+    // but we need to check for external content changes.
+    if (prevProps.element.type === 'text' && prevProps.element.content !== nextProps.element.content) {
+        return false;
+    }
+
+    // If all checks pass, the props are equal
+    return true;
 };
 
 export default memo(ElementRenderer, areEqual);
