@@ -769,21 +769,16 @@ For each attached image, create an image element with type "image" and set conte
 Position them prominently in the design with good sizing (at least 200x200).` : ''}`;
       }
 
-      const userMessages = [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `${systemInstruction}\n\nCurrent Editor State: ${JSON.stringify(cleansedState)}\n\nUser Request: ${aiPrompt}`
-            }
-          ]
+      const contentParts: any[] = [
+        { 
+          type: "text", 
+          text: `${systemInstruction}\n\nCurrent Editor State: ${JSON.stringify(cleansedState)}\n\nUser Request: ${aiPrompt}` 
         }
       ];
-
+      
       if (aiAttachedImages.length > 0) {
-        aiAttachedImages.forEach(image => {
-          userMessages[0].content.push({
+        aiAttachedImages.forEach((image) => {
+          contentParts.push({
             type: "image_url",
             image_url: { url: image }
           });
@@ -791,10 +786,12 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       }
 
       const payload = {
-        model: "meta-llama/llama-4-scout-17b-16e-instruct",
-        messages: userMessages,
-        temperature: 0,
-        max_tokens: 8192
+        messages: [
+          {
+            role: "user",
+            content: contentParts
+          }
+        ]
       };
 
       const result = await fetchWithRetry(apiUrl, payload);
