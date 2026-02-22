@@ -1,26 +1,37 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { DesignElement } from '../types';
 import { Icons } from './IconLibrary';
 
 interface ElementRendererProps {
     element: DesignElement;
     isSelected: boolean;
+    isEditing: boolean;
     onSelect: (id: string, e: React.PointerEvent) => void;
-    onAutoResize: (id: string, height: number) => void;
+    onUpdate: (id: string, content: string, newHeight: number) => void;
     onContextMenu: (e: React.MouseEvent) => void;
 }
 
-const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, onSelect, onAutoResize, onContextMenu }) => {
+const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, isEditing, onSelect, onUpdate, onContextMenu }) => {
     const textRef = useRef<HTMLDivElement>(null);
+    const [localContent, setLocalContent] = useState(element.content);
 
     useEffect(() => {
-        if (element.type === 'text' && textRef.current) {
-            const currentHeight = textRef.current.offsetHeight;
-            if (currentHeight > element.box.height) {
-                onAutoResize(element.id, currentHeight);
-            }
+        setLocalContent(element.content);
+    }, [element.content]);
+
+    useEffect(() => {
+        if (isEditing && textRef.current) {
+            textRef.current.focus();
         }
-    }, [element.content, element.style.fontSize, element.box.width, onAutoResize, element.id, element.type, element.box.height]);
+    }, [isEditing]);
+
+    const handleBlur = () => {
+        if (textRef.current) {
+            const newContent = textRef.current.innerHTML;
+            const newHeight = textRef.current.scrollHeight;
+            onUpdate(element.id, newContent, newHeight);
+        }
+    };
 
     const baseStyle: React.CSSProperties = {
         position: 'absolute',
@@ -46,25 +57,26 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
                 return (
                     <div
                         ref={textRef}
-                        contentEditable={isSelected}
+                        contentEditable={isEditing}
                         suppressContentEditableWarning
-                        onBlur={e => console.log(e.currentTarget.innerHTML)} // Replace with actual update logic
+                        onInput={(e) => setLocalContent(e.currentTarget.innerHTML)}
+                        onBlur={handleBlur}
                         style={{
                             width: '100%',
                             height: 'auto',
                             minHeight: element.box.height,
                             wordBreak: 'break-word',
-                            cursor: 'text',
+                            cursor: isEditing ? 'text' : 'default',
                             padding: 10, 
                             boxSizing: 'border-box',
                         }}
-                        dangerouslySetInnerHTML={{ __html: element.content || '' }}
+                        dangerouslySetInnerHTML={{ __html: localContent || '' }}
                     />
                 );
             case 'image':
                 return <img src={element.content} alt={element.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} draggable="false" />;
             case 'icon':
-                const IconComponent = Icons[element.content as keyof typeof Icons] || Icons.HelpCircle;
+                const IconComponent = Icons[element.content as keyof typeof Icons] || Icons.Placeholder;
                 return <IconComponent style={{ color: element.style.color, width: '100%', height: '100%' }} />;
             case 'shape':
             default:
