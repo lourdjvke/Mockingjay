@@ -547,7 +547,7 @@ const App: React.FC = () => {
   const sanitizeElement = useCallback((el: any): DesignElement => {
     const defaultStyle: ElementStyle = {
         color: '#000000',
-        backgroundColor: null,
+        backgroundColor: 'transparent', // Default to transparent
         fontSize: 24,
         fontFamily: "'Inter', sans-serif",
         fontWeight: '400',
@@ -565,10 +565,12 @@ const App: React.FC = () => {
 
     const style = { ...defaultStyle, ...(el.style || {}) };
 
+    // Ensure critical layout properties are valid
     style.opacity = typeof style.opacity === 'number' ? style.opacity : 1;
     style.borderRadius = typeof style.borderRadius === 'number' ? style.borderRadius : 0;
     style.strokeWidth = typeof style.strokeWidth === 'number' ? style.strokeWidth : 0;
     
+    // Sanitize text-specific styles
     if (el.type === 'text') {
         style.fontSize = typeof style.fontSize === 'number' ? style.fontSize : 24;
         style.fontFamily = style.fontFamily || (allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif");
@@ -576,7 +578,10 @@ const App: React.FC = () => {
         style.textAlign = style.textAlign || 'left';
         style.letterSpacing = typeof style.letterSpacing === 'number' ? style.letterSpacing : 0;
         style.lineHeight = typeof style.lineHeight === 'number' ? style.lineHeight : 1.2;
+        // Ensure text elements don't have a background unless specified
+        style.backgroundColor = style.backgroundColor || 'transparent';
     } else {
+        // Nullify text styles for non-text elements
         style.fontSize = null;
         style.fontFamily = null;
         style.fontWeight = null;
@@ -584,6 +589,8 @@ const App: React.FC = () => {
         style.letterSpacing = null;
         style.lineHeight = null;
     }
+
+    // Nullify color for non-text, non-icon elements
      if (el.type !== 'text' && el.type !== 'icon') {
         style.color = null;
     }
@@ -1076,29 +1083,40 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
     const now = Date.now();
     const timeSinceLastTap = now - lastTap.current;
-
-    if (isMobile && element.type === 'text' && timeSinceLastTap < 300) {
+    
+    // Double-tap to edit logic for mobile
+    if (isMobile && element.type === 'text' && state.selectedElementId === id && timeSinceLastTap < 300) {
         setEditingElementId(id);
-        setDragStart(null);
+        setDragStart(null); // Prevent dragging when entering edit mode
+        lastTap.current = 0; // Reset tap timer
         return;
     }
-
+    
     lastTap.current = now;
 
+    // If another element is selected, or if we are not editing, select the new element
     if (state.selectedElementId !== id) {
         setState(prev => ({ ...prev, selectedElementId: id }));
-        setEditingElementId(isMobile ? null : id);
+        // On desktop, immediately enter edit mode for text elements
+        if (!isMobile && element.type === 'text') {
+            setEditingElementId(id);
+        } else {
+            setEditingElementId(null);
+        }
         triggerHaptic(5);
     }
 
+    // Prevent dragging if the element is locked or if we are currently editing it on mobile
     if (element.locked || (isMobile && editingElementId === id)) return;
 
+    // Standard drag initiation for move/resize
     if (isMobile) {
         if (state.selectedElementId === id) {
             setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
             setElementStartPos({ ...element.box });
         }
     } else {
+        // Long-press for context menu on desktop
         longPressTimer.current = window.setTimeout(() => {
             setContextMenu({ show: true, x: e.clientX, y: e.clientY });
             setDragStart(null);
@@ -1129,8 +1147,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   }, []);
 
   const deselectAll = () => {
+      if (editingElementId) {
+          setEditingElementId(null);
+      }
       setState(prev => ({ ...prev, selectedElementId: null }));
-      setEditingElementId(null);
   }
 
   const addElement = useCallback((element: Partial<DesignElement>) => {
@@ -1141,7 +1161,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       type: (element.type as any) || 'shape',
       box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 200, rotation: 0 },
       content: '',
-      style: { backgroundColor: '#FFFFFF', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: '400', textAlign: 'center', filter: 'none' },
+      style: { backgroundColor: 'transparent', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: '400', textAlign: 'center', filter: 'none' },
       visible: true,
       locked: false,
       ...element
@@ -1298,9 +1318,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   }, [handlePointerMove, handlePointerUp]);
 
   const handleTextUpdate = (id: string, content: string, newHeight: number) => {
-    const cleansedContent = content.replace(/^(\s*<br\s*\/?>\s*)+|(\s*<br\s*\/?>\s*)+$/g, '');
     updateElement(id, {
-        content: cleansedContent,
+        content: content,
         box: { ...selectedElement.box, height: newHeight }
     });
     setEditingElementId(null);
@@ -1611,7 +1630,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     onUpdate={handleTextUpdate} 
                     onContextMenu={(e) => handleElementContextMenu(el.id, e)} 
                   />
-                  {state.selectedElementId === el.id && !el.locked && (
+                  {state.selectedElementId === el.id && !el.locked && editingElementId !== el.id && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
                       {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
                         let s: React.CSSProperties = {};
