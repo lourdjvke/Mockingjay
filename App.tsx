@@ -196,6 +196,8 @@ const App: React.FC = () => {
         currentPageIndex: designToLoad.currentPageIndex || 0,
         selectedElementId: designToLoad.selectedElementId || null,
         themeColors: designToLoad.themeColors || INITIAL_STATE.themeColors,
+        isAiCreated: designToLoad.isAiCreated || false,
+        aiPrompt: designToLoad.aiPrompt || '',
       });
       setCurrentDesignId(designId);
     }
@@ -648,6 +650,8 @@ USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design
         currentPageIndex: 0,
         selectedElementId: null,
         themeColors: aiResponse.themeColors && aiResponse.themeColors.length > 0 ? aiResponse.themeColors : brandDna.colors,
+        isAiCreated: true,
+        aiPrompt: prompt,
       };
 
       setState(newState);
@@ -854,6 +858,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         currentPageIndex: aiState.currentPageIndex || 0,
         selectedElementId: aiState.selectedElementId || null,
         themeColors: aiState.themeColors || state.themeColors,
+        isAiCreated: true,
+        aiPrompt,
       };
 
       if (aiAttachedImages.length > 0 && !useImageAsReference) {
@@ -1156,10 +1162,46 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     });
   }, []);
 
+  const saveToPublicTemplates = async () => {
+    if (!canvasRef.current || !currentDesignId) return;
+
+    const publicTemplateRef = ref(database, `public_templates/${currentDesignId}`);
+    const snapshot = await get(publicTemplateRef);
+
+    if (snapshot.exists()) {
+      console.log("Design already exists in public templates.");
+      return;
+    }
+
+    try {
+      const thumbnail = await domToPng(canvasRef.current, {
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
+        scale: 0.2,
+      });
+
+      const designData = {
+        content: state,
+        thumbnail,
+        name: state.pages[0]?.elements.find(e => e.type === 'text')?.content || 'Untitled Design',
+        lastModified: Date.now(),
+        isAiCreated: state.isAiCreated || false,
+        aiPrompt: state.aiPrompt || null,
+      };
+
+      await set(publicTemplateRef, designData);
+      console.log("Design saved to public templates.");
+
+    } catch (error) {
+      console.error("Failed to save to public templates:", error);
+    }
+  };
+
   const handleExportPng = async () => {
     if (!canvasRef.current) return;
     setExportStatus('processing');
     triggerHaptic(20);
+    saveToPublicTemplates();
 
     const canvasNode = canvasRef.current;
     const originalBoxShadow = canvasNode.style.boxShadow;
@@ -1258,6 +1300,20 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       }
     }
   };
+
+  const handleExportJson = () => {
+    downloadTemplate(state);
+    saveToPublicTemplates();
+    setIsExportModalOpen(false);
+    triggerHaptic(15);
+  };
+
+  useEffect(() => {
+    const openModal = () => setIsExportModalOpen(true);
+    window.addEventListener('open-export-modal', openModal);
+    return () => window.removeEventListener('open-export-modal', openModal);
+  }, []);
+
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
@@ -1582,8 +1638,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
                 />
               </div>
-              <div className="p-5 bg-zinc-900 border-t border-white/10 flex justify-end">
-                 <button onClick={() => setIsBottomSheetOpen(false)} className="w-full bg-lime-400 text-black h-12 rounded-xl font-bold text-sm">Done</button>
+              <div className="p-5 bg-zinc-900 border-t border-white/10 flex items-center gap-3 justify-end">
+                 <button onClick={() => { setIsBottomSheetOpen(false); setIsExportModalOpen(true); }} className="h-12 w-12 flex items-center justify-center bg-zinc-800 text-white rounded-xl font-bold text-sm"><Icons.Download className="w-5 h-5" /></button>
+                 <button onClick={() => setIsBottomSheetOpen(false)} className="flex-1 bg-lime-400 text-black h-12 rounded-xl font-bold text-sm">Done</button>
               </div>
             </div>
           </div>
@@ -1602,7 +1659,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                       <div className="w-12 h-12 bg-black/10 rounded-xl flex items-center justify-center"><Icons.ImageIcon className="w-6 h-6" /></div>
                       <div className="text-left"><div className="text-lg">Download PNG</div><div className="text-[10px] font-bold opacity-60 italic uppercase tracking-widest">Ultra High Fidelity</div></div>
                     </button>
-                    <button onClick={() => { downloadTemplate(state); setIsExportModalOpen(false); triggerHaptic(15); }} className="group flex items-center gap-4 bg-zinc-800 p-5 rounded-2xl text-white font-bold border border-white/5 transition-all hover:bg-zinc-700 active:scale-95">
+                    <button onClick={handleExportJson} className="group flex items-center gap-4 bg-zinc-800 p-5 rounded-2xl text-white font-bold border border-white/5 transition-all hover:bg-zinc-700 active:scale-95">
                       <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center"><Icons.Layout className="w-6 h-6" /></div>
                       <div className="text-left"><div className="text-lg">Export JSON</div><div className="text-[10px] font-bold opacity-60 italic uppercase tracking-widest">Mockingjay Raw File</div></div>
                     </button>
