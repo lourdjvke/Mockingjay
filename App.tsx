@@ -1632,8 +1632,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                         <Icons.Wand2 className="w-5 h-5 text-black" />
                      </div>
                      <div className="space-y-0.5">
-                        <h3 className="text-xs md:text-sm font-black uppercase tracking-widest text-white italic">Mockingjay Intelligence</h3>
-                        <p className="text-white/40 text-[8px] md:text-[9px] font-bold uppercase tracking-widest">Global Design Engine v3.1</p>
+                        <h3 className="text-xs md:text-sm font-black uppercase tracking-widest text-white italic">Mock-AI</h3>
+                        <p className="text-white/40 text-[8px] md:text-[9px] font-bold uppercase tracking-widest">GDE v3.1</p>
                      </div>
                    </div>
                    <div className="text-right">
@@ -1698,7 +1698,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                      <button key={s} onClick={() => setAiPrompt(s)} className="shrink-0 bg-white/5 border border-white/5 px-5 py-2.5 rounded-full text-[10px] font-bold uppercase hover:bg-white/10 hover:border-white/20 transition-all text-white/60 hover:text-white">{s}</button>
                    ))}
                 </div>
-                <button onClick={() => { setIsAiModalOpen(false); setAiAttachedImages([]); }} className="w-full mt-8 text-[10px] font-black uppercase text-white/20 hover:text-white/60 transition-colors tracking-[0.4em]">Abort Engine Session</button>
+                <button onClick={() => { setIsAiModalOpen(false); setAiAttachedImages([]); }} className="w-full mt-8 text-[10px] font-black uppercase text-white/20 hover:text-white/60 transition-colors tracking-[0.4em]">Abort</button>
              </div>
           </div>
         )}
