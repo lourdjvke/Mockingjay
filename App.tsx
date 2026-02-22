@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { produce } from 'immer';
 import { EditorState, DesignElement, BoundingBox, Page, ElementStyle } from './types.ts';
 import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
 import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, embedGoogleFonts } from './utils.ts';
@@ -970,42 +969,60 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   };
 
     const updateElement = useCallback((id: string, updates: Partial<DesignElement> | ((el: DesignElement) => Partial<DesignElement>)) => {
-        setState(produce(draft => {
-            const page = draft.pages[draft.currentPageIndex];
-            if (!page) return;
-            const element = page.elements.find(el => el.id === id);
-            if (element) {
-                const newUpdates = typeof updates === 'function' ? updates(element) : updates;
-                
-                if (newUpdates.box) {
-                    Object.assign(element.box, newUpdates.box);
-                    delete newUpdates.box;
+        setState(prev => ({
+            ...prev,
+            pages: prev.pages.map((page, index) => {
+                if (index !== prev.currentPageIndex) {
+                    return page;
                 }
-                if (newUpdates.style) {
-                    Object.assign(element.style, newUpdates.style);
-                    delete newUpdates.style;
-                }
-                Object.assign(element, newUpdates);
-            }
+                return {
+                    ...page,
+                    elements: page.elements.map(el => {
+                        if (el.id === id) {
+                            const newUpdates = typeof updates === 'function' ? updates(el) : updates;
+                            const newEl = { ...el };
+                            if (newUpdates.box) {
+                                newEl.box = { ...el.box, ...newUpdates.box };
+                                delete newUpdates.box;
+                            }
+                            if (newUpdates.style) {
+                                newEl.style = { ...el.style, ...newUpdates.style };
+                                delete newUpdates.style;
+                            }
+                            return { ...newEl, ...newUpdates };
+                        }
+                        return el;
+                    })
+                };
+            })
         }));
     }, []);
 
   const deleteElement = (id: string) => {
-    setState(produce(draft => {
-        const page = draft.pages[draft.currentPageIndex];
-        if (page) {
-            page.elements = page.elements.filter(el => el.id !== id);
-            draft.selectedElementId = null;
-        }
+    setState(prev => ({
+        ...prev,
+        selectedElementId: null,
+        pages: prev.pages.map((page, index) => {
+            if (index !== prev.currentPageIndex) {
+                return page;
+            }
+            return {
+                ...page,
+                elements: page.elements.filter(el => el.id !== id)
+            };
+        })
     }));
   };
 
   const updatePage = (updates: Partial<Page>) => {
-    setState(produce(draft => {
-        const page = draft.pages[draft.currentPageIndex];
-        if (page) {
-            Object.assign(page, updates);
-        }
+    setState(prev => ({
+        ...prev,
+        pages: prev.pages.map((page, index) => {
+            if (index !== prev.currentPageIndex) {
+                return page;
+            }
+            return { ...page, ...updates };
+        })
     }));
   };
 
@@ -1083,10 +1100,17 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
             },
         }, allFonts);
 
-        setState(produce(draft => {
-            draft.pages[draft.currentPageIndex].elements.push(newElement);
-            draft.selectedElementId = newElement.id;
-        }));
+        setState(prev => {
+            const newPages = [...prev.pages];
+            const page = { ...newPages[prev.currentPageIndex] };
+            page.elements = [...page.elements, newElement];
+            newPages[prev.currentPageIndex] = page;
+            return {
+                ...prev,
+                pages: newPages,
+                selectedElementId: newElement.id,
+            };
+        });
 
         if (elementConfig.type === 'image' && elementConfig.content) {
             MediaStore.saveImage(elementConfig.content).then(() => {
@@ -1120,21 +1144,28 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   }, [addElement, state.themeColors]);
 
   const onReorder = useCallback((id: string, direction: 'up' | 'down') => {
-    setState(produce(draft => {
-      const page = draft.pages[draft.currentPageIndex];
-      const index = page.elements.findIndex(el => el.id === id);
-      if (index === -1) return;
+    setState(prev => {
+        const newPages = [...prev.pages];
+        const page = { ...newPages[prev.currentPageIndex] };
+        const index = page.elements.findIndex(el => el.id === id);
 
-      if (direction === 'up') {
-        if (index < page.elements.length - 1) {
-            [page.elements[index], page.elements[index + 1]] = [page.elements[index + 1], page.elements[index]];
+        if (index === -1) return prev;
+
+        const newElements = [...page.elements];
+        if (direction === 'up') {
+            if (index < newElements.length - 1) {
+                [newElements[index], newElements[index + 1]] = [newElements[index + 1], newElements[index]];
+            }
+        } else {
+            if (index > 0) {
+                [newElements[index], newElements[index - 1]] = [newElements[index - 1], newElements[index]];
+            }
         }
-      } else {
-        if (index > 0) {
-            [page.elements[index], page.elements[index - 1]] = [page.elements[index - 1], page.elements[index]];
-        }
-      }
-    }));
+        
+        page.elements = newElements;
+        newPages[prev.currentPageIndex] = page;
+        return { ...prev, pages: newPages };
+    });
     triggerHaptic(5);
   }, [triggerHaptic]);
 
@@ -1229,7 +1260,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
               let newWidth = width;
               if (h.includes('e')) newWidth += dx;
               if (h.includes('w')) { newWidth -= dx; x += dx; }
-              newWidth = Math.max(50, newWidth); 
+              newWidth = Math.max(50, newWidth);
               updateElement(element.id, { box: { ...element.box, x, width: newWidth } });
           }
       } else {
@@ -1571,15 +1602,15 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
              }}
            >
               {currentPage?.elements.map(el => (
-                <ElementRenderer 
-                    key={el.id} // Ensure key is here for React to track elements
-                    element={el} 
-                    isSelected={state.selectedElementId === el.id} 
-                    isEditing={editingElementId === el.id}
-                    onSelect={handleElementPointerDown} 
-                    updateElement={updateElement} 
-                    onContextMenu={(e) => handleElementContextMenu(el.id, e)} 
-                />
+                   <ElementRenderer 
+                       key={el.id} // Ensure key is here for React to track elements
+                       element={el} 
+                       isSelected={state.selectedElementId === el.id} 
+                       isEditing={editingElementId === el.id}
+                       onSelect={handleElementPointerDown} 
+                       updateElement={updateElement} 
+                       onContextMenu={(e) => handleElementContextMenu(el.id, e)} 
+                   />
               ))}
            </div>
         </div>
@@ -1742,7 +1773,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   availableFonts={allFonts}
                   onAddCustomFont={handleAddCustomFont}
                   onDeleteCustomFont={handleDeleteCustomFont}
-                  onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { [key]: color } }); } }}
+                  onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
                   onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                   onAddShape={onAddShape}
                   onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); setIsBottomSheetOpen(false); }}
@@ -1834,7 +1865,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           availableFonts={allFonts}
           onAddCustomFont={handleAddCustomFont}
           onDeleteCustomFont={handleDeleteCustomFont}
-          onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { [key]: color } }); } }}
+          onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
           onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
           onAddShape={onAddShape}
           onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
