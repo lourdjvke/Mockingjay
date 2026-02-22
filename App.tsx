@@ -664,7 +664,7 @@ USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design
   };
 
   const handleAiRefine = async () => {
-    if (!aiPrompt.trim()) return;
+    if (!aiPrompt.trim() && aiAttachedImages.length === 0) return;
     setIsAiLoading(true);
     triggerHaptic(30);
 
@@ -694,7 +694,23 @@ USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design
         });
       }
 
-      let systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer and UI/UX expert.
+      let systemInstruction;
+
+      if (useImageAsReference) {
+        systemInstruction = `You are an expert UI/UX designer with a powerful vision model. Your task is to meticulously replicate an attached reference image within the Mockingjay editor. Your goal is to create a template that is as close to a pixel-perfect copy as possible using only the available tools (text, shape, icon). You are performing a high-fidelity 'image-to-template' conversion.
+
+**CRITICAL INSTRUCTIONS:**
+1. **Exact Replication is Key:** Analyze the attached image with extreme precision. Replicate the layout, dimensions, colors, typography, and spacing of every single element.
+2. **Use Vision, Don't Hallucinate:** Your response must be based *only* on the visual information in the image. Do not add any new elements or content that is not present in the reference.
+3. **Tool Conversion:** Convert visual elements into Mockingjay elements:
+    - **Color Palette:** Use an eyedropper tool on the image to extract the exact hex codes for all colors (background, text, shapes) and use them in your output.
+    - **Layout & Sizing:** Measure the position (x, y) and dimensions (width, height) of every element relative to the canvas size (${CANVAS_WIDTH}x${CANVAS_HEIGHT}) and replicate them precisely.
+    - **Typography:** Identify the font family (e.g., serif, sans-serif), font weight, font size, and letter spacing. Match them as closely as possible using the available fonts.
+    - **Shapes & Graphics:** Recreate all shapes, lines, and graphic elements using 'shape' elements with appropriate backgroundColor, borderRadius, clipPath, etc.
+4. **DO NOT INCLUDE THE IMAGE:** The reference image must **NOT** be included in the final output. You are recreating it, not embedding it.
+5. **Return Only JSON:** Your entire response must be ONLY the raw JSON object. No explanations, no markdown.`;
+      } else {
+        systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer and UI/UX expert.
 Your task is to transform user prompts into complete, high-fidelity design structures.
 ALWAYS generate RICH content with multiple elements. Never generate empty or minimal designs.
 
@@ -751,21 +767,6 @@ For each attached image, create an image element with type "image" and set conte
 - Third image: "ATTACHED_IMAGE_2"
 - Fourth image: "ATTACHED_IMAGE_3"
 Position them prominently in the design with good sizing (at least 200x200).` : ''}`;
-
-      if (useImageAsReference) {
-        systemInstruction = `You are "Mockingjay AI", a specialist in design replication and adaptation. 
-Your task is to analyze an attached image and recreate its key elements (layout, text, colors, shapes) within the Mockingjay design editor. 
-You must use the available tools to approximate the design as closely as possible, but do not copy it pixel-for-pixel. Capture the essence.
-
-Key elements to identify and recreate:
-- Headline Text: Identify the main heading, its approximate position, and font style.
-- Body Text: Recreate any significant paragraphs or text blocks.
-- Images: Use the placeholder "ATTACHED_IMAGE_0" to represent the main image in the reference.
-- Color Palette: Extract the primary colors and apply them to the background and elements.
-- Shapes: Replicate any prominent shapes or graphic elements.
-- Call-to-Action (CTA): If a button or link is present, recreate it.
-
-YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanation text.`;
       }
 
       const userMessages = [
@@ -793,7 +794,7 @@ YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanat
         model: "meta-llama/llama-4-scout-17b-16e-instruct",
         messages: userMessages,
         temperature: 0,
-        max_tokens: 4096
+        max_tokens: 8192
       };
 
       const result = await fetchWithRetry(apiUrl, payload);
@@ -855,7 +856,7 @@ YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanat
         themeColors: aiState.themeColors || state.themeColors,
       };
 
-      if (aiAttachedImages.length > 0) {
+      if (aiAttachedImages.length > 0 && !useImageAsReference) {
         for (const page of newState.pages) {
           if (page.elements) {
             page.elements = page.elements.map((el: any) => {
@@ -1444,7 +1445,7 @@ YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanat
                 <div className="relative">
                   <input 
                     autoFocus
-                    placeholder="e.g., 'Advertise my noodle brand', 'Create a new coffee flyer'"
+                    placeholder={useImageAsReference ? 'Describe the style or content to recreate...' : 'e.g., \'Advertise my noodle brand\''}
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAiRefine()}
@@ -1454,7 +1455,7 @@ YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanat
                   <button onClick={() => aiImageInputRef.current?.click()} disabled={useImageAsReference ? aiAttachedImages.length >= 1 : aiAttachedImages.length >= 4} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors disabled:opacity-30">
                     <Icons.Paperclip className="w-5 h-5" />
                   </button>
-                  <button onClick={handleAiRefine} disabled={isAiLoading} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-zinc-800' : 'bg-lime-400 text-black active:scale-90 hover:shadow-[0_0_15px_rgba(163,230,53,0.5)]'}`}>
+                  <button onClick={handleAiRefine} disabled={isAiLoading || (useImageAsReference && aiAttachedImages.length === 0)} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-zinc-800' : 'bg-lime-400 text-black active:scale-90 hover:shadow-[0_0_15px_rgba(163,230,53,0.5)]'} disabled:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed`}>
                     {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
                   </button>
                 </div>
@@ -1493,7 +1494,7 @@ YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanat
                   </div>
                 )}
                 <div className="mt-6 flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                   {['Advertise my noodle brand', 'Create a new page with coffee ad', 'Cyberpunk flyer', 'Minimalist layout', 'Bold brand poster'].map(s => (
+                   {['Poster for a film festival', 'Minimalist clothing brand ad', 'Vibrant gig poster style', 'Luxury brand announcement', 'Vintage typography layout'].map(s => (
                      <button key={s} onClick={() => setAiPrompt(s)} className="shrink-0 bg-white/5 border border-white/5 px-5 py-2.5 rounded-full text-[10px] font-bold uppercase hover:bg-white/10 hover:border-white/20 transition-all text-white/60 hover:text-white">{s}</button>
                    ))}
                 </div>
