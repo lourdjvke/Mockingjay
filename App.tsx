@@ -203,32 +203,46 @@ const App: React.FC = () => {
 
   const handleScanSuccess = async (decodedText: string) => {
     try {
-        // Expected format: users/some-uid/designs/some-design-id
         const pathParts = decodedText.split('/');
         if (pathParts.length !== 4 || pathParts[0] !== 'users' || pathParts[2] !== 'designs') {
             throw new Error("Invalid QR code format.");
         }
+
         const designRef = ref(database, decodedText);
         const snapshot = await get(designRef);
-        if (snapshot.exists()) {
-            const designData = snapshot.val();
-            const sanitizedPages = (designData.pages || INITIAL_STATE.pages).map((page: Page) => ({
-                ...page,
-                elements: page.elements || [],
-            }));
-            // Create a new copy in the current user's account
-            const newId = generateId();
-            setState({
-                pages: sanitizedPages,
-                currentPageIndex: designData.currentPageIndex || 0,
-                selectedElementId: null, // Deselect elements upon loading
-                themeColors: designData.themeColors || INITIAL_STATE.themeColors,
-            });
-            setCurrentDesignId(newId);
-            alert("Design loaded successfully! It has been saved as a new copy in your account.");
-        } else {
-            throw new Error("Design not found.");
+
+        if (!snapshot.exists()) {
+            throw new Error("Design not found in database.");
         }
+
+        const designData = snapshot.val();
+        if (!designData) {
+            throw new Error("Scanned design data is empty or invalid.");
+        }
+
+        let finalPages = (designData.pages || []).map((page: Page) => ({
+            ...page,
+            elements: (page.elements || []).map(sanitizeElement), // Also sanitize elements on load
+        }));
+
+        if (finalPages.length === 0) {
+            finalPages = INITIAL_STATE.pages; // Fallback to a default page to prevent crash
+        }
+
+        let finalPageIndex = designData.currentPageIndex || 0;
+        if (finalPageIndex < 0 || finalPageIndex >= finalPages.length) {
+            finalPageIndex = 0; // Ensure index is within bounds
+        }
+
+        const newId = generateId();
+        setState({
+            pages: finalPages,
+            currentPageIndex: finalPageIndex,
+            selectedElementId: null, // Always deselect elements upon loading a shared design
+            themeColors: designData.themeColors || INITIAL_STATE.themeColors,
+        });
+        setCurrentDesignId(newId); // Set the new ID for the copied design
+
     } catch (error) {
         console.error("Failed to load shared design:", error);
         alert(`Failed to load design: ${(error as Error).message}`);
