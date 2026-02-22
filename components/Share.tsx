@@ -1,96 +1,155 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Icons } from './IconLibrary';
 import { toDataURL } from 'qrcode';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 
 interface ShareProps {
   show: boolean;
   onClose: () => void;
   designId: string | null;
+  uid: string | null;
   onScanSuccess: (decodedText: string) => void;
 }
 
-const Share: React.FC<ShareProps> = ({ show, onClose, designId, onScanSuccess }) => {
+type ShareMode = 'show' | 'scan';
+
+const Share: React.FC<ShareProps> = ({ show, onClose, designId, uid, onScanSuccess }) => {
   const [qrCode, setQrCode] = useState<string | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const [mode, setMode] = useState<ShareMode>('show');
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const readerRef = useRef<HTMLDivElement>(null);
+  const [cameraPermission, setCameraPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
 
   useEffect(() => {
-    if (show && designId) {
-      toDataURL(designId, { width: 300, color: { dark: '#000000', light: '#FFFFFF' } })
-        .then(url => {
-          setQrCode(url);
-        })
-        .catch(err => {
-          console.error(err);
-        });
+    if (show && mode === 'show' && designId && uid) {
+      const path = `users/${uid}/designs/${designId}`;
+      toDataURL(path, { width: 300, margin: 2, color: { dark: '#000000', light: '#FFFFFF' } })
+        .then(url => setQrCode(url))
+        .catch(err => console.error("QR Gen Error:", err));
     }
-  }, [show, designId]);
+  }, [show, mode, designId, uid]);
 
   useEffect(() => {
-    if (isScanning) {
-      scannerRef.current = new Html5QrcodeScanner(
-        "qr-reader", 
-        { fps: 10, qrbox: 250 },
-        false
-      );
-      scannerRef.current.render((decodedText, decodedResult) => {
-        onScanSuccess(decodedText);
-        setIsScanning(false);
-        onClose();
-      }, (errorMessage) => {
-        // handle scan error
-      });
+    if (!show) {
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.stop().catch(err => console.error("Scanner stop error:", err));
+      }
+      setMode('show'); // Reset to default mode on close
+      return;
+    }
+
+    if (mode === 'scan') {
+      const startScanner = async () => {
+        if (!readerRef.current) return;
+        
+        if (scannerRef.current && scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
+
+        const html5QrCode = new Html5Qrcode(readerRef.current.id);
+        scannerRef.current = html5QrCode;
+
+        try {
+          const cameras = await Html5Qrcode.getCameras();
+          if (cameras && cameras.length) {
+            setCameraPermission('granted');
+            const cameraId = cameras.find(c => c.label.toLowerCase().includes('back'))?.id || cameras[0].id;
+            await html5QrCode.start(
+              cameraId,
+              { fps: 10, qrbox: { width: 250, height: 250 } },
+              (decodedText) => {
+                onScanSuccess(decodedText);
+                onClose();
+              },
+              (errorMessage) => { /* ignore errors */ }
+            );
+          } else {
+            setCameraPermission('denied');
+          }
+        } catch (err) {
+          console.error("Camera init error:", err);
+          setCameraPermission('denied');
+        }
+      };
+
+      startScanner();
+
     } else {
-      if (scannerRef.current) {
-        scannerRef.current.clear();
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.stop().catch(err => console.error("Scanner cleanup stop error:", err));
       }
     }
 
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear();
+      if (scannerRef.current && scannerRef.current.isScanning) {
+         try {
+          scannerRef.current.stop();
+        } catch (err) { /* silent fail */ }
       }
     };
-  }, [isScanning, onScanSuccess, onClose]);
+  }, [show, mode, onScanSuccess, onClose]);
 
-  if (!show) {
-    return null;
-  }
+  if (!show) return null;
+
+  const renderContent = () => {
+    if (mode === 'scan') {
+      return (
+        <div className="aspect-square w-full rounded-2xl bg-zinc-800 overflow-hidden relative flex items-center justify-center">
+          <div id="qr-reader" ref={readerRef} className="w-full h-full absolute top-0 left-0"></div>
+          {cameraPermission === 'denied' && (
+              <div className="z-10 text-center p-4 bg-black/50 rounded-lg">
+                  <p className="text-white font-semibold">Camera permission denied.</p>
+                  <p className="text-white/60 text-sm">Please enable camera access in your browser settings to scan QR codes.</p>
+              </div>
+          )}
+          {cameraPermission === 'prompt' && (
+              <div className="z-10 flex flex-col items-center justify-center gap-4">
+                  <Icons.Camera className="w-12 h-12 text-white/30" />
+                  <p className="text-white/60 text-sm font-medium">Requesting camera access...</p>
+              </div>
+          )}
+          <div className="absolute inset-0 border-[12px] border-black/30 rounded-[32px] shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250px] h-[250px] border-4 border-dashed border-white/40 rounded-3xl animate-pulse"></div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="aspect-square w-full rounded-2xl bg-white p-4 flex items-center justify-center">
+        {qrCode ? (
+          <img src={qrCode} alt="Design QR Code" className="w-full h-full object-contain" />
+        ) : (
+          <div className="w-full h-full bg-gray-200 animate-pulse rounded-lg" />
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center gap-8 animate-in fade-in duration-500" onClick={onClose}>
-      <div className="bg-zinc-900 border border-white/10 rounded-[24px] w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-        {isScanning ? (
-          <div className="p-8">
-            <div id="qr-reader" style={{ width: '100%' }}></div>
-            <button onClick={() => setIsScanning(false)} className="w-full mt-4 py-3 text-white/50 text-xs font-bold uppercase tracking-widest border-t border-white/5 hover:text-white transition-colors">Cancel</button>
-          </div>
-        ) : (
-          <>
-            <div className="p-8 space-y-6">
-              <div className="text-center space-y-2">
-                <h2 className="text-xl md:text-2xl font-black text-white italic tracking-tight uppercase">Share Design</h2>
-                <p className="text-white/40 text-sm">Scan the QR code to collaborate</p>
-              </div>
-              <div className="flex justify-center">
-                {qrCode ? (
-                  <img src={qrCode} alt="QR Code" />
-                ) : (
-                  <div className="w-[300px] h-[300px] bg-gray-700 animate-pulse rounded-lg" />
-                )}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 border-t border-white/5">
-                <button onClick={() => setIsScanning(true)} className="w-full py-5 text-white/60 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors border-r border-white/5 flex items-center justify-center gap-2">
-                    <Icons.QrCode className="w-4 h-4" /> Scan QR
-                </button>
-                <button onClick={onClose} className="w-full py-5 text-white/60 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors flex items-center justify-center gap-2">
-                    <Icons.X className="w-4 h-4" /> Close
-                </button>
-            </div>
-          </>
-        )}
+    <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={onClose}>
+      <div className="bg-zinc-900 border border-white/10 rounded-[32px] w-full max-w-sm overflow-hidden shadow-2xl p-6 flex flex-col gap-6" onClick={e => e.stopPropagation()}>
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-white">Collaborate</h2>
+          <p className="text-white/50 text-sm">{mode === 'show' ? 'Let others scan your design' : 'Scan a code to view a design'}</p>
+        </div>
+        
+        {renderContent()}
+
+        <div className="grid grid-cols-2 gap-3">
+          <button 
+            onClick={() => setMode('show')} 
+            className={`px-6 py-4 rounded-xl font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2 ${mode === 'show' ? 'bg-lime-400 text-black shadow-lg shadow-lime-500/20' : 'bg-zinc-800 text-white/60 hover:bg-zinc-700'}`}>
+            <Icons.QrCode className="w-5 h-5" />
+            Show QR
+          </button>
+          <button 
+            onClick={() => setMode('scan')} 
+            className={`px-6 py-4 rounded-xl font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2 ${mode === 'scan' ? 'bg-lime-400 text-black shadow-lg shadow-lime-500/20' : 'bg-zinc-800 text-white/60 hover:bg-zinc-700'}`}>
+            <Icons.Camera className="w-5 h-5" />
+            Scan
+          </button>
+        </div>
+        <button onClick={onClose} className="text-center w-full py-2 text-white/40 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">Close</button>
       </div>
     </div>
   );
