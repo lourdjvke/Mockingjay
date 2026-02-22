@@ -193,26 +193,30 @@ const App: React.FC = () => {
   };
 
   const handlePurchase = (amount: number, credits: number) => {
-    if (!user || !window.PaystackPop) return;
+    if (!user || !window.PaystackPop) {
+      alert("Paystack SDK not loaded yet. Please wait.");
+      return;
+    }
 
-    const paystack = new window.PaystackPop();
-    paystack.newTransaction({
-        key: PAYSTACK_PUBLIC_KEY,
-        email: user.email,
-        amount: amount * 100, // Amount in kobo
-        currency: 'NGN',
-        ref: 'ug-' + generateId(),
-        onSuccess: async () => {
-            const userRef = ref(database, `users/${user.uid}`);
-            const snapshot = await get(child(userRef, 'ugcredit'));
-            const currentCredit = snapshot.val() || 0;
-            await set(child(userRef, 'ugcredit'), currentCredit + credits);
-            alert('Purchase successful! Your credits have been added.');
-        },
-        onCancel: () => {
-            alert('Transaction was cancelled.');
-        }
+    const handler = window.PaystackPop.setup({
+      key: PAYSTACK_PUBLIC_KEY,
+      email: user.email,
+      amount: amount * 100, // Amount in kobo
+      currency: 'NGN',
+      ref: 'ug-' + generateId(),
+      callback: async (response: any) => {
+        const userRef = ref(database, `users/${user.uid}`);
+        const snapshot = await get(child(userRef, 'ugcredit'));
+        const currentCredit = snapshot.val() || 0;
+        await set(child(userRef, 'ugcredit'), currentCredit + credits);
+        alert('Purchase successful! Your credits have been added.');
+      },
+      onClose: () => {
+        alert('Transaction was cancelled.');
+      },
     });
+
+    handler.openIframe();
   }
 
   const createNewDesign = useCallback(() => {
