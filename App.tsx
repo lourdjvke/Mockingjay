@@ -10,7 +10,6 @@ import { domToPng } from 'modern-screenshot';
 import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove, update } from './firebase.ts';
 import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
-import ContextMenu from './components/ContextMenu.tsx';
 import QuickTools from './components/QuickTools.tsx';
 import Share from './components/Share.tsx';
 
@@ -116,7 +115,6 @@ const App: React.FC = () => {
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
   const [isBrandDnaOpen, setIsBrandDnaOpen] = useState(false);
   const [brandData, setBrandData] = useState(null);
-  const [contextMenu, setContextMenu] = useState<{ show: boolean; x: number; y: number; }>({ show: false, x: 0, y: 0 });
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Firebase and Design-related state
@@ -1049,11 +1047,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                 setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
                 setElementStartPos({ ...element.box });
             } else {
-                longPressTimer.current = window.setTimeout(() => {
-                    setContextMenu({ show: false, x: e.clientX, y: e.clientY });
-                    setDragStart(null);
-                    longPressTimer.current = null;
-                }, 500);
                 setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
                 setElementStartPos({ ...element.box });
             }
@@ -1076,13 +1069,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     }
   };
 
-  const handleElementContextMenu = useCallback((id: string, e: React.MouseEvent) => {
+  const handleElementContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setState(prev => ({ ...prev, selectedElementId: id }));
-    setEditingElementId(null);
-    setContextMenu({ show: false, x: e.clientX, y: e.clientY });
-    setDragStart(null);
   }, []);
 
   const deselectAll = () => {
@@ -1210,7 +1199,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       }
     }
 
-    if (!dragStart || contextMenu.show) return;
+    if (!dragStart) return;
 
     const dx = (e.clientX - dragStart.x) / scale;
     const dy = (e.clientY - dragStart.y) / scale;
@@ -1283,7 +1272,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       if (Math.abs(rotation % 45) < 5) rotation = Math.round(rotation / 45) * 45;
       updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation } });
     }
-  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement, contextMenu.show, isMobile, currentPage]);
+  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement, isMobile, currentPage]);
 
   const handlePointerUp = useCallback(() => {
     if (longPressTimer.current) {
@@ -1466,30 +1455,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           }
         }
       `}</style>
-      <ContextMenu
-        show={false}
-        x={contextMenu.x}
-        y={contextMenu.y}
-        isMobile={isMobile}
-        selectedElement={selectedElement}
-        onClose={() => setContextMenu({ ...contextMenu, show: false })}
-        onMoveForward={() => {
-            if (state.selectedElementId) onReorder(state.selectedElementId, 'up');
-            setContextMenu({ ...contextMenu, show: false });
-        }}
-        onMoveBackward={() => {
-            if (state.selectedElementId) onReorder(state.selectedElementId, 'down');
-            setContextMenu({ ...contextMenu, show: false });
-        }}
-        onCut={() => {
-            if (state.selectedElementId) deleteElement(state.selectedElementId);
-            setContextMenu({ ...contextMenu, show: false });
-        }}
-        onApplyEffect={(effect) => {
-            handleApplyEffect(effect);
-            setContextMenu({ ...contextMenu, show: false });
-        }}
-      />
 
       <Share 
         show={isShareModalOpen} 
@@ -1563,7 +1528,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
         {isBrandDnaOpen && <BrandDna onClose={() => setIsBrandDnaOpen(false)} onStartCampaign={handleGenerateCampaign} />}
 
-        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${ (isBottomSheetOpen || (contextMenu.show && isMobile)) ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${isBottomSheetOpen ? 'opacity-0' : 'opacity-100'}`}>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) })); triggerHaptic(2); }}><Icons.ArrowLeft className="w-5 h-5"/></button>
            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">{state.currentPageIndex + 1}/{state.pages.length}</span>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) })); triggerHaptic(2); }}><Icons.ArrowRight className="w-5 h-5"/></button>
@@ -1593,7 +1558,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
              />
            ))}
 
-           <div id="design-canvas" ref={canvasRef} onPointerDown={handleCanvasPointerDown} onContextMenu={e => e.preventDefault()} className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center bg-zinc-800 overflow-hidden"
+           <div id="design-canvas" ref={canvasRef} onPointerDown={handleCanvasPointerDown} onContextMenu={handleElementContextMenu} className="relative shadow-[0_0_120px_rgba(0,0,0,0.8)] transition-all duration-300 origin-center bg-zinc-800 overflow-hidden"
              style={{ 
                width: CANVAS_WIDTH, height: CANVAS_HEIGHT, transform: `scale(${scale})`,
                backgroundColor: currentPage?.background.startsWith('#') ? currentPage.background : undefined,
@@ -1609,7 +1574,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                        isEditing={editingElementId === el.id}
                        onSelect={handleElementPointerDown} 
                        updateElement={updateElement} 
-                       onContextMenu={(e) => handleElementContextMenu(el.id, e)} 
+                       onContextMenu={(e) => handleElementContextMenu(e)} 
                    />
               ))}
            </div>
@@ -1713,7 +1678,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         )}
 
         {isMobile && !isAiModalOpen && !isPwaInstalled && deferredPrompt && (
-          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen || (contextMenu.show && isMobile) ? 'translate-y-full' : 'translate-y-0'}`}>
+          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? 'translate-y-full' : 'translate-y-0'}`}>
             <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-lime-400/20 rounded-2xl shadow-2xl p-4">
               <button onClick={handlePwaInstall} className="w-full flex items-center gap-4">
                 <div className="w-12 h-12 bg-lime-400 rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(163,230,53,0.3)]">
@@ -1730,7 +1695,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         )}
 
         {isMobile && !isAiModalOpen && (isPwaInstalled || !deferredPrompt) && (
-          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen || (contextMenu.show && isMobile) ? 'translate-y-full' : 'translate-y-0'}`}>
+          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? 'translate-y-full' : 'translate-y-0'}`}>
                 <QuickTools
                     selectedElement={selectedElement}
                     updateElement={updateElement}
