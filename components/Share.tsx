@@ -1,15 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Icons } from './IconLibrary';
 import { toDataURL } from 'qrcode';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 
 interface ShareProps {
   show: boolean;
   onClose: () => void;
   designId: string | null;
+  onScanSuccess: (decodedText: string) => void;
 }
 
-const Share: React.FC<ShareProps> = ({ show, onClose, designId }) => {
+const Share: React.FC<ShareProps> = ({ show, onClose, designId, onScanSuccess }) => {
   const [qrCode, setQrCode] = useState<string | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   useEffect(() => {
     if (show && designId) {
@@ -23,6 +27,33 @@ const Share: React.FC<ShareProps> = ({ show, onClose, designId }) => {
     }
   }, [show, designId]);
 
+  useEffect(() => {
+    if (isScanning) {
+      scannerRef.current = new Html5QrcodeScanner(
+        "qr-reader", 
+        { fps: 10, qrbox: 250 },
+        false
+      );
+      scannerRef.current.render((decodedText, decodedResult) => {
+        onScanSuccess(decodedText);
+        setIsScanning(false);
+        onClose();
+      }, (errorMessage) => {
+        // handle scan error
+      });
+    } else {
+      if (scannerRef.current) {
+        scannerRef.current.clear();
+      }
+    }
+
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.clear();
+      }
+    };
+  }, [isScanning, onScanSuccess, onClose]);
+
   if (!show) {
     return null;
   }
@@ -30,20 +61,36 @@ const Share: React.FC<ShareProps> = ({ show, onClose, designId }) => {
   return (
     <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center gap-8 animate-in fade-in duration-500" onClick={onClose}>
       <div className="bg-zinc-900 border border-white/10 rounded-[24px] w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-        <div className="p-8 space-y-6">
-          <div className="text-center space-y-2">
-            <h2 className="text-xl md:text-2xl font-black text-white italic tracking-tight uppercase">Share Design</h2>
-            <p className="text-white/40 text-sm">Scan the QR code to collaborate</p>
+        {isScanning ? (
+          <div className="p-8">
+            <div id="qr-reader" style={{ width: '100%' }}></div>
+            <button onClick={() => setIsScanning(false)} className="w-full mt-4 py-3 text-white/50 text-xs font-bold uppercase tracking-widest border-t border-white/5 hover:text-white transition-colors">Cancel</button>
           </div>
-          <div className="flex justify-center">
-            {qrCode ? (
-              <img src={qrCode} alt="QR Code" />
-            ) : (
-              <div className="w-[300px] h-[300px] bg-gray-700 animate-pulse rounded-lg" />
-            )}
-          </div>
-        </div>
-        <button onClick={onClose} className="w-full py-5 text-white/30 text-xs font-bold uppercase tracking-widest border-t border-white/5 hover:text-white transition-colors">Close</button>
+        ) : (
+          <>
+            <div className="p-8 space-y-6">
+              <div className="text-center space-y-2">
+                <h2 className="text-xl md:text-2xl font-black text-white italic tracking-tight uppercase">Share Design</h2>
+                <p className="text-white/40 text-sm">Scan the QR code to collaborate</p>
+              </div>
+              <div className="flex justify-center">
+                {qrCode ? (
+                  <img src={qrCode} alt="QR Code" />
+                ) : (
+                  <div className="w-[300px] h-[300px] bg-gray-700 animate-pulse rounded-lg" />
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 border-t border-white/5">
+                <button onClick={() => setIsScanning(true)} className="w-full py-5 text-white/60 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors border-r border-white/5 flex items-center justify-center gap-2">
+                    <Icons.QrCode className="w-4 h-4" /> Scan QR
+                </button>
+                <button onClick={onClose} className="w-full py-5 text-white/60 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors flex items-center justify-center gap-2">
+                    <Icons.X className="w-4 h-4" /> Close
+                </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
