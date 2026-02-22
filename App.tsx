@@ -7,7 +7,7 @@ import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
 import BrandDna from './components/BrandDna.tsx';
 import { domToPng } from 'modern-screenshot';
-import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove } from './firebase.ts';
+import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove, runTransaction } from './firebase.ts';
 import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
 import ContextMenu from './components/ContextMenu.tsx';
@@ -21,6 +21,45 @@ interface SnapLine {
 
 type ExportStatus = 'idle' | 'processing' | 'success' | 'error';
 type SaveStatus = 'idle' | 'saving' | 'saved';
+
+const PricingModal = ({ show, onClose, onSelectPlan }) => {
+  if (!show) return null;
+
+  const plans = [
+    { amount: 500, tokens: 500, name: "Starter" },
+    { amount: 1000, tokens: 1200, name: "Pro" },
+    { amount: 3500, tokens: 4000, name: "Ultimate" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[3000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-zinc-900 border border-white/10 rounded-[24px] w-full max-w-md overflow-hidden shadow-2xl scale-100 animate-in fade-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
+        <div className="p-8 space-y-6">
+          <div className="text-center space-y-2">
+            <h2 className="text-2xl font-black text-white italic tracking-tight uppercase">Get More Tokens</h2>
+            <p className="text-white/40 text-sm">You need at least 150 tokens to generate a design.</p>
+          </div>
+          <div className="grid gap-4">
+            {plans.map((plan) => (
+              <div key={plan.name} onClick={() => onSelectPlan(plan.amount)} className="relative group bg-zinc-800 p-5 rounded-2xl text-white font-bold border border-white/5 transition-all hover:bg-zinc-700 active:scale-95 cursor-pointer overflow-hidden">
+                <div className="shimmer-overlay" />
+                <div className="flex justify-between items-center">
+                  <div className="space-y-1">
+                    <div className="text-lg">{plan.name}</div>
+                    <div className="text-[10px] font-bold opacity-60 italic uppercase tracking-widest">{plan.tokens} Tokens</div>
+                  </div>
+                  <div className="text-2xl font-black">₦{plan.amount}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <button onClick={onClose} className="w-full py-5 text-white/30 text-xs font-bold uppercase tracking-widest border-t border-white/5 hover:text-white transition-colors">Cancel</button>
+      </div>
+    </div>
+  );
+};
+
 
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>(INITIAL_STATE);
@@ -52,6 +91,9 @@ const App: React.FC = () => {
   const [designs, setDesigns] = useState<any[]>([]);
   const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [userTokens, setUserTokens] = useState(0);
+  const [showPricingModal, setShowPricingModal] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -60,6 +102,57 @@ const App: React.FC = () => {
   const longPressTimer = useRef<number | null>(null);
 
   const allFonts = [...userFonts, ...BASE_FONTS];
+
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://js.paystack.co/v1/inline.js";
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  const payWithPaystack = (amountToPay) => {
+    if (!window.PaystackPop) {
+      alert("Paystack SDK not loaded yet. Please wait.");
+      return;
+    }
+    if (!user) {
+      alert("You must be logged in to make a purchase.");
+      return;
+    }
+
+    setPaymentLoading(true);
+
+    const handler = window.PaystackPop.setup({
+      key: "pk_live_8bfda55664a1327e5d47c4acc6767c123514b826", // Replace with your public key
+      email: user.email,
+      amount: amountToPay * 100, // Amount in Kobo
+      currency: "NGN",
+      ref: `ref_${Math.floor(Math.random() * 1000000000 + 1)}`,
+      callback: (response) => {
+        const tokenMap = {
+          500: 500,
+          1000: 1200,
+          3500: 4000
+        };
+        const tokensToAdd = tokenMap[amountToPay];
+        const userCreditRef = ref(database, `users/${user.uid}/ugcredit`);
+        runTransaction(userCreditRef, (currentTokens) => {
+          return (currentTokens || 0) + tokensToAdd;
+        });
+        setPaymentLoading(false);
+        setShowPricingModal(false);
+      },
+      onClose: () => {
+        setPaymentLoading(false);
+      },
+    });
+
+    handler.openIframe();
+  };
 
   const debouncedSave = useDebouncedCallback(async (designState: EditorState, designId: string) => {
     if (!user || !canvasRef.current) return;
@@ -105,6 +198,7 @@ const App: React.FC = () => {
         setState(INITIAL_STATE);
         setCurrentDesignId(null);
         setDesigns([]);
+        setUserTokens(0);
       }
     });
     return () => unsubscribe();
@@ -124,6 +218,19 @@ const App: React.FC = () => {
           .sort((a, b) => b.lastModified - a.lastModified)
         : [];
       setDesigns(userDesigns);
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      setUserTokens(0);
+      return;
+    }
+    const userCreditRef = ref(database, `users/${user.uid}/ugcredit`);
+    const unsubscribe = onValue(userCreditRef, (snapshot) => {
+      const tokens = snapshot.val() || 0;
+      setUserTokens(tokens);
     });
     return () => unsubscribe();
   }, [user]);
@@ -500,11 +607,24 @@ const App: React.FC = () => {
   }, [allFonts]);
 
   const handleGenerateCampaign = async (brandDna, prompt, tags, images) => {
+    if (userTokens < 150) {
+      setShowPricingModal(true);
+      return;
+    }
+    
     setIsBrandDnaOpen(false);
     setIsAiLoading(true);
     triggerHaptic(30);
 
     try {
+      const userCreditRef = ref(database, `users/${user.uid}/ugcredit`);
+      await runTransaction(userCreditRef, (currentTokens) => {
+        if (currentTokens < 150) {
+          throw "Insufficient tokens";
+        }
+        return currentTokens - 150;
+      });
+
       const apiUrl = '/api/ai';
 
       const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer specializing in brand campaigns.
@@ -669,10 +789,23 @@ USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design
 
   const handleAiRefine = async () => {
     if (!aiPrompt.trim() && aiAttachedImages.length === 0) return;
+    if (userTokens < 150) {
+      setShowPricingModal(true);
+      return;
+    }
+
     setIsAiLoading(true);
     triggerHaptic(30);
 
     try {
+      const userCreditRef = ref(database, `users/${user.uid}/ugcredit`);
+      await runTransaction(userCreditRef, (currentTokens) => {
+        if (currentTokens < 150) {
+          throw "Insufficient tokens";
+        }
+        return currentTokens - 150;
+      });
+
       const apiUrl = '/api/ai';
 
       const base64Map: { [key: string]: string } = {};
@@ -1317,6 +1450,11 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
+      <PricingModal 
+        show={showPricingModal} 
+        onClose={() => setShowPricingModal(false)}
+        onSelectPlan={payWithPaystack} 
+      />
       <ContextMenu
         show={contextMenu.show}
         x={contextMenu.x}
@@ -1488,13 +1626,19 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         {isAiModalOpen && (
           <div className="absolute inset-x-0 bottom-0 z-[200] p-4 animate-in slide-in-from-bottom duration-500">
              <div className="bg-lime-900/40 backdrop-blur-3xl border border-lime-400/30 rounded-[24px] p-6 md:p-8 shadow-[0_40px_100px_rgba(0,0,0,0.9)]">
-                <div className="flex items-center gap-3 mb-6">
-                   <div className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.4)]">
-                      <Icons.Wand2 className="w-5 h-5 text-black" />
+                <div className="flex items-center justify-between gap-3 mb-6">
+                   <div className="flex items-center gap-3">
+                     <div className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.4)]">
+                        <Icons.Wand2 className="w-5 h-5 text-black" />
+                     </div>
+                     <div className="space-y-0.5">
+                        <h3 className="text-xs md:text-sm font-black uppercase tracking-widest text-white italic">Mockingjay Intelligence</h3>
+                        <p className="text-white/40 text-[8px] md:text-[9px] font-bold uppercase tracking-widest">Global Design Engine v3.1</p>
+                     </div>
                    </div>
-                   <div className="space-y-0.5">
-                      <h3 className="text-xs md:text-sm font-black uppercase tracking-widest text-white italic">Mockingjay Intelligence</h3>
-                      <p className="text-white/40 text-[8px] md:text-[9px] font-bold uppercase tracking-widest">Global Design Engine v3.1</p>
+                   <div className="text-right">
+                      <div className="text-sm font-bold text-white">{userTokens}</div>
+                      <div className="text-[9px] text-white/40 font-medium uppercase tracking-wider">Tokens</div>
                    </div>
                 </div>
                 <input type="file" ref={aiImageInputRef} className="hidden" accept="image/*" multiple onChange={handleAiImageAttach} />
