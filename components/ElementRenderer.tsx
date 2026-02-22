@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useLayoutEffect } from 'react';
 import { DesignElement } from '../types';
 import { Icons } from './IconLibrary';
 
@@ -7,71 +7,86 @@ interface ElementRendererProps {
     isSelected: boolean;
     isEditing: boolean;
     onSelect: (id: string, e: React.PointerEvent<HTMLDivElement>) => void;
-    onUpdate: (id: string, content: string, newHeight: number) => void;
-    onContextMenu: (e: React.MouseEvent) => void;
+    onUpdate: (id: string, updates: Partial<DesignElement>) => void;
 }
 
-const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, isEditing, onSelect, onUpdate, onContextMenu }) => {
+// This function calculates the exact height a text element should be.
+const getTextHeight = (element: DesignElement) => {
+    const tempDiv = document.createElement('div');
+    Object.assign(tempDiv.style, {
+        width: `${element.box.width}px`,
+        padding: '10px',
+        boxSizing: 'border-box',
+        fontFamily: element.style.fontFamily || 'inherit',
+        fontSize: element.style.fontSize ? `${element.style.fontSize}px` : 'inherit',
+        lineHeight: element.style.lineHeight || 'normal',
+        letterSpacing: element.style.letterSpacing ? `${element.style.letterSpacing}px` : 'normal',
+        fontWeight: element.style.fontWeight || 'normal',
+        wordBreak: 'break-word',
+        visibility: 'hidden',
+        position: 'absolute',
+        top: '-9999px',
+        left: '-9999px',
+    });
+    // Cleanse content before measuring to get the *true* height
+    const cleansedContent = (element.content || '').replace(/^(<br\s*\/?>|\s|&nbsp;)+|(<br\s*\/?>|\s|&nbsp;)+$/g, "");
+    tempDiv.innerHTML = cleansedContent || '&nbsp;'; // Use a non-breaking space to ensure at least one line of height
+    document.body.appendChild(tempDiv);
+    const height = tempDiv.scrollHeight;
+    document.body.removeChild(tempDiv);
+    return height;
+};
+
+const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, isEditing, onSelect, onUpdate }) => {
     const textRef = useRef<HTMLDivElement>(null);
 
-    // Effect to sync external content changes (e.g., from AI), but ONLY when not editing.
-    // This is crucial to prevent the caret from jumping.
-    useEffect(() => {
+    // useLayoutEffect runs synchronously after a render but before the screen is updated.
+    // This is the key to preventing the caret jump.
+    useLayoutEffect(() => {
         const div = textRef.current;
-        if (div && !isEditing && element.type === 'text' && div.innerHTML !== element.content) {
+        if (div && !isEditing && div.innerHTML !== element.content) {
             div.innerHTML = element.content || '';
         }
-    }, [element.content, isEditing, element.type]);
+    }, [element.content, isEditing]);
 
-    // Effect to handle focusing and cursor placement when editing starts.
+    // On initial render and when content changes, ensure the box height is correct.
+    useEffect(() => {
+        if (element.type === 'text') {
+            const requiredHeight = getTextHeight(element);
+            if (element.box.height < requiredHeight) {
+                onUpdate(element.id, { box: { ...element.box, height: requiredHeight } });
+            }
+        }
+    }, [element.content, element.box.width, element.style]); // Re-check if content, width, or style changes
+
+    // When editing begins, focus the div and move the cursor to the end.
     useEffect(() => {
         if (isEditing && textRef.current) {
             textRef.current.focus();
-            // Move cursor to the end of the text
             const range = document.createRange();
             const sel = window.getSelection();
-            range.selectNodeContents(textRef.current);
-            range.collapse(false);
-            sel?.removeAllRanges();
-            sel?.addRange(range);
+            if (sel) {
+                range.selectNodeContents(textRef.current);
+                range.collapse(false); // false means collapse to the end
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
         }
     }, [isEditing]);
 
     const handleBlur = () => {
         if (textRef.current && isEditing) {
             const newContent = textRef.current.innerHTML;
-
-            // 1. Cleanse the content: remove leading/trailing <br> tags and whitespace.
             const cleansedContent = newContent.replace(/^(<br\s*\/?>|\s|&nbsp;)+|(<br\s*\/?>|\s|&nbsp;)+$/g, "");
+            const newHeight = getTextHeight({ ...element, content: cleansedContent });
 
-            // 2. Accurately calculate the height of the cleansed content.
-            const tempDiv = document.createElement('div');
-            Object.assign(tempDiv.style, {
-                width: `${element.box.width}px`,
-                padding: '10px',
-                boxSizing: 'border-box',
-                fontFamily: element.style.fontFamily || 'inherit',
-                fontSize: element.style.fontSize ? `${element.style.fontSize}px` : 'inherit',
-                lineHeight: element.style.lineHeight || 'normal',
-                letterSpacing: element.style.letterSpacing ? `${element.style.letterSpacing}px` : 'normal',
-                fontWeight: element.style.fontWeight || 'normal',
-                wordBreak: 'break-word',
-                visibility: 'hidden',
-                position: 'absolute',
-                top: '-9999px',
-                left: '-9999px',
+            onUpdate(element.id, {
+                content: cleansedContent,
+                box: { ...element.box, height: newHeight },
             });
-            tempDiv.innerHTML = cleansedContent || '&nbsp;'; // Use &nbsp; to ensure height for empty content
-            document.body.appendChild(tempDiv);
-            const newHeight = tempDiv.scrollHeight;
-            document.body.removeChild(tempDiv);
-            
-            // 3. Call the update function with cleansed content and precise height.
-            onUpdate(element.id, cleansedContent, newHeight);
         }
     };
     
-    // Base style for the draggable/resizable container
     const containerStyle: React.CSSProperties = {
         position: 'absolute',
         left: element.box.x,
@@ -84,9 +99,11 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
         visibility: element.visible ? 'visible' : 'hidden',
         pointerEvents: 'auto',
         ...element.style,
-        // The white background bug was caused by default styles in App.tsx.
-        // This ensures that text elements are transparent unless a color is specified.
-        backgroundColor: element.type === 'text' ? (element.style.backgroundColor || 'transparent') : element.style.backgroundColor,
+        // THE FIX: Explicitly set backgroundColor to transparent for text/icon, 
+        // unless one is already defined in the element's style.
+        backgroundColor: (element.type === 'text' || element.type === 'icon') 
+            ? (element.style.backgroundColor || 'transparent') 
+            : element.style.backgroundColor,
     };
 
     const renderContent = () => {
@@ -98,16 +115,16 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
                         contentEditable={isEditing}
                         suppressContentEditableWarning={true}
                         onBlur={handleBlur}
+                        onPointerDown={(e) => e.stopPropagation()} // Stop pointer events from bubbling to the container
                         style={{
                             width: '100%',
-                            height: '100%',
+                            height: '100%', // Let the container control the height
                             wordBreak: 'break-word',
                             cursor: isEditing ? 'text' : 'default',
                             padding: 10,
                             boxSizing: 'border-box',
                             outline: 'none',
                         }}
-                        // Set the initial HTML, but allow the browser to control it during editing.
                         dangerouslySetInnerHTML={{ __html: element.content || '' }}
                     />
                 );
@@ -126,7 +143,6 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
         <div
             style={containerStyle}
             onPointerDown={(e) => onSelect(element.id, e)}
-            onContextMenu={onContextMenu}
         >
             {renderContent()}
         </div>
