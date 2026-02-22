@@ -1042,7 +1042,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                 setElementStartPos({ ...element.box });
             } else {
                 longPressTimer.current = window.setTimeout(() => {
-                    setContextMenu({ show: true, x: e.clientX, y: e.clientY });
+                    setContextMenu({ show: false, x: e.clientX, y: e.clientY });
                     setDragStart(null);
                     longPressTimer.current = null;
                 }, 500);
@@ -1073,7 +1073,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     e.stopPropagation();
     setState(prev => ({ ...prev, selectedElementId: id }));
     setEditingElementId(null);
-    setContextMenu({ show: true, x: e.clientX, y: e.clientY });
+    setContextMenu({ show: false, x: e.clientX, y: e.clientY });
     setDragStart(null);
   }, []);
 
@@ -1457,7 +1457,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         }
       `}</style>
       <ContextMenu
-        show={contextMenu.show}
+        show={false}
         x={contextMenu.x}
         y={contextMenu.y}
         isMobile={isMobile}
@@ -1528,7 +1528,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === 'success' ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-12 scale-90'}`}>
         <div className="bg-zinc-900/90 backdrop-blur-3xl border border-white/10 px-6 py-3 rounded-full flex items-center gap-4 shadow-[0_12px_48px_rgba(0,0,0,0.6)]">
            <div className="w-6 h-6 bg-lime-400 text-black rounded-full flex items-center justify-center shadow-inner">
-             <Icons.Sparkles className="w-3.5 h-3.5" />
+             <Icons.Magic className="w-3.5 h-3.5" />
            </div>
            <span className="text-[13px] font-bold tracking-tight text-white uppercase italic">Design Finalized</span>
         </div>
@@ -1541,7 +1541,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                 <div className="w-32 h-32 border-2 border-lime-400/20 rounded-full animate-ping absolute inset-0"></div>
                 <div className="w-32 h-32 border-4 border-lime-400 border-t-transparent rounded-full animate-spin"></div>
                 <div className="absolute inset-0 flex items-center justify-center">
-                   <Icons.Wand2 className="w-10 h-10 text-lime-400 animate-pulse" />
+                   <Icons.Magic className="w-10 h-10 text-lime-400 animate-pulse" />
                 </div>
              </div>
              <div className="text-center space-y-2">
@@ -1563,7 +1563,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
               {saveStatus === 'saved' && <Icons.Check className="w-4 h-4 text-green-400" />}
               {saveStatus === 'idle' && <Icons.Plus className="w-5 h-5" />}
             </button>
-           <button className="p-1.5 bg-gradient-to-tr from-lime-600 to-lime-400 rounded-full text-black hover:rotate-12 transition-all shadow-[0_0_15px_rgba(163,230,53,0.4)]" onClick={() => { setIsAiModalOpen(true); triggerHaptic(10); }}><Icons.Wand2 className="w-4 h-4" /></button>
+           <button className="p-1.5 bg-gradient-to-tr from-lime-600 to-lime-400 rounded-full text-black hover:rotate-12 transition-all shadow-[0_0_15px_rgba(163,230,53,0.4)]" onClick={() => { setIsAiModalOpen(true); triggerHaptic(10); }}><Icons.Magic className="w-4 h-4" /></button>
            {selectedElement ? (
             <button className="p-1 text-red-400/60 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
            ) : (
@@ -1641,7 +1641,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                 <div className="flex items-center justify-between gap-3 mb-6">
                    <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.4)]">
-                            <Icons.Wand2 className="w-5 h-5 text-black" />
+                            <Icons.Magic className="w-5 h-5 text-black" />
                         </div>
                         <div className="space-y-0.5">
                             <h3 className="text-xs md:text-sm font-black uppercase tracking-widest text-white italic">Mockingjay Intelligence</h3>
@@ -1649,7 +1649,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                         </div>
                    </div>
                    <div className="flex items-center gap-2 bg-black/20 border border-white/10 px-4 py-2 rounded-full">
-                        <Icons.Sparkles className="w-4 h-4 text-lime-400" />
+                        <Icons.Magic className="w-4 h-4 text-lime-400" />
                         <span className="text-lg font-bold text-white">{ugCredit}</span>
                    </div>
                 </div>
@@ -1689,7 +1689,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                             <Icons.Paperclip className="w-5 h-5" />
                         </button>
                         <button onClick={handleAiRefine} disabled={isAiLoading || (useImageAsReference && aiAttachedImages.length === 0)} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-zinc-800' : 'bg-lime-400 text-black active:scale-90 hover:shadow-[0_0_15px_rgba(163,230,53,0.5)]'} disabled:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed`}>
-                            {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
+                            {isAiLoading ? <Icons.Magic className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
                         </button>
                         </div>
                         {aiAttachedImages.length > 0 && (
