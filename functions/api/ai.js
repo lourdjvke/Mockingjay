@@ -1,147 +1,158 @@
-  function handleFile(file) {
-            if (!file || !file.type.startsWith('image/')) return;
-            
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                currentImageBase64 = e.target.result.split(',')[1];
-                previewImg.src = e.target.result;
-                workspace.classList.remove('hidden');
-                analyzeImage();
-            };
-            reader.readAsDataURL(file);
-        }
 
-        // --- AI Logic ---
-
-        async function analyzeImage() {
-            loading.classList.remove('hidden');
-            results.classList.add('hidden');
-            clearCanvas();
-            
-            const prompt = `Describe this image briefly. Identify the main objects and provide their normalized bounding box coordinates [ymin, xmin, ymax, xmax] as a JSON array of objects with keys: "label", "box".`;
-            
-            const payload = {
-                contents: [{
-                    parts: [
-                        { text: prompt },
-                        { inlineData: { mimeType: "image/png", data: currentImageBase64 } }
-                    ]
-                }],
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "OBJECT",
-                        properties: {
-                            description: { type: "STRING" },
-                            objects: {
-                                type: "ARRAY",
-                                items: {
-                                    type: "OBJECT",
-                                    properties: {
-                                        label: { type: "STRING" },
-                                        box: { 
-                                            type: "ARRAY", 
-                                            items: { type: "NUMBER" },
-                                            minItems: 4,
-                                            maxItems: 4
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            };
-
-            try {
-                const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, payload);
-                const data = await response.json();
-                const result = JSON.parse(data.candidates[0].content.parts[0].text);
-                
-                displayResults(result);
-            } catch (error) {
-                console.error(error);
-                descriptionEl.innerText = "Error contacting Gemini. Please check your connection.";
-                loading.classList.add('hidden');
-                results.classList.remove('hidden');
-            }
-        }
-
-        async function fetchWithRetry(url, body, retries = 5, backoff = 1000) {
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const res = await fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body)
-                    });
-                    if (res.ok) return res;
-                    if (res.status !== 429 && res.status < 500) break;
-                } catch (e) {}
-                await new Promise(r => setTimeout(r, backoff * Math.pow(2, i)));
-            }
-            throw new Error("Failed after retries");
-        }
-
-        function displayResults(data) {
-            loading.classList.add('hidden');
-            results.classList.remove('hidden');
-            
-            descriptionEl.innerText = data.description || "No description provided.";
-            objectsList.innerHTML = "";
-
-            if (data.objects && data.objects.length > 0) {
-                data.objects.forEach(obj => {
-                    const chip = document.createElement('div');
-                    chip.className = "flex justify-between items-center p-2 bg-indigo-50 border border-indigo-100 rounded-lg text-sm";
-                    chip.innerHTML = `<span class="font-semibold text-indigo-700">${obj.label}</span>
-                                      <span class="text-xs text-slate-400 font-mono">[${obj.box.join(', ')}]</span>`;
-                    objectsList.appendChild(chip);
-                });
-                drawBoxes(data.objects);
-            } else {
-                objectsList.innerHTML = '<p class="text-slate-400 text-sm italic">No specific objects localized.</p>';
-            }
-        }
-
-        function drawBoxes(objects) {
-            const ctx = overlayCanvas.getContext('2d');
-            const img = previewImg;
-            
-            // Wait for image dimensions to be stable
-            setTimeout(() => {
-                overlayCanvas.width = img.clientWidth;
-                overlayCanvas.height = img.clientHeight;
-                ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-
-                objects.forEach(obj => {
-                    const [ymin, xmin, ymax, xmax] = obj.box;
-                    
-                    // Normalized to pixels
-                    const x = (xmin / 1000) * overlayCanvas.width;
-                    const y = (ymin / 1000) * overlayCanvas.height;
-                    const w = ((xmax - xmin) / 1000) * overlayCanvas.width;
-                    const h = ((ymax - ymin) / 1000) * overlayCanvas.height;
-
-                    ctx.strokeStyle = '#6366f1';
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(x, y, w, h);
-
-                    ctx.fillStyle = '#6366f1';
-                    ctx.font = 'bold 12px sans-serif';
-                    ctx.fillText(obj.label, x, y > 15 ? y - 5 : y + 15);
-                });
-            }, 100);
-        }
-
-        function clearCanvas() {
-            const ctx = overlayCanvas.getContext('2d');
-            ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-        }
-
-        window.addEventListener('resize', () => {
-            // Re-draw boxes if there's an image
-            if (previewImg.src) {
-                // Logic would need to cache last objects to redraw properly
-            }
+export async function onRequest({ request, env }) {
+    if (request.method !== 'POST') {
+        return new Response('Method Not Allowed', {
+            status: 405,
+            headers: {
+                'Allow': 'POST',
+            },
         });
+    }
+
+    const models = [
+        'gemini-2.5-flash',
+        'gemini-3-flash',
+        'gemini-2.5-flash-lite',
+    ];
+
+    let lastError = null;
+
+    try {
+        const clientRequestBody = await request.json();
+
+        const lastMessage = clientRequestBody.messages[clientRequestBody.messages.length - 1];
+        let userPromptText = '';
+        let imagePart = null;
+
+        if (!lastMessage || !lastMessage.content) {
+            return new Response(JSON.stringify({ error: 'Invalid request: No message content found.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        if (typeof lastMessage.content === 'string') {
+            userPromptText = lastMessage.content;
+        } else if (Array.isArray(lastMessage.content)) {
+            const textPart = lastMessage.content.find(p => p.type === 'text');
+            userPromptText = textPart?.text || '';
+            imagePart = lastMessage.content.find(p => p.type === 'image_url');
+        }
+
+        if (!userPromptText && !imagePart) {
+            return new Response(JSON.stringify({ error: 'Invalid prompt format: No text or image prompt found.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        const luxuryDesignContext = `
+        You are "Mockingjay Atelier", the epitome of digital elegance and a visionary in luxury brand design.
+        Your creations are not mere designs; they are bespoke digital couture. Your task is to interpret user aspirations and manifest them into breathtaking, high-fashion design structures.
+        You operate with an unparalleled aesthetic sense, blending classic principles with avant-garde trends.
+        ALWAYS generate opulent, richly detailed content with a story. Never settle for mediocrity or minimalism unless the prompt explicitly demands it in a high-fashion context (e.g., \'brutalist luxury\').
+  
+        CRITICAL RULES OF THE ATELIER:
+        1. Every canvas is a masterpiece. Populate it with an abundance of carefully curated elements (minimum 4-6).
+        2. Blank space is a statement, not an oversight. Never return an empty page.
+        3. Impeccable execution is paramount. Elements MUST have flawless positioning, exquisite typography, and a harmonious color palette.
+        4. Embody the client\'s vision. The brand\'s soul must permeate every pixel.
+        5. The canvas is your domain: 1080x1080 pixels. Every element must respect its sacred boundaries.
+        6. For multi-page narratives, each page is a new chapter, as rich and complete as the last.
+        7. Details make the luxury. Use \`borderRadius\` with intention (0-30px for sharp, modern looks; 999px for soft, organic forms).
+        8. All properties in the schema are intentional. If a style property is not applicable, it MUST be \`null\`.
+  
+        STYLISTIC GUIDANCE (DESIGN PATTERNS):
+  
+        FOR ASPIRATIONAL BRANDS:
+        1. Set the mood with a sophisticated background color or a subtle, textured image (\`page.background\`).
+        2. A bold, elegant headline (50-80px) that captures the brand\'s essence.
+        3. An eloquent tagline or sub-header (28-36px).
+        4. 2-4 blocks of poetic, descriptive text (16-20px).
+        5. Sculptural shapes, icons, or line art to add depth and intrigue. Use \`clipPath\` to create signature forms.
+        6. The color palette must breathe luxury.
+  
+        COMPOSITION & LAYOUT (THE GOLDEN RATIO):
+        - Adhere to a generous margin of 30-60px from all canvas edges.
+        - Create visual rhythm by spacing elements 20-30px apart.
+        - The main headline should command attention, often placed at a key focal point, not just centered at the top.
+        - Guide the viewer\'s eye with a clear visual hierarchy.
+  
+        The output must be a flawless JSON object. Do not include any text, code block markers, or markdown before or after the JSON object.
+  
+        User\'s request is as follows:
+        ${userPromptText}
+      `;
+
+        const parts = [{ text: luxuryDesignContext }];
+
+        if (imagePart && imagePart.image_url && imagePart.image_url.url) {
+            const imageUrl = imagePart.image_url.url;
+            const match = imageUrl.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/);
+            if (match) {
+                const mimeType = match[1];
+                const base64Data = match[2];
+                parts.unshift({ // Add image part to the beginning of the parts array
+                    inlineData: {
+                        mimeType: mimeType,
+                        data: base64Data,
+                    }
+                });
+            }
+        }
+
+        const geminiRequestBody = {
+            contents: [{ parts: parts }],
+            generationConfig: {
+                responseMimeType: "application/json",
+            },
+        };
+
+        for (const model of models) {
+            const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
+            
+            try {
+                const geminiResponse = await fetch(geminiApiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(geminiRequestBody),
+                });
+
+                if (geminiResponse.ok) {
+                    const geminiData = await geminiResponse.json();
+                    const generatedText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                    if (generatedText) {
+                        const openAICompliantResponse = {
+                            choices: [{ message: { content: generatedText } }],
+                        };
+                        return new Response(JSON.stringify(openAICompliantResponse), {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/json' },
+                        });
+                    }
+                    lastError = new Error(`No content in Gemini response from model ${model}`);
+                    console.error(`Invalid Gemini Response from ${model}:`, geminiData);
+                    continue; // Try next model
+                } else {
+                    const errorBodyText = await geminiResponse.text();
+                    lastError = new Error(`Gemini API request failed for model ${model} with status ${geminiResponse.status}: ${errorBodyText}`);
+                    console.error(`Gemini API error for model ${model}:`, errorBodyText);
+                    // continue to next model
+                }
+            } catch (error) {
+                lastError = error;
+                console.error(`Error fetching from model ${model}:`, error);
+                // continue to next model
+            }
+        }
+
+        // If loop finishes, all models failed
+        console.error('All Gemini models failed. Last error:', lastError);
+        return new Response(JSON.stringify({ error: 'AI system not responding' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+        });
+
+    } catch (error) {
+        console.error('Error in Cloudflare Function:', error);
+        return new Response(JSON.stringify({ error: error.message || 'Failed to process request' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    }
+}
