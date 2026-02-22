@@ -1270,10 +1270,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     };
   }, [handlePointerMove, handlePointerUp]);
 
-  const handleTextUpdate = (id: string, updates: Partial<DesignElement>) => {
-    updateElement(id, updates);
-    setEditingElementId(null);
-  };
+  const handleFinishEdit = useCallback((id: string, updates: Partial<DesignElement>) => {
+      updateElement(id, updates);
+      setEditingElementId(null);
+  }, [updateElement]);
 
   const saveToPublicTemplates = async () => {
     if (!canvasRef.current || !currentDesignId) return;
@@ -1553,7 +1553,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     isSelected={state.selectedElementId === el.id} 
                     isEditing={editingElementId === el.id}
                     onSelect={handleElementPointerDown} 
-                    onUpdate={handleTextUpdate}
+                    onFinishEdit={handleFinishEdit}
                   />
                   {state.selectedElementId === el.id && !el.locked && editingElementId !== el.id && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
