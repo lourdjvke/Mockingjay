@@ -927,51 +927,43 @@ YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanat
     });
   };
 
-  const handleSelect = useCallback((id: string, e: React.PointerEvent) => {
+  const handleElementPointerDown = useCallback((id: string, e: React.PointerEvent) => {
     e.stopPropagation();
-    if (state.selectedElementId !== id) triggerHaptic(5);
-    setState(prev => ({ ...prev, selectedElementId: id }));
     const element = currentPage.elements.find(el => el.id === id);
+    if (!element) return;
 
-    if (longPressTimer.current) {
-        clearTimeout(longPressTimer.current);
+    const wasSelected = state.selectedElementId === id;
+
+    if (!wasSelected) {
+        setState(prev => ({ ...prev, selectedElementId: id }));
+        triggerHaptic(5);
     }
 
-    if (element && !element.locked) {
-        if (isMobile) {
-            // On mobile, selection happens on tap, not drag
-            if (dragStart?.type !== 'swipe') {
-                setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
-                setElementStartPos({ ...element.box });
-            }
-        } else {
-            longPressTimer.current = window.setTimeout(() => {
-                setContextMenu({
-                    show: true,
-                    x: e.clientX,
-                    y: e.clientY,
-                });
-                setDragStart(null); // Prevent dragging after context menu opens
-                longPressTimer.current = null;
-            }, 500);
-    
+    if (element.locked) return;
+
+    if (isMobile) {
+        if (wasSelected) {
             setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
             setElementStartPos({ ...element.box });
         }
+    } else {
+        longPressTimer.current = window.setTimeout(() => {
+            setContextMenu({ show: true, x: e.clientX, y: e.clientY });
+            setDragStart(null);
+            longPressTimer.current = null;
+        }, 500);
+        setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
+        setElementStartPos({ ...element.box });
     }
-  }, [currentPage, state.selectedElementId, triggerHaptic, isMobile, dragStart]);
+  }, [state.selectedElementId, currentPage, isMobile, triggerHaptic, contextMenu.show]);
 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
-    // Only trigger swipe or deselect if the event is on the canvas background itself
-    if (e.target === e.currentTarget) {
-        if (isMobile && state.pages.length > 1) {
-            if (state.selectedElementId) {
-                deselectAll();
-            }
-            setDragStart({ x: e.clientX, y: e.clientY, type: 'swipe' });
-        } else {
-            deselectAll();
-        }
+    if (e.target !== e.currentTarget) return;
+
+    if (state.selectedElementId) {
+        deselectAll();
+    } else if (isMobile && state.pages.length > 1) {
+        setDragStart({ x: e.clientX, y: e.clientY, type: 'swipe' });
     }
   };
 
@@ -1405,7 +1397,7 @@ YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanat
            >
               {currentPage?.elements.map(el => (
                 <div key={el.id}>
-                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleSelect} onAutoResize={handleAutoResize} onContextMenu={(e) => handleElementContextMenu(el.id, e)} />
+                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleElementPointerDown} onAutoResize={handleAutoResize} onContextMenu={(e) => handleElementContextMenu(el.id, e)} />
                   {state.selectedElementId === el.id && !el.locked && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
                       {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
@@ -1426,7 +1418,7 @@ YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanat
                       >
                          <Icons.RotateCw className="w-7 h-7 text-lime-400" />
                       </div>
-                      <div onPointerDown={(e) => handleSelect(el.id, e)} className="absolute -top-24 left-1/2 -translate-x-1/2 bg-lime-400 px-6 py-2.5 rounded-full flex items-center gap-3 text-[12px] text-black font-bold uppercase tracking-widest shadow-xl animate-bounce pointer-events-auto cursor-grab active:cursor-grabbing">
+                      <div onPointerDown={(e) => handleElementPointerDown(el.id, e)} className="absolute -top-24 left-1/2 -translate-x-1/2 bg-lime-400 px-6 py-2.5 rounded-full flex items-center gap-3 text-[12px] text-black font-bold uppercase tracking-widest shadow-xl animate-bounce pointer-events-auto cursor-grab active:cursor-grabbing">
                          <Icons.Move className="w-5 h-5" /> Move
                       </div>
                     </div>
