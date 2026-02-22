@@ -115,12 +115,6 @@ const App: React.FC = () => {
     }
   }, [state, user, currentDesignId, isAuthLoading, debouncedSave]);
 
-    useEffect(() => {
-        const script = document.createElement("script");
-        script.src = "https://js.paystack.co/v1/inline.js";
-        document.body.appendChild(script);
-    }, []);
-
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
@@ -1716,7 +1710,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                         </div>
                     </>
                 )}
-                <button onClick={() => { setIsAiModalOpen(false); setAiAttachedImages([]); }} className="w-full mt-8 text-[10px] font-black uppercase text-white/20 hover:text-white/60 transition-colors tracking-[0.4em]">Abort Engine Session</button>
+                <button onClick={() => { setIsAiModalOpen(false); setAiAttachedImages([]); }} className="w-full mt-8 text-[10px] font-black uppercase text-white/20 hover:text-white/60 transition-colors tracking-[0.4em]">Close</button>
              </div>
           </div>
         )}
