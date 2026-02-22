@@ -201,6 +201,40 @@ const App: React.FC = () => {
     }
   }, [designs]);
 
+  const handleScanSuccess = async (decodedText: string) => {
+    try {
+        // Expected format: users/some-uid/designs/some-design-id
+        const pathParts = decodedText.split('/');
+        if (pathParts.length !== 4 || pathParts[0] !== 'users' || pathParts[2] !== 'designs') {
+            throw new Error("Invalid QR code format.");
+        }
+        const designRef = ref(database, decodedText);
+        const snapshot = await get(designRef);
+        if (snapshot.exists()) {
+            const designData = snapshot.val();
+            const sanitizedPages = (designData.pages || INITIAL_STATE.pages).map((page: Page) => ({
+                ...page,
+                elements: page.elements || [],
+            }));
+            // Create a new copy in the current user's account
+            const newId = generateId();
+            setState({
+                pages: sanitizedPages,
+                currentPageIndex: designData.currentPageIndex || 0,
+                selectedElementId: null, // Deselect elements upon loading
+                themeColors: designData.themeColors || INITIAL_STATE.themeColors,
+            });
+            setCurrentDesignId(newId);
+            alert("Design loaded successfully! It has been saved as a new copy in your account.");
+        } else {
+            throw new Error("Design not found.");
+        }
+    } catch (error) {
+        console.error("Failed to load shared design:", error);
+        alert(`Failed to load design: ${(error as Error).message}`);
+    }
+  };
+
   const addPage = () => {
     setState(prev => {
       const newPage: Page = { id: generateId(), background: '#18181b', elements: [] };
@@ -914,10 +948,16 @@ YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanat
   }, [currentPage, state.selectedElementId, triggerHaptic, isMobile, dragStart]);
 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
-    if (isMobile && !selectedElement && state.pages.length > 1) {
-        setDragStart({ x: e.clientX, y: e.clientY, type: 'swipe' });
-    } else {
-        deselectAll();
+    // Only trigger swipe or deselect if the event is on the canvas background itself
+    if (e.target === e.currentTarget) {
+        if (isMobile && state.pages.length > 1) {
+            if (state.selectedElementId) {
+                deselectAll();
+            }
+            setDragStart({ x: e.clientX, y: e.clientY, type: 'swipe' });
+        } else {
+            deselectAll();
+        }
     }
   };
 
@@ -1027,11 +1067,12 @@ YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanat
 
     if (dragStart.type === 'swipe' && isMobile) {
         const swipeThreshold = 50;
-        if (dx > swipeThreshold) {
-            setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) }));
-            setDragStart(null);
-        } else if (dx < -swipeThreshold) {
-            setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) }));
+        if (Math.abs(dx) > swipeThreshold) {
+            if (dx > 0) {
+                setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) }));
+            } else {
+                setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) }));
+            }
             setDragStart(null);
         }
         return;
@@ -1238,7 +1279,13 @@ YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanat
         }}
       />
 
-      <Share show={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} designId={currentDesignId} />
+      <Share 
+        show={isShareModalOpen} 
+        onClose={() => setIsShareModalOpen(false)} 
+        designId={currentDesignId}
+        uid={user?.uid || null}
+        onScanSuccess={handleScanSuccess}
+      />
 
        {!user && !isAuthLoading && (
         <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center gap-8 animate-in fade-in duration-500">
@@ -1405,15 +1452,21 @@ YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanat
                     {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
                   </button>
                 </div>
-                <div className="flex items-center gap-4 mt-4">
-                    <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer">
-                        <input type="checkbox" checked={useImageAsReference} onChange={e => {
-                            setUseImageAsReference(e.target.checked);
-                            if (e.target.checked) {
-                                setAiAttachedImages(prev => prev.slice(0, 1));
-                            }
-                        }} className="form-checkbox h-4 w-4 rounded bg-white/10 text-lime-500 border-white/20 focus:ring-lime-500" />
-                        Use Image as Reference
+                <div className="flex items-center justify-between mt-4">
+                    <label className="flex items-center cursor-pointer">
+                        <div className="relative">
+                            <input type="checkbox" className="sr-only" checked={useImageAsReference} onChange={e => {
+                                setUseImageAsReference(e.target.checked);
+                                if (e.target.checked) {
+                                    setAiAttachedImages(prev => prev.slice(0, 1));
+                                }
+                            }} />
+                            <div className={`block w-10 h-5 rounded-full transition-colors ${useImageAsReference ? 'bg-lime-400' : 'bg-zinc-700'}`}></div>
+                            <div className={`dot absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform ${useImageAsReference ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                        </div>
+                        <div className="ml-3 text-xs text-white/50 font-medium">
+                            Use Image as Reference
+                        </div>
                     </label>
                 </div>
                 {aiAttachedImages.length > 0 && (
