@@ -573,7 +573,9 @@ const App: React.FC = () => {
         style.textAlign = style.textAlign || 'left';
         style.letterSpacing = typeof style.letterSpacing === 'number' ? style.letterSpacing : 0;
         style.lineHeight = typeof style.lineHeight === 'number' ? style.lineHeight : 1.2;
-        style.backgroundColor = style.backgroundColor || 'transparent';
+        style.backgroundColor = 'transparent'; // Enforce transparent background
+    } else if (el.type === 'image') {
+        style.backgroundColor = 'transparent'; // Enforce transparent background
     } else {
         style.fontSize = null;
         style.fontFamily = null;
@@ -659,6 +661,7 @@ CRITICAL RULES:
 4. Match the Canvas dimensions: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}.
 5. Use reasonable borderRadius values (0-24px for rectangles, 999 for circles/pills). Do NOT use excessive values.
 6. For optional style properties that are not applicable to an element, you MUST return them with a value of null.
+7. For 'text' and 'image' elements, backgroundColor MUST ALWAYS be null.
 
 **NEW: PRIORITIZE IMAGE-CENTRIC LAYOUTS & MINIMAL TEXT**
 - **Layout 1 (Focus):** Full-screen image as the page background with minimal, high-contrast text overlaid.
@@ -863,6 +866,7 @@ CRITICAL RULES:
 6. When user asks for additional pages, append new pages to the pages array. Every page MUST have elements.
 7. Use reasonable borderRadius values (0-24px for rectangles, 999 for circles/pills). Do NOT use excessive values.
 8. For optional style properties that are not applicable to an element, you MUST return them with a value of null.
+9. For 'text' and 'image' elements, backgroundColor MUST ALWAYS be null.
 
 **NEW: PRIORITIZE IMAGE-CENTRIC LAYOUTS & MINIMAL TEXT**
 - **Layout 1 (Focus):** Full-screen image as the page background with minimal, high-contrast text overlaid.
@@ -1077,7 +1081,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     const timeSinceLastTap = now - lastTap.current;
     lastTap.current = now;
 
-    // Double-tap to edit for text elements on mobile
     if (isMobile && element.type === 'text' && state.selectedElementId === id && timeSinceLastTap < 300) {
         setEditingElementId(id);
         setDragStart(null);
@@ -1089,7 +1092,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         triggerHaptic(5);
     }
     
-    // On desktop, double-click to edit text
     if (!isMobile && element.type === 'text' && timeSinceLastTap < 300) {
         setEditingElementId(id);
         setDragStart(null);
@@ -1123,7 +1125,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       id: generateId(),
       name: element.name || (element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : 'Element'),
       type: (element.type as any) || 'shape',
-      box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 50, rotation: 0 }, // Default height to 50
+      box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 50, rotation: 0 },
       content: '',
       style: { backgroundColor: 'transparent', color: '#FFFFFF', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: '400', textAlign: 'center', filter: 'none' },
       visible: true,
@@ -1623,23 +1625,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
                   </button>
                 </div>
-                {/* <div className="flex items-center justify-between mt-4">
-                    <label className="flex items-center cursor-pointer">
-                        <div className="relative">
-                            <input type="checkbox" className="sr-only" checked={useImageAsReference} onChange={e => {
-                                setUseImageAsReference(e.target.checked);
-                                if (e.target.checked) {
-                                    setAiAttachedImages(prev => prev.slice(0, 1));
-                                }
-                            }} />
-                            <div className={`block w-10 h-5 rounded-full transition-colors ${useImageAsReference ? 'bg-lime-400' : 'bg-zinc-700'}`}></div>
-                            <div className={`dot absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform ${useImageAsReference ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                        </div>
-                        <div className="ml-3 text-xs text-white/50 font-medium">
-                            Use Image as Reference
-                        </div>
-                    </label>
-                </div> */}
                 {aiAttachedImages.length > 0 && (
                   <div className="flex gap-2 mt-3">
                     {aiAttachedImages.map((img, i) => (
@@ -1739,7 +1724,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   availableFonts={allFonts}
                   onAddCustomFont={handleAddCustomFont}
                   onDeleteCustomFont={handleDeleteCustomFont}
-                  onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
                   onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                   onAddShape={onAddShape}
                   onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); setIsBottomSheetOpen(false); }}
@@ -1831,7 +1815,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           availableFonts={allFonts}
           onAddCustomFont={handleAddCustomFont}
           onDeleteCustomFont={handleDeleteCustomFont}
-          onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
           onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); }}
           onAddShape={onAddShape}
           onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); }}
