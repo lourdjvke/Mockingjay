@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { produce } from 'immer';
 import { EditorState, DesignElement, BoundingBox, Page, ElementStyle } from './types.ts';
 import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
 import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, embedGoogleFonts } from './utils.ts';
@@ -7,7 +8,7 @@ import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
 import BrandDna from './components/BrandDna.tsx';
 import { domToPng } from 'modern-screenshot';
-import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove } from './firebase.ts';
+import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove, update } from './firebase.ts';
 import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
 import ContextMenu from './components/ContextMenu.tsx';
@@ -22,9 +23,82 @@ interface SnapLine {
 type ExportStatus = 'idle' | 'processing' | 'success' | 'error';
 type SaveStatus = 'idle' | 'saving' | 'saved';
 
+const AI_COST = 150;
+const PAYSTACK_PUBLIC_KEY = 'pk_live_8bfda55664a1327e5d47c4acc6767c123514b826';
+
+const PRICING_OPTIONS = [
+    { amount: 500, credits: 500, label: "Basic" },
+    { amount: 1000, credits: 1200, label: "Standard" },
+    { amount: 3500, credits: 4000, label: "Premium" },
+];
+
+declare global {
+    interface Window {
+        PaystackPop: any;
+    }
+}
+
+// A more robust sanitization function to prevent rendering issues.
+const sanitizeElement = (el: any, allFonts: { name: string; value: string }[]): DesignElement => {
+    const VALID_TYPES: DesignElement['type'][] = ['text', 'shape', 'image', 'icon'];
+    const elementType = VALID_TYPES.includes(el.type) ? el.type : 'shape';
+
+    const defaultStyle: ElementStyle = {
+        color: '#000000',
+        backgroundColor: '#ffffff',
+        fontSize: 24,
+        fontFamily: "'Inter', sans-serif",
+        fontWeight: '400',
+        textAlign: 'left',
+        letterSpacing: 0,
+        lineHeight: 1.2,
+        borderRadius: 0,
+        opacity: 1,
+        strokeColor: null,
+        strokeWidth: 0,
+        strokePattern: 'solid',
+        clipPath: null,
+        filter: null
+    };
+
+    const style = { ...defaultStyle, ...(el.style || {}) };
+
+    style.opacity = typeof style.opacity === 'number' ? Math.max(0, Math.min(1, style.opacity)) : 1;
+    style.borderRadius = typeof style.borderRadius === 'number' && style.borderRadius >= 0 ? style.borderRadius : 0;
+    style.strokeWidth = typeof style.strokeWidth === 'number' && style.strokeWidth >= 0 ? style.strokeWidth : 0;
+    style.fontSize = typeof style.fontSize === 'number' && style.fontSize > 0 ? style.fontSize : 24;
+    style.lineHeight = typeof style.lineHeight === 'number' && style.lineHeight > 0 ? style.lineHeight : 1.2;
+    style.letterSpacing = typeof style.letterSpacing === 'number' ? style.letterSpacing : 0;
+
+    if (typeof style.fontFamily !== 'string' || style.fontFamily.trim() === '') {
+        style.fontFamily = allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif";
+    }
+
+    const box = {
+        x: typeof el.box?.x === 'number' ? el.box.x : 50,
+        y: typeof el.box?.y === 'number' ? el.box.y : 50,
+        width: typeof el.box?.width === 'number' && el.box.width > 0 ? el.box.width : 200,
+        height: typeof el.box?.height === 'number' && el.box.height > 0 ? el.box.height : 100,
+        rotation: typeof el.box?.rotation === 'number' ? el.box.rotation % 360 : 0,
+    };
+
+    return {
+      id: el.id || generateId(),
+      name: el.name || `${elementType.charAt(0).toUpperCase() + elementType.slice(1)}`,
+      type: elementType,
+      box: box,
+      content: String(el.content || ''),
+      style: style,
+      visible: typeof el.visible === 'boolean' ? el.visible : true,
+      locked: typeof el.locked === 'boolean' ? el.locked : false,
+    };
+};
+
+
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>(INITIAL_STATE);
-  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: 'move' | 'resize' | 'rotate' | 'swipe', handle?: string, initialAngle?: number } | null>(null);
+  const [editingElementId, setEditingElementId] = useState<string | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number, y: number, type: 'move' | 'resize' | 'rotate' | 'swipe', handle?: string, initialAngle?: number, initialFontSize?: number, initialWidth?: number } | null>(null);
   const [elementStartPos, setElementStartPos] = useState<BoundingBox | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
@@ -52,12 +126,14 @@ const App: React.FC = () => {
   const [designs, setDesigns] = useState<any[]>([]);
   const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [ugCredit, setUgCredit] = useState(0);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiImageInputRef = useRef<HTMLInputElement>(null);
   const longPressTimer = useRef<number | null>(null);
+  const clickTimeout = useRef<number | null>(null);
 
   const allFonts = [...userFonts, ...BASE_FONTS];
 
@@ -105,6 +181,7 @@ const App: React.FC = () => {
         setState(INITIAL_STATE);
         setCurrentDesignId(null);
         setDesigns([]);
+        setUgCredit(0);
       }
     });
     return () => unsubscribe();
@@ -113,19 +190,29 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!user) {
       setDesigns([]);
+      setUgCredit(0);
       return;
     }
     const designsRef = ref(database, `users/${user.uid}/designs`);
-    const unsubscribe = onValue(designsRef, (snapshot) => {
+    const creditRef = ref(database, `users/${user.uid}/ugcredit`);
+
+    const designsUnsubscribe = onValue(designsRef, (snapshot) => {
       const data = snapshot.val();
       const userDesigns = data
-        ? Object.keys(data)
-          .map(key => ({ id: key, ...data[key] }))
-          .sort((a, b) => b.lastModified - a.lastModified)
+        ? Object.keys(data).map(key => ({ id: key, ...data[key] })).sort((a, b) => b.lastModified - a.lastModified)
         : [];
       setDesigns(userDesigns);
     });
-    return () => unsubscribe();
+
+    const creditUnsubscribe = onValue(creditRef, (snapshot) => {
+        const credit = snapshot.val();
+        setUgCredit(typeof credit === 'number' ? credit : 0);
+    });
+
+    return () => {
+        designsUnsubscribe();
+        creditUnsubscribe();
+    }
   }, [user]);
 
   useEffect(() => {
@@ -163,6 +250,35 @@ const App: React.FC = () => {
     }
   };
 
+  const handlePurchase = (amount: number, credits: number) => {
+    if (!user || !window.PaystackPop) {
+      alert("Paystack SDK not loaded yet. Please wait.");
+      return;
+    }
+
+    const handler = window.PaystackPop.setup({
+      key: PAYSTACK_PUBLIC_KEY,
+      email: user.email,
+      amount: amount * 100, // Amount in kobo
+      currency: 'NGN',
+      ref: 'ug-' + generateId(),
+      callback: (response: any) => {
+        (async () => {
+          const userRef = ref(database, `users/${user.uid}`);
+          const snapshot = await get(child(userRef, 'ugcredit'));
+          const currentCredit = snapshot.val() || 0;
+          await set(child(userRef, 'ugcredit'), currentCredit + credits);
+          alert('Purchase successful! Your credits have been added.');
+        })();
+      },
+      onClose: () => {
+        alert('Transaction was cancelled.');
+      },
+    });
+
+    handler.openIframe();
+  }
+
   const createNewDesign = useCallback(() => {
     const newId = generateId();
     setState(INITIAL_STATE);
@@ -183,25 +299,27 @@ const App: React.FC = () => {
     }
 };
 
-  const loadDesign = useCallback((designId: string) => {
+const loadDesign = useCallback((designId: string) => {
     const designToLoad = designs.find(d => d.id === designId);
     if (designToLoad) {
-      const sanitizedPages = (designToLoad.pages || INITIAL_STATE.pages).map((page: Page) => ({
-        ...page,
-        elements: page.elements || [],
-      }));
+        const sanitizedPages = (designToLoad.pages || INITIAL_STATE.pages).map((page: Page) => ({
+            ...page,
+            id: page.id || generateId(),
+            elements: (page.elements || []).map(el => sanitizeElement(el, allFonts)),
+        }));
 
-      setState({
-        pages: sanitizedPages,
-        currentPageIndex: designToLoad.currentPageIndex || 0,
-        selectedElementId: designToLoad.selectedElementId || null,
-        themeColors: designToLoad.themeColors || INITIAL_STATE.themeColors,
-        isAiCreated: designToLoad.isAiCreated || false,
-        aiPrompt: designToLoad.aiPrompt || '',
-      });
-      setCurrentDesignId(designId);
+        setState({
+            pages: sanitizedPages,
+            currentPageIndex: designToLoad.currentPageIndex || 0,
+            selectedElementId: null, // Always deselect on load
+            themeColors: designToLoad.themeColors || INITIAL_STATE.themeColors,
+            isAiCreated: designToLoad.isAiCreated || false,
+            aiPrompt: designToLoad.aiPrompt || '',
+        });
+        setCurrentDesignId(designId);
     }
-  }, [designs]);
+}, [designs, allFonts]);
+
 
   const handleScanSuccess = async (decodedText: string) => {
     try {
@@ -224,26 +342,21 @@ const App: React.FC = () => {
 
         let finalPages = (designData.pages || []).map((page: Page) => ({
             ...page,
-            elements: (page.elements || []).map(sanitizeElement), // Also sanitize elements on load
+            elements: (page.elements || []).map(el => sanitizeElement(el, allFonts)),
         }));
 
         if (finalPages.length === 0) {
-            finalPages = INITIAL_STATE.pages; // Fallback to a default page to prevent crash
-        }
-
-        let finalPageIndex = designData.currentPageIndex || 0;
-        if (finalPageIndex < 0 || finalPageIndex >= finalPages.length) {
-            finalPageIndex = 0; // Ensure index is within bounds
+            finalPages = INITIAL_STATE.pages;
         }
 
         const newId = generateId();
         setState({
             pages: finalPages,
-            currentPageIndex: finalPageIndex,
-            selectedElementId: null, // Always deselect elements upon loading a shared design
+            currentPageIndex: 0,
+            selectedElementId: null,
             themeColors: designData.themeColors || INITIAL_STATE.themeColors,
         });
-        setCurrentDesignId(newId); // Set the new ID for the copied design
+        setCurrentDesignId(newId);
 
     } catch (error) {
         console.error("Failed to load shared design:", error);
@@ -436,70 +549,11 @@ const App: React.FC = () => {
     throw new Error(errData.error || `Request failed with status ${response.status}`);
   };
 
-  const sanitizeElement = useCallback((el: any): DesignElement => {
-    const defaultStyle: ElementStyle = {
-        color: '#000000',
-        backgroundColor: null,
-        fontSize: 24,
-        fontFamily: "'Inter', sans-serif",
-        fontWeight: '400',
-        textAlign: 'left',
-        letterSpacing: 0,
-        lineHeight: 1.2,
-        borderRadius: 0,
-        opacity: 1,
-        strokeColor: null,
-        strokeWidth: 0,
-        strokePattern: 'solid',
-        clipPath: null,
-        filter: null
-    };
-
-    const style = { ...defaultStyle, ...(el.style || {}) };
-
-    style.opacity = typeof style.opacity === 'number' ? style.opacity : 1;
-    style.borderRadius = typeof style.borderRadius === 'number' ? style.borderRadius : 0;
-    style.strokeWidth = typeof style.strokeWidth === 'number' ? style.strokeWidth : 0;
-    
-    if (el.type === 'text') {
-        style.fontSize = typeof style.fontSize === 'number' ? style.fontSize : 24;
-        style.fontFamily = style.fontFamily || (allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif");
-        style.fontWeight = style.fontWeight || '400';
-        style.textAlign = style.textAlign || 'left';
-        style.letterSpacing = typeof style.letterSpacing === 'number' ? style.letterSpacing : 0;
-        style.lineHeight = typeof style.lineHeight === 'number' ? style.lineHeight : 1.2;
-    } else {
-        style.fontSize = null;
-        style.fontFamily = null;
-        style.fontWeight = null;
-        style.textAlign = null;
-        style.letterSpacing = null;
-        style.lineHeight = null;
-    }
-     if (el.type !== 'text' && el.type !== 'icon') {
-        style.color = null;
-    }
-
-
-    return {
-      id: el.id || generateId(),
-      name: el.name || 'AI Element',
-      type: el.type || 'shape',
-      box: {
-        x: typeof el.box?.x === 'number' ? el.box.x : 50,
-        y: typeof el.box?.y === 'number' ? el.box.y : 50,
-        width: typeof el.box?.width === 'number' && el.box.width > 0 ? el.box.width : 200,
-        height: typeof el.box?.height === 'number' && el.box.height > 0 ? el.box.height : 100,
-        rotation: typeof el.box?.rotation === 'number' ? el.box.rotation : 0,
-      },
-      content: el.content === undefined ? '' : el.content,
-      style,
-      visible: typeof el.visible === 'boolean' ? el.visible : true,
-      locked: typeof el.locked === 'boolean' ? el.locked : false,
-    };
-  }, [allFonts]);
-
   const handleGenerateCampaign = async (brandDna, prompt, tags, images) => {
+    if (ugCredit < AI_COST) {
+        alert('You have insufficient credits to perform this action.');
+        return;
+    }
     setIsBrandDnaOpen(false);
     setIsAiLoading(true);
     triggerHaptic(30);
@@ -626,7 +680,7 @@ USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design
       const sanitizedPages = aiResponse.pages.map((page: any) => ({
         id: page.id || generateId(),
         background: page.background || '#18181b',
-        elements: (page.elements || []).map(sanitizeElement),
+        elements: (page.elements || []).map(el => sanitizeElement(el, allFonts)),
       }));
 
       if (images.length > 0) {
@@ -649,10 +703,14 @@ USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design
         pages: sanitizedPages,
         currentPageIndex: 0,
         selectedElementId: null,
-        themeColors: aiResponse.themeColors && aiResponse.themeColors.length > 0 ? aiResponse.themeColors : brandDna.colors,
+        themeColors: aiResponse.themeColors && aiResponse.themeColors.length > 0 ? aiResponse.themeColors : brandData.colors,
         isAiCreated: true,
         aiPrompt: prompt,
       };
+
+      const newCredit = (ugCredit || 0) - AI_COST;
+      const creditRef = ref(database, `users/${user.uid}/ugcredit`);
+      await set(creditRef, newCredit);
 
       setState(newState);
       const newId = generateId();
@@ -668,6 +726,10 @@ USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design
   };
 
   const handleAiRefine = async () => {
+    if (ugCredit < AI_COST) {
+        alert('You have insufficient credits to perform this action.');
+        return;
+    }
     if (!aiPrompt.trim() && aiAttachedImages.length === 0) return;
     setIsAiLoading(true);
     triggerHaptic(30);
@@ -849,7 +911,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       const sanitizedPages = aiState.pages.map((page: any) => ({
         id: page.id || generateId(),
         background: page.background || '#18181b',
-        elements: (page.elements || []).map(sanitizeElement),
+        elements: (page.elements || []).map(el => sanitizeElement(el, allFonts)),
       }));
 
       const newState = {
@@ -886,6 +948,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       const pageAdded = newState.pages.length > state.pages.length;
       const targetPageIndex = pageAdded ? newState.pages.length - 1 : (newState.currentPageIndex || 0);
 
+      const newCredit = (ugCredit || 0) - AI_COST;
+      const creditRef = ref(database, `users/${user.uid}/ugcredit`);
+      await set(creditRef, newCredit);
+
       setState({
         ...newState,
         currentPageIndex: targetPageIndex
@@ -903,73 +969,92 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     }
   };
 
+    const updateElement = useCallback((id: string, updates: Partial<DesignElement> | ((el: DesignElement) => Partial<DesignElement>)) => {
+        setState(produce(draft => {
+            const page = draft.pages[draft.currentPageIndex];
+            if (!page) return;
+            const element = page.elements.find(el => el.id === id);
+            if (element) {
+                const newUpdates = typeof updates === 'function' ? updates(element) : updates;
+                
+                if (newUpdates.box) {
+                    Object.assign(element.box, newUpdates.box);
+                    delete newUpdates.box;
+                }
+                if (newUpdates.style) {
+                    Object.assign(element.style, newUpdates.style);
+                    delete newUpdates.style;
+                }
+                Object.assign(element, newUpdates);
+            }
+        }));
+    }, []);
+
   const deleteElement = (id: string) => {
-    setState(prev => {
-      const newPages = [...prev.pages];
-      newPages[prev.currentPageIndex].elements = newPages[prev.currentPageIndex].elements.filter(el => el.id !== id);
-      return { ...prev, pages: newPages, selectedElementId: null };
-    });
+    setState(produce(draft => {
+        const page = draft.pages[draft.currentPageIndex];
+        if (page) {
+            page.elements = page.elements.filter(el => el.id !== id);
+            draft.selectedElementId = null;
+        }
+    }));
   };
 
-  const updateElement = useCallback((id: string, updates: Partial<DesignElement>) => {
-    setState(prev => {
-      const newPages = [...prev.pages];
-      const page = newPages[prev.currentPageIndex];
-      page.elements = page.elements.map(el => {
-        if (el.id === id) {
-          const newStyle = updates.style ? { ...el.style, ...updates.style } : el.style;
-          return { ...el, ...updates, style: newStyle };
-        }
-        return el;
-      });
-      return { ...prev, pages: newPages };
-    });
-  }, []);
-
   const updatePage = (updates: Partial<Page>) => {
-    setState(prev => {
-      const newPages = [...prev.pages];
-      newPages[prev.currentPageIndex] = { ...newPages[prev.currentPageIndex], ...updates };
-      return { ...prev, pages: newPages };
-    });
+    setState(produce(draft => {
+        const page = draft.pages[draft.currentPageIndex];
+        if (page) {
+            Object.assign(page, updates);
+        }
+    }));
   };
 
   const handleElementPointerDown = useCallback((id: string, e: React.PointerEvent) => {
     e.stopPropagation();
     const element = currentPage.elements.find(el => el.id === id);
-    if (!element) return;
+    if (!element || element.locked) return;
 
-    const wasSelected = state.selectedElementId === id;
-
-    if (!wasSelected) {
-        setState(prev => ({ ...prev, selectedElementId: id }));
-        triggerHaptic(5);
-    }
-
-    if (element.locked) return;
-
-    if (isMobile) {
-        if (wasSelected) {
-            setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
-            setElementStartPos({ ...element.box });
+    if (clickTimeout.current) {
+        clearTimeout(clickTimeout.current);
+        clickTimeout.current = null;
+        if (element.type === 'text') {
+            setEditingElementId(id);
+            setState(prev => ({ ...prev, selectedElementId: null }));
         }
     } else {
-        longPressTimer.current = window.setTimeout(() => {
-            setContextMenu({ show: true, x: e.clientX, y: e.clientY });
-            setDragStart(null);
-            longPressTimer.current = null;
-        }, 500);
-        setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
-        setElementStartPos({ ...element.box });
+        clickTimeout.current = window.setTimeout(() => {
+            clickTimeout.current = null;
+            setEditingElementId(null);
+            setState(prev => ({ ...prev, selectedElementId: id }));
+            triggerHaptic(5);
+
+            if (isMobile) {
+                setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
+                setElementStartPos({ ...element.box });
+            } else {
+                longPressTimer.current = window.setTimeout(() => {
+                    setContextMenu({ show: false, x: e.clientX, y: e.clientY });
+                    setDragStart(null);
+                    longPressTimer.current = null;
+                }, 500);
+                setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
+                setElementStartPos({ ...element.box });
+            }
+        }, 250);
     }
-  }, [state.selectedElementId, currentPage, isMobile, triggerHaptic, contextMenu.show]);
+  }, [currentPage, isMobile, triggerHaptic]);
 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
     if (e.target !== e.currentTarget) return;
 
     if (state.selectedElementId) {
-        deselectAll();
-    } else if (isMobile && state.pages.length > 1) {
+        setState(prev => ({ ...prev, selectedElementId: null }));
+    }
+    if (editingElementId) {
+        setEditingElementId(null);
+    }
+    
+    if (isMobile && state.pages.length > 1) {
         setDragStart({ x: e.clientX, y: e.clientY, type: 'swipe' });
     }
   };
@@ -978,37 +1063,39 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     e.preventDefault();
     e.stopPropagation();
     setState(prev => ({ ...prev, selectedElementId: id }));
-    setContextMenu({ show: true, x: e.clientX, y: e.clientY });
+    setEditingElementId(null);
+    setContextMenu({ show: false, x: e.clientX, y: e.clientY });
     setDragStart(null);
   }, []);
 
-  const deselectAll = () => setState(prev => ({ ...prev, selectedElementId: null }));
+  const deselectAll = () => {
+      setState(prev => ({ ...prev, selectedElementId: null }));
+      setEditingElementId(null);
+  }
 
-  const addElement = useCallback((element: Partial<DesignElement>) => {
-    const defaultFont = allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif";
-    const newElement: DesignElement = {
-      id: generateId(),
-      name: element.name || (element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : 'Element'),
-      type: (element.type as any) || 'shape',
-      box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 200, rotation: 0 },
-      content: '',
-      style: { backgroundColor: '#FFFFFF', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: '400', textAlign: 'center', filter: 'none' },
-      visible: true,
-      locked: false,
-      ...element
-    };
-    setState(prev => {
-      const newPages = [...prev.pages];
-      newPages[prev.currentPageIndex].elements.push(newElement);
-      return { ...prev, pages: newPages, selectedElementId: newElement.id };
-    });
-    if (element.type === 'image' && element.content) {
-      MediaStore.saveImage(element.content).then(() => {
-        MediaStore.getImages().then(imgs => setRecentImages(imgs.map(i => i.data)));
-      });
-    }
-    triggerHaptic(15);
-  }, [allFonts, triggerHaptic]);
+    const addElement = useCallback((elementConfig: Partial<DesignElement>) => {
+        const newElement = sanitizeElement({
+            id: generateId(),
+            box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 100) / 2, width: 200, height: 100, rotation: 0 },
+            ...elementConfig,
+            style: {
+                ...elementConfig.style,
+            },
+        }, allFonts);
+
+        setState(produce(draft => {
+            draft.pages[draft.currentPageIndex].elements.push(newElement);
+            draft.selectedElementId = newElement.id;
+        }));
+
+        if (elementConfig.type === 'image' && elementConfig.content) {
+            MediaStore.saveImage(elementConfig.content).then(() => {
+                MediaStore.getImages().then(imgs => setRecentImages(imgs.map(i => i.data)));
+            });
+        }
+        triggerHaptic(15);
+    }, [allFonts, triggerHaptic]);
+
 
   const onAddShape = useCallback((type: string) => {
     let clipPath = undefined;
@@ -1033,21 +1120,21 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   }, [addElement, state.themeColors]);
 
   const onReorder = useCallback((id: string, direction: 'up' | 'down') => {
-    setState(prev => {
-      const newPages = [...prev.pages];
-      const page = { ...newPages[prev.currentPageIndex] };
+    setState(produce(draft => {
+      const page = draft.pages[draft.currentPageIndex];
       const index = page.elements.findIndex(el => el.id === id);
-      if (index === -1) return prev;
-      const newElements = [...page.elements];
+      if (index === -1) return;
+
       if (direction === 'up') {
-        if (index < newElements.length - 1) [newElements[index], newElements[index + 1]] = [newElements[index + 1], newElements[index]];
+        if (index < page.elements.length - 1) {
+            [page.elements[index], page.elements[index + 1]] = [page.elements[index + 1], page.elements[index]];
+        }
       } else {
-        if (index > 0) [newElements[index], newElements[index - 1]] = [newElements[index - 1], newElements[index]];
+        if (index > 0) {
+            [page.elements[index], page.elements[index - 1]] = [page.elements[index - 1], page.elements[index]];
+        }
       }
-      page.elements = newElements;
-      newPages[prev.currentPageIndex] = page;
-      return { ...prev, pages: newPages };
-    });
+    }));
     triggerHaptic(5);
   }, [triggerHaptic]);
 
@@ -1060,8 +1147,27 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           case 'invert': filterValue = 'invert(100%)'; break;
           case 'motion-blur': filterValue = 'blur(8px)'; break;
       }
-      updateElement(selectedElement.id, { style: { ...selectedElement.style, filter: filterValue } });
+      updateElement(selectedElement.id, { style: { filter: filterValue } });
   }, [selectedElement, updateElement]);
+
+  const getCursorForHandle = (handle: string): string => {
+      switch (handle) {
+          case 'n':
+          case 's':
+              return 'ns-resize';
+          case 'e':
+          case 'w':
+              return 'ew-resize';
+          case 'nw':
+          case 'se':
+              return 'nwse-resize';
+          case 'ne':
+          case 'sw':
+              return 'nesw-resize';
+          default:
+              return 'auto';
+      }
+  };
 
   const handlePointerMove = useCallback((e: PointerEvent) => {
     if (dragStart && longPressTimer.current) {
@@ -1092,31 +1198,50 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     }
 
     if (!elementStartPos || !state.selectedElementId) return;
+    const element = currentPage.elements.find(el => el.id === state.selectedElementId);
+    if (!element) return;
 
     if (dragStart.type === 'move') {
-      const newX = elementStartPos.x + dx;
-      const newY = elementStartPos.y + dy;
-      const centerX = CANVAS_WIDTH / 2 - elementStartPos.width / 2;
-      const centerY = CANVAS_HEIGHT / 2 - elementStartPos.height / 2;
-      const isSnappedX = Math.abs(newX - centerX) < 5;
-      const isSnappedY = Math.abs(newY - centerY) < 5;
-      const snappedX = isSnappedX ? centerX : newX;
-      const snappedY = isSnappedY ? centerY : newY;
-      const lines: SnapLine[] = [];
-      if (isSnappedX) lines.push({ type: 'vertical', position: CANVAS_WIDTH / 2 });
-      if (isSnappedY) lines.push({ type: 'horizontal', position: CANVAS_HEIGHT / 2 });
-      setSnapLines(lines);
-      updateElement(state.selectedElementId, { box: { ...elementStartPos, x: snappedX, y: snappedY } });
+        updateElement(state.selectedElementId, {
+            box: { ...element.box, x: elementStartPos.x + dx, y: elementStartPos.y + dy }
+        });
     } else if (dragStart.type === 'resize' && dragStart.handle) {
       const h = dragStart.handle;
       let { x, y, width, height } = elementStartPos;
-      if (h.includes('e')) width += dx;
-      if (h.includes('w')) { width -= dx; x += dx; }
-      if (h.includes('s')) height += dy;
-      if (h.includes('n')) { height -= dy; y += dy; }
-      width = Math.max(10, width);
-      height = Math.max(10, height);
-      updateElement(state.selectedElementId, { box: { ...elementStartPos, x, y, width, height } });
+      
+      if (element.type === 'text') {
+          if (h.length === 2) { // Corner resize
+              let newWidth = width;
+              if (h.includes('e')) newWidth += dx;
+              if (h.includes('w')) newWidth -= dx;
+              
+              const scaleFactor = newWidth / (dragStart.initialWidth || width);
+              const newFontSize = Math.max(8, (dragStart.initialFontSize || element.style.fontSize || 24) * scaleFactor);
+              
+              if (h.includes('w')) x = elementStartPos.x + elementStartPos.width - newWidth;
+              if (h.includes('n')) y = elementStartPos.y + elementStartPos.height - height; // Height is auto
+
+              updateElement(element.id, {
+                  box: { ...element.box, width: newWidth, x },
+                  style: { ...element.style, fontSize: newFontSize },
+              });
+          } else { // Side resize (e, w)
+              let newWidth = width;
+              if (h.includes('e')) newWidth += dx;
+              if (h.includes('w')) { newWidth -= dx; x += dx; }
+              newWidth = Math.max(50, newWidth); 
+              updateElement(element.id, { box: { ...element.box, x, width: newWidth } });
+          }
+      } else {
+          if (h.includes('e')) width += dx;
+          if (h.includes('w')) { width -= dx; x += dx; }
+          if (h.includes('s')) height += dy;
+          if (h.includes('n')) { height -= dy; y += dy; }
+          width = Math.max(10, width);
+          height = Math.max(10, height);
+          updateElement(state.selectedElementId, { box: { ...elementStartPos, x, y, width, height } });
+      }
+
     } else if (dragStart.type === 'rotate') {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
@@ -1127,7 +1252,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       if (Math.abs(rotation % 45) < 5) rotation = Math.round(rotation / 45) * 45;
       updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation } });
     }
-  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement, contextMenu.show, isMobile]);
+  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement, contextMenu.show, isMobile, currentPage]);
 
   const handlePointerUp = useCallback(() => {
     if (longPressTimer.current) {
@@ -1147,20 +1272,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       window.removeEventListener('pointerup', handlePointerUp);
     };
   }, [handlePointerMove, handlePointerUp]);
-
-  const handleAutoResize = useCallback((id: string, newHeight: number) => {
-    setState(prev => {
-      const newPages = [...prev.pages];
-      const page = newPages[prev.currentPageIndex];
-      page.elements = page.elements.map(el => {
-        if (el.id === id && newHeight > el.box.height) {
-          return { ...el, box: { ...el.box, height: newHeight } };
-        }
-        return el;
-      });
-      return { ...prev, pages: newPages };
-    });
-  }, []);
 
   const saveToPublicTemplates = async () => {
     if (!canvasRef.current || !currentDesignId) return;
@@ -1317,8 +1428,15 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden select-none touch-none">
+       <style>{`
+        @keyframes shimmer {
+          100% {
+            transform: translateX(100%);
+          }
+        }
+      `}</style>
       <ContextMenu
-        show={contextMenu.show}
+        show={false}
         x={contextMenu.x}
         y={contextMenu.y}
         isMobile={isMobile}
@@ -1389,7 +1507,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${exportStatus === 'success' ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-12 scale-90'}`}>
         <div className="bg-zinc-900/90 backdrop-blur-3xl border border-white/10 px-6 py-3 rounded-full flex items-center gap-4 shadow-[0_12px_48px_rgba(0,0,0,0.6)]">
            <div className="w-6 h-6 bg-lime-400 text-black rounded-full flex items-center justify-center shadow-inner">
-             <Icons.Sparkles className="w-3.5 h-3.5" />
+             <Icons.Magic className="w-3.5 h-3.5" />
            </div>
            <span className="text-[13px] font-bold tracking-tight text-white uppercase italic">Design Finalized</span>
         </div>
@@ -1402,7 +1520,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                 <div className="w-32 h-32 border-2 border-lime-400/20 rounded-full animate-ping absolute inset-0"></div>
                 <div className="w-32 h-32 border-4 border-lime-400 border-t-transparent rounded-full animate-spin"></div>
                 <div className="absolute inset-0 flex items-center justify-center">
-                   <Icons.Wand2 className="w-10 h-10 text-lime-400 animate-pulse" />
+                   <Icons.Magic className="w-10 h-10 text-lime-400 animate-pulse" />
                 </div>
              </div>
              <div className="text-center space-y-2">
@@ -1424,7 +1542,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
               {saveStatus === 'saved' && <Icons.Check className="w-4 h-4 text-green-400" />}
               {saveStatus === 'idle' && <Icons.Plus className="w-5 h-5" />}
             </button>
-           <button className="p-1.5 bg-gradient-to-tr from-lime-600 to-lime-400 rounded-full text-black hover:rotate-12 transition-all shadow-[0_0_15px_rgba(163,230,53,0.4)]" onClick={() => { setIsAiModalOpen(true); triggerHaptic(10); }}><Icons.Wand2 className="w-4 h-4" /></button>
+           <button className="p-1.5 bg-gradient-to-tr from-lime-600 to-lime-400 rounded-full text-black hover:rotate-12 transition-all shadow-[0_0_15px_rgba(163,230,53,0.4)]" onClick={() => { setIsAiModalOpen(true); triggerHaptic(10); }}><Icons.Magic className="w-4 h-4" /></button>
            {selectedElement ? (
             <button className="p-1 text-red-400/60 hover:text-red-400 transition-colors" onClick={() => selectedElement && deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button>
            ) : (
@@ -1453,34 +1571,15 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
              }}
            >
               {currentPage?.elements.map(el => (
-                <div key={el.id}>
-                  <ElementRenderer element={el} isSelected={state.selectedElementId === el.id} onSelect={handleElementPointerDown} onAutoResize={handleAutoResize} onContextMenu={(e) => handleElementContextMenu(el.id, e)} />
-                  {state.selectedElementId === el.id && !el.locked && (
-                    <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
-                      {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
-                        let s: React.CSSProperties = {};
-                        if (h === 'nw') s = { top: '-12px', left: '-12px' }; if (h === 'ne') s = { top: '-12px', right: '-12px' };
-                        if (h === 'sw') s = { bottom: '-12px', left: '-12px' }; if (h === 'se') s = { bottom: '-12px', right: '-12px' };
-                        if (h === 'n') s = { top: '-12px', left: '50%', transform: 'translateX(-50%)' }; if (h === 's') s = { bottom: '-12px', left: '50%', transform: 'translateX(-50%)' };
-                        if (h === 'e') s = { right: '-12px', top: '50%', transform: 'translateY(-50%)' }; if (h === 'w') s = { left: '-12px', top: '50%', transform: 'translateY(-50%)' };
-                        const isC = h.length === 2;
-                        return (
-                          <div key={h} onPointerDown={(e) => { e.stopPropagation(); setDragStart({ x: e.clientX, y: e.clientY, type: 'resize', handle: h }); setElementStartPos({...el.box}); triggerHaptic(5); }}
-                            style={s} className={`absolute bg-white border-2 border-lime-400 pointer-events-auto shadow-lg ${isC ? 'w-6 h-6 rounded-full' : 'w-10 h-3 rounded-sm'} z-50 hover:scale-110 transition-transform`}
-                          />
-                        );
-                      })}
-                      <div onPointerDown={(e) => { e.stopPropagation(); const rect = canvasRef.current?.getBoundingClientRect(); if (!rect) return; const cX = rect.left + (el.box.x + el.box.width / 2) * scale; const cY = rect.top + (el.box.y + el.box.height / 2) * scale; const initialAngle = Math.atan2(e.clientY - cY, e.clientX - cX) * (180 / Math.PI); setDragStart({ x: e.clientX, y: e.clientY, type: 'rotate', initialAngle }); setElementStartPos({...el.box}); triggerHaptic(10); }}
-                        className="absolute -bottom-24 left-1/2 -translate-x-1/2 w-14 h-14 bg-zinc-900 border border-white/20 rounded-full flex items-center justify-center pointer-events-auto shadow-2xl"
-                      >
-                         <Icons.RotateCw className="w-7 h-7 text-lime-400" />
-                      </div>
-                      <div onPointerDown={(e) => handleElementPointerDown(el.id, e)} className="absolute -top-24 left-1/2 -translate-x-1/2 bg-lime-400 px-6 py-2.5 rounded-full flex items-center gap-3 text-[12px] text-black font-bold uppercase tracking-widest shadow-xl animate-bounce pointer-events-auto cursor-grab active:cursor-grabbing">
-                         <Icons.Move className="w-5 h-5" /> Move
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <ElementRenderer 
+                    key={el.id} // Ensure key is here for React to track elements
+                    element={el} 
+                    isSelected={state.selectedElementId === el.id} 
+                    isEditing={editingElementId === el.id}
+                    onSelect={handleElementPointerDown} 
+                    updateElement={updateElement} 
+                    onContextMenu={(e) => handleElementContextMenu(el.id, e)} 
+                />
               ))}
            </div>
         </div>
@@ -1488,73 +1587,85 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         {isAiModalOpen && (
           <div className="absolute inset-x-0 bottom-0 z-[200] p-4 animate-in slide-in-from-bottom duration-500">
              <div className="bg-lime-900/40 backdrop-blur-3xl border border-lime-400/30 rounded-[24px] p-6 md:p-8 shadow-[0_40px_100px_rgba(0,0,0,0.9)]">
-                <div className="flex items-center gap-3 mb-6">
-                   <div className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.4)]">
-                      <Icons.Wand2 className="w-5 h-5 text-black" />
+                <div className="flex items-center justify-between gap-3 mb-6">
+                   <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.4)]">
+                            <Icons.Magic className="w-5 h-5 text-black" />
+                        </div>
+                        <div className="space-y-0.5">
+                            <h3 className="text-xs md:text-sm font-black uppercase tracking-widest text-white italic">Mockingjay Intelligence</h3>
+                            <p className="text-white/40 text-[8px] md:text-[9px] font-bold uppercase tracking-widest">Global Design Engine v3.1</p>
+                        </div>
                    </div>
-                   <div className="space-y-0.5">
-                      <h3 className="text-xs md:text-sm font-black uppercase tracking-widest text-white italic">Mockingjay Intelligence</h3>
-                      <p className="text-white/40 text-[8px] md:text-[9px] font-bold uppercase tracking-widest">Global Design Engine v3.1</p>
+                   <div className="flex items-center gap-2 bg-black/20 border border-white/10 px-4 py-2 rounded-full">
+                        <Icons.Magic className="w-4 h-4 text-lime-400" />
+                        <span className="text-lg font-bold text-white">{ugCredit}</span>
                    </div>
                 </div>
-                <input type="file" ref={aiImageInputRef} className="hidden" accept="image/*" multiple onChange={handleAiImageAttach} />
-                <div className="relative">
-                  <input 
-                    autoFocus
-                    placeholder={useImageAsReference ? 'Describe the style or content to recreate...' : 'e.g., \'Advertise my noodle brand\''}
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAiRefine()}
-                    disabled={isAiLoading}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl h-16 pl-12 pr-14 text-sm focus:outline-none focus:border-lime-400 transition-all placeholder:text-white/20"
-                  />
-                  <button onClick={() => aiImageInputRef.current?.click()} disabled={useImageAsReference ? aiAttachedImages.length >= 1 : aiAttachedImages.length >= 4} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors disabled:opacity-30">
-                    <Icons.Paperclip className="w-5 h-5" />
-                  </button>
-                  <button onClick={handleAiRefine} disabled={isAiLoading || (useImageAsReference && aiAttachedImages.length === 0)} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-zinc-800' : 'bg-lime-400 text-black active:scale-90 hover:shadow-[0_0_15px_rgba(163,230,53,0.5)]'} disabled:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed`}>
-                    {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
-                  </button>
-                </div>
-                {/* <div className="flex items-center justify-between mt-4">
-                    <label className="flex items-center cursor-pointer">
+                {ugCredit < AI_COST ? (
+                    <div className="text-center">
+                        <h4 className="text-white font-bold text-lg mb-2">You need more tokens!</h4>
+                        <p className="text-white/50 text-sm mb-6">Each AI generation costs {AI_COST} tokens. Please top up to continue.</p>
+                        <div className="grid md:grid-cols-3 gap-4">
+                            {PRICING_OPTIONS.map(opt => (
+                                <button 
+                                    key={opt.amount}
+                                    onClick={() => handlePurchase(opt.amount, opt.credits)}
+                                    className="relative overflow-hidden w-full p-5 bg-zinc-800/80 rounded-2xl border border-white/10 text-left transition-all hover:border-lime-400/50 hover:bg-zinc-800/50 active:scale-95 group"
+                                >
+                                    <span className="absolute top-0 left-0 -translate-x-full w-full h-full bg-gradient-to-r from-transparent via-lime-400/30 to-transparent animate-[shimmer_2.5s_infinite] group-hover:animate-[shimmer_2s_infinite]" />
+                                    <div className="text-sm text-white/50 font-bold uppercase tracking-widest">{opt.label}</div>
+                                    <div className="text-3xl text-white font-bold my-1">{opt.credits.toLocaleString()} <span className="text-lg text-lime-400">Tokens</span></div>
+                                    <div className="text-lg text-white/80 font-bold">₦{opt.amount.toLocaleString()}</div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <input type="file" ref={aiImageInputRef} className="hidden" accept="image/*" multiple onChange={handleAiImageAttach} />
                         <div className="relative">
-                            <input type="checkbox" className="sr-only" checked={useImageAsReference} onChange={e => {
-                                setUseImageAsReference(e.target.checked);
-                                if (e.target.checked) {
-                                    setAiAttachedImages(prev => prev.slice(0, 1));
-                                }
-                            }} />
-                            <div className={`block w-10 h-5 rounded-full transition-colors ${useImageAsReference ? 'bg-lime-400' : 'bg-zinc-700'}`}></div>
-                            <div className={`dot absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform ${useImageAsReference ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                        </div>
-                        <div className="ml-3 text-xs text-white/50 font-medium">
-                            Use Image as Reference
-                        </div>
-                    </label>
-                </div> */}
-                {aiAttachedImages.length > 0 && (
-                  <div className="flex gap-2 mt-3">
-                    {aiAttachedImages.map((img, i) => (
-                      <div key={i} className="relative w-14 h-14 rounded-xl overflow-hidden border border-white/10 group">
-                        <img src={img} alt={`Attachment ${i + 1}`} className="w-full h-full object-cover" />
-                        <button onClick={() => setAiAttachedImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Icons.X className="w-4 h-4 text-white" />
+                        <input 
+                            autoFocus
+                            placeholder={useImageAsReference ? 'Describe the style or content to recreate...' : 'e.g., \'Advertise my noodle brand\''}
+                            value={aiPrompt}
+                            onChange={(e) => setAiPrompt(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAiRefine()}
+                            disabled={isAiLoading}
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl h-16 pl-12 pr-14 text-sm focus:outline-none focus:border-lime-400 transition-all placeholder:text-white/20"
+                        />
+                        <button onClick={() => aiImageInputRef.current?.click()} disabled={useImageAsReference ? aiAttachedImages.length >= 1 : aiAttachedImages.length >= 4} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors disabled:opacity-30">
+                            <Icons.Paperclip className="w-5 h-5" />
                         </button>
-                      </div>
-                    ))}
-                    {aiAttachedImages.length < (useImageAsReference ? 1 : 4) && (
-                      <button onClick={() => aiImageInputRef.current?.click()} className="w-14 h-14 rounded-xl border border-dashed border-white/10 flex items-center justify-center text-white/20 hover:text-white/40 hover:border-white/20 transition-colors">
-                        <Icons.Plus className="w-5 h-5" />
-                      </button>
-                    )}
-                  </div>
+                        <button onClick={handleAiRefine} disabled={isAiLoading || (useImageAsReference && aiAttachedImages.length === 0)} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-zinc-800' : 'bg-lime-400 text-black active:scale-90 hover:shadow-[0_0_15px_rgba(163,230,53,0.5)]'} disabled:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed`}>
+                            {isAiLoading ? <Icons.Magic className="w-5 h-5 animate-spin-custom" /> : <Icons.ArrowRight className="w-6 h-6" />}
+                        </button>
+                        </div>
+                        {aiAttachedImages.length > 0 && (
+                        <div className="flex gap-2 mt-3">
+                            {aiAttachedImages.map((img, i) => (
+                            <div key={i} className="relative w-14 h-14 rounded-xl overflow-hidden border border-white/10 group">
+                                <img src={img} alt={`Attachment ${i + 1}`} className="w-full h-full object-cover" />
+                                <button onClick={() => setAiAttachedImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Icons.X className="w-4 h-4 text-white" />
+                                </button>
+                            </div>
+                            ))}
+                            {aiAttachedImages.length < (useImageAsReference ? 1 : 4) && (
+                            <button onClick={() => aiImageInputRef.current?.click()} className="w-14 h-14 rounded-xl border border-dashed border-white/10 flex items-center justify-center text-white/20 hover:text-white/40 hover:border-white/20 transition-colors">
+                                <Icons.Plus className="w-5 h-5" />
+                            </button>
+                            )}
+                        </div>
+                        )}
+                        <div className="mt-6 flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                        {['Poster for a film festival', 'Minimalist clothing brand ad', 'Vibrant gig poster style', 'Luxury brand announcement', 'Vintage typography layout'].map(s => (
+                            <button key={s} onClick={() => setAiPrompt(s)} className="shrink-0 bg-white/5 border border-white/5 px-5 py-2.5 rounded-full text-[10px] font-bold uppercase hover:bg-white/10 hover:border-white/20 transition-all text-white/60 hover:text-white">{s}</button>
+                        ))}
+                        </div>
+                    </>
                 )}
-                <div className="mt-6 flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                   {['Poster for a film festival', 'Minimalist clothing brand ad', 'Vibrant gig poster style', 'Luxury brand announcement', 'Vintage typography layout'].map(s => (
-                     <button key={s} onClick={() => setAiPrompt(s)} className="shrink-0 bg-white/5 border border-white/5 px-5 py-2.5 rounded-full text-[10px] font-bold uppercase hover:bg-white/10 hover:border-white/20 transition-all text-white/60 hover:text-white">{s}</button>
-                   ))}
-                </div>
-                <button onClick={() => { setIsAiModalOpen(false); setAiAttachedImages([]); }} className="w-full mt-8 text-[10px] font-black uppercase text-white/20 hover:text-white/60 transition-colors tracking-[0.4em]">Abort Engine Session</button>
+                <button onClick={() => { setIsAiModalOpen(false); setAiAttachedImages([]); }} className="w-full mt-8 text-[10px] font-black uppercase text-white/20 hover:text-white/60 transition-colors tracking-[0.4em]">Close</button>
              </div>
           </div>
         )}
@@ -1631,7 +1742,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   availableFonts={allFonts}
                   onAddCustomFont={handleAddCustomFont}
                   onDeleteCustomFont={handleDeleteCustomFont}
-                  onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
+                  onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { [key]: color } }); } }}
                   onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); setIsBottomSheetOpen(false); }}
                   onAddShape={onAddShape}
                   onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); setIsBottomSheetOpen(false); }}
@@ -1723,7 +1834,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           availableFonts={allFonts}
           onAddCustomFont={handleAddCustomFont}
           onDeleteCustomFont={handleDeleteCustomFont}
-          onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
+          onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { [key]: color } }); } }}
           onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
           onAddShape={onAddShape}
           onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
