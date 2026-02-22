@@ -10,7 +10,6 @@ import { domToPng } from 'modern-screenshot';
 import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove, runTransaction } from './firebase.ts';
 import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
-import ContextMenu from './components/ContextMenu.tsx';
 import QuickTools from './components/QuickTools.tsx';
 import Share from './components/Share.tsx';
 
@@ -81,7 +80,6 @@ const App: React.FC = () => {
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
   const [isBrandDnaOpen, setIsBrandDnaOpen] = useState(false);
   const [brandData, setBrandData] = useState(null);
-  const [contextMenu, setContextMenu] = useState<{ show: boolean; x: number; y: number; }>({ show: false, x: 0, y: 0 });
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [editingElementId, setEditingElementId] = useState<string | null>(null);
 
@@ -99,7 +97,6 @@ const App: React.FC = () => {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiImageInputRef = useRef<HTMLInputElement>(null);
-  const longPressTimer = useRef<number | null>(null);
   const lastTap = useRef(0);
 
   const allFonts = [...userFonts, ...BASE_FONTS];
@@ -547,7 +544,7 @@ const App: React.FC = () => {
   const sanitizeElement = useCallback((el: any): DesignElement => {
     const defaultStyle: ElementStyle = {
         color: '#000000',
-        backgroundColor: 'transparent', // Default to transparent
+        backgroundColor: 'transparent',
         fontSize: 24,
         fontFamily: "'Inter', sans-serif",
         fontWeight: '400',
@@ -565,12 +562,10 @@ const App: React.FC = () => {
 
     const style = { ...defaultStyle, ...(el.style || {}) };
 
-    // Ensure critical layout properties are valid
     style.opacity = typeof style.opacity === 'number' ? style.opacity : 1;
     style.borderRadius = typeof style.borderRadius === 'number' ? style.borderRadius : 0;
     style.strokeWidth = typeof style.strokeWidth === 'number' ? style.strokeWidth : 0;
     
-    // Sanitize text-specific styles
     if (el.type === 'text') {
         style.fontSize = typeof style.fontSize === 'number' ? style.fontSize : 24;
         style.fontFamily = style.fontFamily || (allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif");
@@ -578,10 +573,8 @@ const App: React.FC = () => {
         style.textAlign = style.textAlign || 'left';
         style.letterSpacing = typeof style.letterSpacing === 'number' ? style.letterSpacing : 0;
         style.lineHeight = typeof style.lineHeight === 'number' ? style.lineHeight : 1.2;
-        // Ensure text elements don't have a background unless specified
         style.backgroundColor = style.backgroundColor || 'transparent';
     } else {
-        // Nullify text styles for non-text elements
         style.fontSize = null;
         style.fontFamily = null;
         style.fontWeight = null;
@@ -590,7 +583,6 @@ const App: React.FC = () => {
         style.lineHeight = null;
     }
 
-    // Nullify color for non-text, non-icon elements
      if (el.type !== 'text' && el.type !== 'icon') {
         style.color = null;
     }
@@ -1083,75 +1075,47 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
     const now = Date.now();
     const timeSinceLastTap = now - lastTap.current;
-    
-    // Double-tap to edit logic for mobile
-    if (isMobile && element.type === 'text' && state.selectedElementId === id && timeSinceLastTap < 300) {
-        setEditingElementId(id);
-        setDragStart(null); // Prevent dragging when entering edit mode
-        lastTap.current = 0; // Reset tap timer
-        return;
-    }
-    
     lastTap.current = now;
 
-    // If another element is selected, or if we are not editing, select the new element
+    // Double-tap to edit for text elements on mobile
+    if (isMobile && element.type === 'text' && state.selectedElementId === id && timeSinceLastTap < 300) {
+        setEditingElementId(id);
+        setDragStart(null);
+        return;
+    }
+
     if (state.selectedElementId !== id) {
         setState(prev => ({ ...prev, selectedElementId: id }));
-        // On desktop, immediately enter edit mode for text elements
-        if (!isMobile && element.type === 'text') {
-            setEditingElementId(id);
-        } else {
-            setEditingElementId(null);
-        }
         triggerHaptic(5);
     }
-
-    // Prevent dragging if the element is locked or if we are currently editing it on mobile
-    if (element.locked || (isMobile && editingElementId === id)) return;
-
-    // Standard drag initiation for move/resize
-    if (isMobile) {
-        if (state.selectedElementId === id) {
-            setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
-            setElementStartPos({ ...element.box });
-        }
-    } else {
-        // Long-press for context menu on desktop
-        longPressTimer.current = window.setTimeout(() => {
-            setContextMenu({ show: true, x: e.clientX, y: e.clientY });
-            setDragStart(null);
-            longPressTimer.current = null;
-        }, 500);
-        setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
-        setElementStartPos({ ...element.box });
+    
+    // On desktop, double-click to edit text
+    if (!isMobile && element.type === 'text' && timeSinceLastTap < 300) {
+        setEditingElementId(id);
+        setDragStart(null);
+        return;
     }
+
+    if (element.locked || editingElementId === id) return;
+
+    setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
+    setElementStartPos({ ...element.box });
+
   }, [state.selectedElementId, currentPage, isMobile, triggerHaptic, editingElementId]);
 
 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
     if (e.target !== e.currentTarget) return;
 
+    if (editingElementId) {
+        setEditingElementId(null);
+    }
     if (state.selectedElementId) {
-        deselectAll();
+        setState(prev => ({ ...prev, selectedElementId: null }));
     } else if (isMobile && state.pages.length > 1) {
         setDragStart({ x: e.clientX, y: e.clientY, type: 'swipe' });
     }
   };
-
-  const handleElementContextMenu = useCallback((id: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setState(prev => ({ ...prev, selectedElementId: id }));
-    setContextMenu({ show: true, x: e.clientX, y: e.clientY });
-    setDragStart(null);
-  }, []);
-
-  const deselectAll = () => {
-      if (editingElementId) {
-          setEditingElementId(null);
-      }
-      setState(prev => ({ ...prev, selectedElementId: null }));
-  }
 
   const addElement = useCallback((element: Partial<DesignElement>) => {
     const defaultFont = allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif";
@@ -1159,9 +1123,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       id: generateId(),
       name: element.name || (element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : 'Element'),
       type: (element.type as any) || 'shape',
-      box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 200, rotation: 0 },
+      box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 50, rotation: 0 }, // Default height to 50
       content: '',
-      style: { backgroundColor: 'transparent', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: '400', textAlign: 'center', filter: 'none' },
+      style: { backgroundColor: 'transparent', color: '#FFFFFF', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: '400', textAlign: 'center', filter: 'none' },
       visible: true,
       locked: false,
       ...element
@@ -1233,16 +1197,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   }, [selectedElement, updateElement]);
 
   const handlePointerMove = useCallback((e: PointerEvent) => {
-    if (dragStart && longPressTimer.current) {
-      const dx = e.clientX - dragStart.x;
-      const dy = e.clientY - dragStart.y;
-      if (Math.sqrt(dx * dx + dy * dy) > 5) {
-          clearTimeout(longPressTimer.current);
-          longPressTimer.current = null;
-      }
-    }
-
-    if (!dragStart || contextMenu.show) return;
+    if (!dragStart) return;
 
     const dx = (e.clientX - dragStart.x) / scale;
     const dy = (e.clientY - dragStart.y) / scale;
@@ -1283,8 +1238,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       if (h.includes('w')) { width -= dx; x += dx; }
       if (h.includes('s')) height += dy;
       if (h.includes('n')) { height -= dy; y += dy; }
-      width = Math.max(10, width);
-      height = Math.max(10, height);
+      width = Math.max(20, width);
+      height = Math.max(20, height);
       updateElement(state.selectedElementId, { box: { ...elementStartPos, x, y, width, height } });
     } else if (dragStart.type === 'rotate') {
       const rect = canvasRef.current?.getBoundingClientRect();
@@ -1296,13 +1251,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       if (Math.abs(rotation % 45) < 5) rotation = Math.round(rotation / 45) * 45;
       updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation } });
     }
-  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement, contextMenu.show, isMobile]);
+  }, [dragStart, elementStartPos, state.selectedElementId, scale, updateElement, isMobile]);
 
   const handlePointerUp = useCallback(() => {
-    if (longPressTimer.current) {
-        clearTimeout(longPressTimer.current);
-        longPressTimer.current = null;
-    }
     setDragStart(null);
     setElementStartPos(null);
     setSnapLines([]);
@@ -1317,11 +1268,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     };
   }, [handlePointerMove, handlePointerUp]);
 
-  const handleTextUpdate = (id: string, content: string, newHeight: number) => {
-    updateElement(id, {
-        content: content,
-        box: { ...selectedElement.box, height: newHeight }
-    });
+  const handleTextUpdate = (id: string, updates: Partial<DesignElement>) => {
+    updateElement(id, updates);
     setEditingElementId(null);
   };
 
@@ -1485,30 +1433,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         onClose={() => setShowPricingModal(false)}
         onSelectPlan={payWithPaystack} 
       />
-      <ContextMenu
-        show={contextMenu.show}
-        x={contextMenu.x}
-        y={contextMenu.y}
-        isMobile={isMobile}
-        selectedElement={selectedElement}
-        onClose={() => setContextMenu({ ...contextMenu, show: false })}
-        onMoveForward={() => {
-            if (state.selectedElementId) onReorder(state.selectedElementId, 'up');
-            setContextMenu({ ...contextMenu, show: false });
-        }}
-        onMoveBackward={() => {
-            if (state.selectedElementId) onReorder(state.selectedElementId, 'down');
-            setContextMenu({ ...contextMenu, show: false });
-        }}
-        onCut={() => {
-            if (state.selectedElementId) deleteElement(state.selectedElementId);
-            setContextMenu({ ...contextMenu, show: false });
-        }}
-        onApplyEffect={(effect) => {
-            handleApplyEffect(effect);
-            setContextMenu({ ...contextMenu, show: false });
-        }}
-      />
 
       <Share 
         show={isShareModalOpen} 
@@ -1582,7 +1506,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
         {isBrandDnaOpen && <BrandDna onClose={() => setIsBrandDnaOpen(false)} onStartCampaign={handleGenerateCampaign} />}
 
-        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${ (isBottomSheetOpen || (contextMenu.show && isMobile)) ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${ (isBottomSheetOpen || isMobile) ? 'opacity-0' : 'opacity-100'}`}>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) })); triggerHaptic(2); }}><Icons.ArrowLeft className="w-5 h-5"/></button>
            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">{state.currentPageIndex + 1}/{state.pages.length}</span>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) })); triggerHaptic(2); }}><Icons.ArrowRight className="w-5 h-5"/></button>
@@ -1627,32 +1551,35 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     isSelected={state.selectedElementId === el.id} 
                     isEditing={editingElementId === el.id}
                     onSelect={handleElementPointerDown} 
-                    onUpdate={handleTextUpdate} 
-                    onContextMenu={(e) => handleElementContextMenu(el.id, e)} 
+                    onUpdate={handleTextUpdate}
                   />
                   {state.selectedElementId === el.id && !el.locked && editingElementId !== el.id && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
-                      {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
-                        let s: React.CSSProperties = {};
-                        if (h === 'nw') s = { top: '-12px', left: '-12px' }; if (h === 'ne') s = { top: '-12px', right: '-12px' };
-                        if (h === 'sw') s = { bottom: '-12px', left: '-12px' }; if (h === 'se') s = { bottom: '-12px', right: '-12px' };
-                        if (h === 'n') s = { top: '-12px', left: '50%', transform: 'translateX(-50%)' }; if (h === 's') s = { bottom: '-12px', left: '50%', transform: 'translateX(-50%)' };
-                        if (h === 'e') s = { right: '-12px', top: '50%', transform: 'translateY(-50%)' }; if (h === 'w') s = { left: '-12px', top: '50%', transform: 'translateY(-50%)' };
-                        const isC = h.length === 2;
-                        return (
-                          <div key={h} onPointerDown={(e) => { e.stopPropagation(); setDragStart({ x: e.clientX, y: e.clientY, type: 'resize', handle: h }); setElementStartPos({...el.box}); triggerHaptic(5); }}
-                            style={s} className={`absolute bg-white border-2 border-lime-400 pointer-events-auto shadow-lg ${isC ? 'w-6 h-6 rounded-full' : 'w-10 h-3 rounded-sm'} z-50 hover:scale-110 transition-transform`}
-                          />
-                        );
-                      })}
-                      <div onPointerDown={(e) => { e.stopPropagation(); const rect = canvasRef.current?.getBoundingClientRect(); if (!rect) return; const cX = rect.left + (el.box.x + el.box.width / 2) * scale; const cY = rect.top + (el.box.y + el.box.height / 2) * scale; const initialAngle = Math.atan2(e.clientY - cY, e.clientX - cX) * (180 / Math.PI); setDragStart({ x: e.clientX, y: e.clientY, type: 'rotate', initialAngle }); setElementStartPos({...el.box}); triggerHaptic(10); }}
-                        className="absolute -bottom-24 left-1/2 -translate-x-1/2 w-14 h-14 bg-zinc-900 border border-white/20 rounded-full flex items-center justify-center pointer-events-auto shadow-2xl"
-                      >
-                         <Icons.RotateCw className="w-7 h-7 text-lime-400" />
-                      </div>
-                      <div onPointerDown={(e) => handleElementPointerDown(el.id, e)} className="absolute -top-24 left-1/2 -translate-x-1/2 bg-lime-400 px-6 py-2.5 rounded-full flex items-center gap-3 text-[12px] text-black font-bold uppercase tracking-widest shadow-xl animate-bounce pointer-events-auto cursor-grab active:cursor-grabbing">
-                         <Icons.Move className="w-5 h-5" /> Move
-                      </div>
+                      {!isMobile && (
+                        <>
+                          {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
+                            let s: React.CSSProperties = {};
+                            if (h === 'nw') s = { top: '-12px', left: '-12px' }; if (h === 'ne') s = { top: '-12px', right: '-12px' };
+                            if (h === 'sw') s = { bottom: '-12px', left: '-12px' }; if (h === 'se') s = { bottom: '-12px', right: '-12px' };
+                            if (h === 'n') s = { top: '-12px', left: '50%', transform: 'translateX(-50%)' }; if (h === 's') s = { bottom: '-12px', left: '50%', transform: 'translateX(-50%)' };
+                            if (h === 'e') s = { right: '-12px', top: '50%', transform: 'translateY(-50%)' }; if (h === 'w') s = { left: '-12px', top: '50%', transform: 'translateY(-50%)' };
+                            const isC = h.length === 2;
+                            return (
+                              <div key={h} onPointerDown={(e) => { e.stopPropagation(); setDragStart({ x: e.clientX, y: e.clientY, type: 'resize', handle: h }); setElementStartPos({...el.box}); triggerHaptic(5); }}
+                                style={s} className={`absolute bg-white border-2 border-lime-400 pointer-events-auto shadow-lg ${isC ? 'w-6 h-6 rounded-full' : 'w-10 h-3 rounded-sm'} z-50 hover:scale-110 transition-transform`}
+                              />
+                            );
+                          })}
+                          <div onPointerDown={(e) => { e.stopPropagation(); const rect = canvasRef.current?.getBoundingClientRect(); if (!rect) return; const cX = rect.left + (el.box.x + el.box.width / 2) * scale; const cY = rect.top + (el.box.y + el.box.height / 2) * scale; const initialAngle = Math.atan2(e.clientY - cY, e.clientX - cX) * (180 / Math.PI); setDragStart({ x: e.clientX, y: e.clientY, type: 'rotate', initialAngle }); setElementStartPos({...el.box}); triggerHaptic(10); }}
+                            className="absolute -bottom-24 left-1/2 -translate-x-1/2 w-14 h-14 bg-zinc-900 border border-white/20 rounded-full flex items-center justify-center pointer-events-auto shadow-2xl"
+                          >
+                             <Icons.RotateCw className="w-7 h-7 text-lime-400" />
+                          </div>
+                          <div onPointerDown={(e) => handleElementPointerDown(el.id, e)} className="absolute -top-24 left-1/2 -translate-x-1/2 bg-lime-400 px-6 py-2.5 rounded-full flex items-center gap-3 text-[12px] text-black font-bold uppercase tracking-widest shadow-xl animate-bounce pointer-events-auto cursor-grab active:cursor-grabbing">
+                             <Icons.Move className="w-5 h-5" /> Move
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1752,7 +1679,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         )}
 
         {isMobile && !isAiModalOpen && !isPwaInstalled && deferredPrompt && (
-          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen || (contextMenu.show && isMobile) ? 'translate-y-full' : 'translate-y-0'}`}>
+          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? 'translate-y-full' : 'translate-y-0'}`}>
             <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-lime-400/20 rounded-2xl shadow-2xl p-4">
               <button onClick={handlePwaInstall} className="w-full flex items-center gap-4">
                 <div className="w-12 h-12 bg-lime-400 rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(163,230,53,0.3)]">
@@ -1769,7 +1696,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         )}
 
         {isMobile && !isAiModalOpen && (isPwaInstalled || !deferredPrompt) && (
-          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen || (contextMenu.show && isMobile) ? 'translate-y-full' : 'translate-y-0'}`}>
+          <div className={`absolute bottom-0 left-0 right-0 z-[100] transition-transform duration-300 ${isBottomSheetOpen ? 'translate-y-full' : 'translate-y-0'}`}>
                 <QuickTools
                     selectedElement={selectedElement}
                     updateElement={updateElement}
@@ -1905,9 +1832,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
           onAddCustomFont={handleAddCustomFont}
           onDeleteCustomFont={handleDeleteCustomFont}
           onColorChange={(color) => { if (selectedElement) { const key = selectedElement.type === 'text' || selectedElement.type === 'icon' ? 'color' : 'backgroundColor'; updateElement(selectedElement.id, { style: { ...selectedElement.style, [key]: color } }); } }}
-          onAddText={(type) => addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } })}
+          onAddText={(type) => { addElement({ type: 'text', name: type, content: type === 'Header' ? 'HEADER' : (type === 'Subheader' ? 'Subheader' : 'Paragraph text.'), style: { fontSize: type === 'Header' ? 42 : 24, fontFamily: allFonts[0]?.value, color: '#FFF', textAlign: 'center', lineHeight: 1.2, letterSpacing: 0, fontWeight: '700' }, box: { x: 30, y: 150, width: 300, height: 100, rotation: 0 } }); }}
           onAddShape={onAddShape}
-          onAddImage={(src) => addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } })}
+          onAddImage={(src) => { addElement({ type: 'image', name: 'Image', content: src, style: { borderRadius: 24 }, box: { x: 40, y: 200, width: 280, height: 400, rotation: 0 } }); }}
           onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
         />
       )}
