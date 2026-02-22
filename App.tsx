@@ -204,12 +204,14 @@ const App: React.FC = () => {
       amount: amount * 100, // Amount in kobo
       currency: 'NGN',
       ref: 'ug-' + generateId(),
-      callback: async (response: any) => {
-        const userRef = ref(database, `users/${user.uid}`);
-        const snapshot = await get(child(userRef, 'ugcredit'));
-        const currentCredit = snapshot.val() || 0;
-        await set(child(userRef, 'ugcredit'), currentCredit + credits);
-        alert('Purchase successful! Your credits have been added.');
+      callback: (response: any) => {
+        (async () => {
+          const userRef = ref(database, `users/${user.uid}`);
+          const snapshot = await get(child(userRef, 'ugcredit'));
+          const currentCredit = snapshot.val() || 0;
+          await set(child(userRef, 'ugcredit'), currentCredit + credits);
+          alert('Purchase successful! Your credits have been added.');
+        })();
       },
       onClose: () => {
         alert('Transaction was cancelled.');
