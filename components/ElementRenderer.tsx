@@ -10,7 +10,6 @@ interface ElementRendererProps {
     onUpdate: (id: string, updates: Partial<DesignElement>) => void;
 }
 
-// This function calculates the exact height a text element should be.
 const getTextHeight = (element: DesignElement) => {
     const tempDiv = document.createElement('div');
     Object.assign(tempDiv.style, {
@@ -28,9 +27,8 @@ const getTextHeight = (element: DesignElement) => {
         top: '-9999px',
         left: '-9999px',
     });
-    // Cleanse content before measuring to get the *true* height
     const cleansedContent = (element.content || '').replace(/^(<br\s*\/?>|\s|&nbsp;)+|(<br\s*\/?>|\s|&nbsp;)+$/g, "");
-    tempDiv.innerHTML = cleansedContent || '&nbsp;'; // Use a non-breaking space to ensure at least one line of height
+    tempDiv.innerHTML = cleansedContent || '&nbsp;';
     document.body.appendChild(tempDiv);
     const height = tempDiv.scrollHeight;
     document.body.removeChild(tempDiv);
@@ -40,8 +38,6 @@ const getTextHeight = (element: DesignElement) => {
 const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, isEditing, onSelect, onUpdate }) => {
     const textRef = useRef<HTMLDivElement>(null);
 
-    // useLayoutEffect runs synchronously after a render but before the screen is updated.
-    // This is the key to preventing the caret jump.
     useLayoutEffect(() => {
         const div = textRef.current;
         if (div && !isEditing && div.innerHTML !== element.content) {
@@ -49,7 +45,6 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
         }
     }, [element.content, isEditing]);
 
-    // On initial render and when content changes, ensure the box height is correct.
     useEffect(() => {
         if (element.type === 'text') {
             const requiredHeight = getTextHeight(element);
@@ -57,9 +52,8 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
                 onUpdate(element.id, { box: { ...element.box, height: requiredHeight } });
             }
         }
-    }, [element.content, element.box.width, element.style]); // Re-check if content, width, or style changes
+    }, [element.content, element.box.width, element.style]);
 
-    // When editing begins, focus the div and move the cursor to the end.
     useEffect(() => {
         if (isEditing && textRef.current) {
             textRef.current.focus();
@@ -67,7 +61,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
             const sel = window.getSelection();
             if (sel) {
                 range.selectNodeContents(textRef.current);
-                range.collapse(false); // false means collapse to the end
+                range.collapse(false);
                 sel.removeAllRanges();
                 sel.addRange(range);
             }
@@ -99,10 +93,8 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
         visibility: element.visible ? 'visible' : 'hidden',
         pointerEvents: 'auto',
         ...element.style,
-        // THE FIX: Explicitly set backgroundColor to transparent for text/icon, 
-        // unless one is already defined in the element's style.
-        backgroundColor: (element.type === 'text' || element.type === 'icon') 
-            ? (element.style.backgroundColor || 'transparent') 
+        backgroundColor: (element.type === 'text' || element.type === 'image' || element.type === 'icon') 
+            ? 'transparent' 
             : element.style.backgroundColor,
     };
 
@@ -115,10 +107,10 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
                         contentEditable={isEditing}
                         suppressContentEditableWarning={true}
                         onBlur={handleBlur}
-                        onPointerDown={(e) => e.stopPropagation()} // Stop pointer events from bubbling to the container
+                        onPointerDown={(e) => e.stopPropagation()}
                         style={{
                             width: '100%',
-                            height: '100%', // Let the container control the height
+                            height: '100%',
                             wordBreak: 'break-word',
                             cursor: isEditing ? 'text' : 'default',
                             padding: 10,
