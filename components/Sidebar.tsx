@@ -113,7 +113,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   const currentPage = pages[currentPageIndex];
 
   useEffect(() => {
-    // When the selected element changes, update the local text content.
     if (selectedElement) {
         setLocalTextContent(selectedElement.content || '');
     }
@@ -316,7 +315,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       <div className="relative">
                         <div className="flex bg-zinc-900 rounded-full border border-white/10 h-11 overflow-hidden">
                            <button className="flex-1 flex items-center justify-center px-4 hover:bg-white/5 border-r border-white/10 transition-colors" onClick={() => setShowFontList(!showFontList)}>
-                             <span style={{ fontFamily: selectedElement.style.fontFamily }} className="truncate text-sm font-bold italic">
+                             <span style={{ fontFamily: selectedElement.style.fontFamily || 'inherit' }} className="truncate text-sm font-bold italic">
                                {availableFonts.find(f => f.value === selectedElement.style.fontFamily)?.name || 'Default Font'}
                              </span>
                            </button>
@@ -352,7 +351,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       </div>
                       <div className="flex items-end gap-3">
                          <div className="flex-1 space-y-2">
-                           <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold"><span>Size</span><span>{selectedElement.style.fontSize}</span></div>
+                           <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold"><span>Size</span><span>{selectedElement.style.fontSize ?? 24}</span></div>
                            <input type="range" min="8" max="250" step="1" value={selectedElement.style.fontSize ?? 24} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, fontSize: parseInt(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
                          </div>
                          <div className="flex bg-zinc-900 rounded-lg p-1 border border-white/10">
@@ -363,12 +362,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">
-                          <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold"><span>Line</span><span>{selectedElement.style.lineHeight?.toFixed(1) || '1.0'}</span></div>
+                          <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold"><span>Line</span><span>{(selectedElement.style.lineHeight ?? 1.2).toFixed(1)}</span></div>
                           <input type="range" min="0.5" max="3" step="0.1" value={selectedElement.style.lineHeight ?? 1.2} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, lineHeight: parseFloat(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
                         </div>
                         <div className="space-y-2">
                           <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold"><span>Space</span><span>{selectedElement.style.letterSpacing ?? 0}</span></div>
-                          <input type="range" min="-5" max="30" step="1" value={selectedElement.style.letterSpacing ?? 0} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, letterSpacing: parseInt(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
+                          <input type="range" min="-5" max="30" step="1" value={selectedElement.style.letterSpacing ?? 0} onChange={(e) => updateElement(selectedElement.id, { style: { ...selected.style, letterSpacing: parseInt(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
                         </div>
                       </div>
                     </div>
