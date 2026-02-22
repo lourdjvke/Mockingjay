@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DesignElement, ElementStyle } from '../types';
 import { Icons } from './IconLibrary';
 
@@ -46,6 +46,7 @@ const QuickTools: React.FC<QuickToolsProps> = ({
     onApplyEffect
 }) => {
     const [activeTool, setActiveTool] = useState<string | null>(null);
+    const imageReplaceInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         setActiveTool(null);
@@ -56,6 +57,21 @@ const QuickTools: React.FC<QuickToolsProps> = ({
         updateElement(selectedElement.id, {
             style: { ...selectedElement.style, [property]: value }
         });
+    };
+
+    const handleImageReplace = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedElement || selectedElement.type !== 'image') return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const dataUrl = event.target?.result as string;
+            if (dataUrl) {
+                updateElement(selectedElement.id, { content: dataUrl });
+            }
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
     };
 
     const renderActiveTool = () => {
@@ -152,7 +168,8 @@ const QuickTools: React.FC<QuickToolsProps> = ({
             case 'image':
                  return (
                     <>
-                        <button onClick={() => onOpenSidebar()} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Image className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Replace</span></button>
+                        <input type="file" accept="image/*" ref={imageReplaceInputRef} className="hidden" onChange={handleImageReplace} />
+                        <button onClick={() => imageReplaceInputRef.current?.click()} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Image className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Replace</span></button>
                         <button onClick={() => setActiveTool(activeTool === 'effects' ? null : 'effects')} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Wand2 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Effects</span></button>
                         <button onClick={() => onOpenSidebar()} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Layers className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Layer</span></button>
                     </>
