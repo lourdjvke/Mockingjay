@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Icons } from './IconLibrary.tsx';
 import { DesignElement, Page } from '../types.ts';
 import type { User } from 'firebase/auth';
@@ -99,6 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     elements: isMobile
   });
   const [showFontList, setShowFontList] = useState(false);
+  const [localTextContent, setLocalTextContent] = useState(selectedElement?.content || '');
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const fontUploadRef = useRef<HTMLInputElement>(null);
   const colorPickerRef = useRef<HTMLInputElement>(null);
@@ -110,6 +111,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const currentPage = pages[currentPageIndex];
+
+  useEffect(() => {
+    // When the selected element changes, update the local text content.
+    if (selectedElement) {
+        setLocalTextContent(selectedElement.content || '');
+    }
+  }, [selectedElement]);
+
 
   const toggleSection = (id: string) => {
     setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
@@ -334,7 +343,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                         )}
                       </div>
                       <div className="w-full bg-zinc-900 border border-white/10 rounded-xl p-3 focus-within:border-lime-400/50 transition-colors">
-                        <textarea defaultValue={selectedElement.content} onBlur={(e) => updateElement(selectedElement.id, { content: e.target.value })} onChange={(e) => updateElement(selectedElement.id, { content: e.target.value })} className="bg-transparent border-none outline-none w-full text-sm font-medium resize-none h-20 text-white" placeholder="Type something..."/>
+                        <textarea 
+                            value={localTextContent}
+                            onBlur={() => updateElement(selectedElement.id, { content: localTextContent })}
+                            onChange={(e) => setLocalTextContent(e.target.value)}
+                            className="bg-transparent border-none outline-none w-full text-sm font-medium resize-none h-20 text-white" 
+                            placeholder="Type something..."/>
                       </div>
                       <div className="flex items-end gap-3">
                          <div className="flex-1 space-y-2">
