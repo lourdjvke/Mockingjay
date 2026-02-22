@@ -1,53 +1,49 @@
 
+export type ElementType = 'text' | 'shape' | 'image' | 'icon';
+
+export interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+}
+
+export interface DesignElement {
+  id: string;
+  type: ElementType;
+  name: string;
+  box: BoundingBox;
+  content: string; // text content, svg path, or image src
+  style: {
+    color?: string;
+    backgroundColor?: string;
+    fontSize?: number;
+    fontFamily?: string;
+    fontWeight?: string;
+    textAlign?: 'left' | 'center' | 'right';
+    borderRadius?: number;
+    opacity?: number;
+    strokeColor?: string;
+    strokeWidth?: number;
+    strokePattern?: 'solid' | 'dashed' | 'dotted';
+    letterSpacing?: number;
+    lineHeight?: number;
+    clipPath?: string;
+  };
+  visible: boolean;
+  locked: boolean;
+}
+
+export interface Page {
+  id: string;
+  background: string; // HEX or image URL
+  elements: DesignElement[];
+}
+
 export interface EditorState {
-    pages: Page[];
-    currentPageIndex: number;
-    selectedElementId: string | null;
-    themeColors: string[];
-    isAiCreated?: boolean;
-    aiPrompt?: string;
-  }
-  
-  export interface Page {
-    id: string;
-    background: string;
-    elements: DesignElement[];
-  }
-  
-  export interface DesignElement {
-    id: string;
-    name: string;
-    type: 'text' | 'shape' | 'image' | 'icon';
-    box: BoundingBox;
-    content: string;
-    style: ElementStyle;
-    visible: boolean;
-    locked: boolean;
-  }
-  
-  export interface BoundingBox {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    rotation: number;
-  }
-  
-  export interface ElementStyle {
-    color: string | null;
-    backgroundColor: string | null;
-    fontSize: number | null;
-    fontFamily: string | null;
-    fontWeight: string | null;
-    textAlign: 'left' | 'center' | 'right' | null;
-    letterSpacing: number | null;
-    lineHeight: number | null;
-    borderRadius: number | null;
-    opacity: number;
-    strokeColor: string | null;
-    strokeWidth: number | null;
-    strokePattern: 'solid' | 'dashed' | 'dotted' | null;
-    clipPath: string | null;
-    filter: string | null;
-  }
-  
+  pages: Page[];
+  currentPageIndex: number;
+  selectedElementId: string | null;
+  themeColors: string[];
+}
