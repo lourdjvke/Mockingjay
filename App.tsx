@@ -1109,9 +1109,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
     if (e.target !== e.currentTarget) return;
 
-    if (editingElementId) {
-        setEditingElementId(null);
-    }
     if (state.selectedElementId) {
         setState(prev => ({ ...prev, selectedElementId: null }));
     } else if (isMobile && state.pages.length > 1) {
@@ -1270,10 +1267,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     };
   }, [handlePointerMove, handlePointerUp]);
 
-  const handleTextUpdate = (id: string, updates: Partial<DesignElement>) => {
-    updateElement(id, updates);
-    setEditingElementId(null);
-  };
+  const handleFinishEdit = useCallback((id: string, updates: Partial<DesignElement>) => {
+      updateElement(id, updates);
+      setEditingElementId(null);
+  }, [updateElement]);
 
   const saveToPublicTemplates = async () => {
     if (!canvasRef.current || !currentDesignId) return;
@@ -1508,7 +1505,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
         {isBrandDnaOpen && <BrandDna onClose={() => setIsBrandDnaOpen(false)} onStartCampaign={handleGenerateCampaign} />}
 
-        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${ (isBottomSheetOpen || isMobile) ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-2xl transition-opacity ${ isBottomSheetOpen ? 'opacity-0' : 'opacity-100'}`}>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) })); triggerHaptic(2); }}><Icons.ArrowLeft className="w-5 h-5"/></button>
            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">{state.currentPageIndex + 1}/{state.pages.length}</span>
            <button className="p-1 text-white/30 hover:text-white transition-colors" onClick={() => { setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) })); triggerHaptic(2); }}><Icons.ArrowRight className="w-5 h-5"/></button>
@@ -1553,11 +1550,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     isSelected={state.selectedElementId === el.id} 
                     isEditing={editingElementId === el.id}
                     onSelect={handleElementPointerDown} 
-                    onUpdate={handleTextUpdate}
+                    onFinishEdit={handleFinishEdit}
                   />
                   {state.selectedElementId === el.id && !el.locked && editingElementId !== el.id && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
-                      {!isMobile && (
                         <>
                           {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
                             let s: React.CSSProperties = {};
@@ -1581,7 +1577,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                              <Icons.Move className="w-5 h-5" /> Move
                           </div>
                         </>
-                      )}
                     </div>
                   )}
                 </div>
