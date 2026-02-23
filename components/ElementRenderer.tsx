@@ -6,9 +6,17 @@ interface ElementRendererProps {
     element: DesignElement;
     isSelected: boolean;
     onSelect: (id: string, e: React.PointerEvent<HTMLDivElement>) => void;
+    onResizeStart: (id: string, handle: string, e: React.PointerEvent<HTMLDivElement>) => void;
+    onRotateStart: (id: string, e: React.PointerEvent<HTMLDivElement>) => void;
 }
 
-const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, onSelect }) => {
+const ElementRenderer: React.FC<ElementRendererProps> = ({ 
+    element, 
+    isSelected, 
+    onSelect, 
+    onResizeStart, 
+    onRotateStart 
+}) => {
     
     const { perspective = 1000, rotateX = 0, rotateY = 0 } = element.style;
     const transform = `perspective(${perspective}px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) rotate(${element.box.rotation}deg)`;
@@ -20,14 +28,24 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
         width: element.box.width,
         height: element.box.height,
         transform,
-        backfaceVisibility: 'hidden',
+        transformOrigin: 'center center',
         boxSizing: 'border-box',
         visibility: element.visible ? 'visible' : 'hidden',
         pointerEvents: 'auto',
-        ...element.style,
-        backgroundColor: (element.type === 'text' || element.type === 'image' || element.type === 'icon') 
-            ? 'transparent' 
-            : element.style.backgroundColor,
+    };
+
+    const contentWrapperStyle: React.CSSProperties = {
+      width: '100%',
+      height: '100%',
+      ...element.style,
+      backgroundColor: (element.type === 'text' || element.type === 'image' || element.type === 'icon') 
+          ? 'transparent' 
+          : element.style.backgroundColor,
+      outline: isSelected ? '2px solid #84cc16' : 'none',
+      outlineOffset: '2px',
+      transition: 'outline 0.1s ease-in-out',
+      borderRadius: element.style.borderRadius,
+      overflow: 'hidden',
     };
 
     const renderContent = () => {
@@ -58,12 +76,55 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
         }
     };
 
+    const resizeHandles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+
     return (
         <div
             style={containerStyle}
             onPointerDown={(e) => onSelect(element.id, e)}
         >
-            {renderContent()}
+            <div style={contentWrapperStyle}>
+                {renderContent()}
+            </div>
+
+            {isSelected && (
+                <>
+                    {/* Resize Handles */}
+                    {resizeHandles.map(handle => (
+                        <div
+                            key={handle}
+                            className={`absolute bg-white border-2 border-lime-500 rounded-full w-4 h-4`}
+                            style={{
+                                top: handle.includes('n') ? -8 : handle.includes('s') ? 'calc(100% - 8px)' : 'calc(50% - 8px)',
+                                left: handle.includes('w') ? -8 : handle.includes('e') ? 'calc(100% - 8px)' : 'calc(50% - 8px)',
+                                cursor: `${handle}-resize`,
+                                zIndex: 100
+                            }}
+                            onPointerDown={(e) => {
+                                e.stopPropagation();
+                                onResizeStart(element.id, handle, e);
+                            }}
+                        />
+                    ))}
+
+                    {/* Rotate Handle */}
+                    <div
+                        className="absolute bg-white border-2 border-lime-500 rounded-full w-5 h-5 flex items-center justify-center"
+                        style={{
+                            top: -32,
+                            left: 'calc(50% - 10px)',
+                            cursor: 'alias',
+                            zIndex: 100
+                        }}
+                        onPointerDown={(e) => {
+                            e.stopPropagation();
+                            onRotateStart(element.id, e);
+                        }}
+                    >
+                        <Icons.RotateCw className="w-3 h-3 text-lime-600" />
+                    </div>
+                </>
+            )}
         </div>
     );
 };
