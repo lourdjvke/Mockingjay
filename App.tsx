@@ -141,7 +141,7 @@ const App: React.FC = () => {
       email: user.email,
       amount: amountToPay * 100, // Amount in Kobo
       currency: "NGN",
-      ref: \`ref_\${Math.floor(Math.random() * 1000000000 + 1)}\`,
+      ref: `ref_${Math.floor(Math.random() * 1000000000 + 1)}`,
       callback: (response) => {
         const tokenMap = {
           500: 500,
@@ -149,7 +149,7 @@ const App: React.FC = () => {
           3500: 4000
         };
         const tokensToAdd = tokenMap[amountToPay];
-        const userCreditRef = ref(database, \`users/\${user.uid}/ugcredit\`);
+        const userCreditRef = ref(database, `users/${user.uid}/ugcredit`);
         runTransaction(userCreditRef, (currentTokens) => {
           return (currentTokens || 0) + tokensToAdd;
         });
@@ -190,7 +190,7 @@ const App: React.FC = () => {
             thumbnail,
         };
 
-        const dbRef = ref(database, \`users/\${user.uid}/designs/\${designId}\`);
+        const dbRef = ref(database, `users/${user.uid}/designs/${designId}`);
         await set(dbRef, designData);
 
         setSaveStatus('saved');
@@ -227,7 +227,7 @@ const App: React.FC = () => {
       setDesigns([]);
       return;
     }
-    const designsRef = ref(database, \`users/\${user.uid}/designs\`);
+    const designsRef = ref(database, `users/${user.uid}/designs`);
     const unsubscribe = onValue(designsRef, (snapshot) => {
       const data = snapshot.val();
       const userDesigns = data
@@ -245,7 +245,7 @@ const App: React.FC = () => {
       setUserTokens(0);
       return;
     }
-    const userCreditRef = ref(database, \`users/\${user.uid}/ugcredit\`);
+    const userCreditRef = ref(database, `users/${user.uid}/ugcredit`);
     const unsubscribe = onValue(userCreditRef, (snapshot) => {
       const tokens = snapshot.val() || 0;
       setUserTokens(tokens);
@@ -300,7 +300,7 @@ const App: React.FC = () => {
 
     const confirmed = window.confirm("Are you sure you want to delete this design?");
     if (confirmed) {
-        const designRef = ref(database, \`users/\${user.uid}/designs/\${designId}\`);
+        const designRef = ref(database, `users/${user.uid}/designs/${designId}`);
         await remove(designRef);
 
         if (currentDesignId === designId) {
@@ -376,7 +376,7 @@ const App: React.FC = () => {
 
     } catch (error) {
         console.error("Failed to load shared design:", error);
-        alert(\`Failed to load design: \${(error as Error).message}\`);
+        alert(`Failed to load design: ${(error as Error).message}`);
     }
   };
 
@@ -406,11 +406,11 @@ const App: React.FC = () => {
   };
 
   const injectFontFace = (name: string, base64: string) => {
-    const styleId = \`font-face-\${name.replace(/\\s+/g, '-').toLowerCase()}\`;
+    const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
     document.getElementById(styleId)?.remove();
     const style = document.createElement('style');
     style.id = styleId;
-    style.innerHTML = \`@font-face { font-family: '\${name}'; src: url(data:font/ttf;base64,\${base64}); font-weight: normal; font-style: normal; }\`;
+    style.innerHTML = `@font-face { font-family: '${name}'; src: url(data:font/ttf;base64,${base64}); font-weight: normal; font-style: normal; }`;
     document.head.appendChild(style);
   };
 
@@ -426,8 +426,8 @@ const App: React.FC = () => {
             const fontFace = new FontFace(font.name, font.data);
             await fontFace.load();
             document.fonts.add(fontFace);
-            loadedFonts.push({ name: font.name, value: \`'\${font.name}', sans-serif\` });
-          } catch (e) { console.error(\`Font init fail: \${font.name}\`, e); }
+            loadedFonts.push({ name: font.name, value: `'${font.name}', sans-serif` });
+          } catch (e) { console.error(`Font init fail: ${font.name}`, e); }
         }
         setUserFonts(loadedFonts);
         const storedImages = await MediaStore.getImages();
@@ -447,7 +447,7 @@ const App: React.FC = () => {
       await fontFace.load();
       document.fonts.add(fontFace);
       
-      setUserFonts(prev => [...prev, { name, value: \`'\${name}', sans-serif\` }]);
+      setUserFonts(prev => [...prev, { name, value: `'${name}', sans-serif` }]);
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(20);
     } catch (err) {
       console.error("Font save failed:", err);
@@ -457,7 +457,7 @@ const App: React.FC = () => {
   const handleDeleteCustomFont = useCallback(async (name: string) => {
     try {
       await FontStore.deleteFont(name);
-      const styleId = \`font-face-\${name.replace(/\\s+/g, '-').toLowerCase()}\`;
+      const styleId = `font-face-${name.replace(/\s+/g, '-').toLowerCase()}`;
       document.getElementById(styleId)?.remove();
       setUserFonts(prev => prev.filter(f => f.name !== name));
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(5);
@@ -564,8 +564,8 @@ const App: React.FC = () => {
         return await response.json();
     }
 
-    const errData = await response.json().catch(() => ({ error: \`Request failed with status \${response.status}\` }));
-    throw new Error(errData.error || \`Request failed with status \${response.status}\`);
+    const errData = await response.json().catch(() => ({ error: `Request failed with status ${response.status}` }));
+    throw new Error(errData.error || `Request failed with status ${response.status}`);
   };
 
   const sanitizeElement = useCallback((el: any): DesignElement => {
@@ -573,7 +573,7 @@ const App: React.FC = () => {
         color: '#000000',
         backgroundColor: 'transparent',
         fontSize: 24,
-        fontFamily: "\'Inter\', sans-serif",
+        fontFamily: "'Inter', sans-serif",
         fontWeight: '400',
         textAlign: 'left',
         letterSpacing: 0,
@@ -595,7 +595,7 @@ const App: React.FC = () => {
     
     if (el.type === 'text') {
         style.fontSize = typeof style.fontSize === 'number' ? style.fontSize : 24;
-        style.fontFamily = style.fontFamily || (allFonts.length > 0 ? allFonts[0].value : "\'Inter\', sans-serif");
+        style.fontFamily = style.fontFamily || (allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif");
         style.fontWeight = style.fontWeight || '400';
         style.textAlign = style.textAlign || 'left';
         style.letterSpacing = typeof style.letterSpacing === 'number' ? style.letterSpacing : 0;
@@ -645,7 +645,7 @@ const App: React.FC = () => {
     triggerHaptic(30);
 
     try {
-      const userCreditRef = ref(database, \`users/\${user.uid}/ugcredit\`);
+      const userCreditRef = ref(database, `users/${user.uid}/ugcredit`);
       await runTransaction(userCreditRef, (currentTokens) => {
         if (currentTokens < 150) {
           throw "Insufficient tokens";
@@ -655,36 +655,36 @@ const App: React.FC = () => {
 
       const apiUrl = '/api/ai';
 
-      const systemInstruction = \`You are "Mockingjay AI", a world-class Lead Designer specializing in brand campaigns.
+      const systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer specializing in brand campaigns.
 Your task is to generate a complete, multi-page design campaign based on a brand's DNA.
 
 **Brand DNA Context:**
-- Business Name: \${brandDna.businessName}
-- Overview: \${brandDna.overview}
-- Values: \${brandDna.values.join(', ')}
-- Tone: \${brandDna.tone}
-- Aesthetic: \${brandDna.aesthetic}
-- Colors: \${brandDna.colors.join(', ')}
-- Fonts: \${brandDna.fonts.join(', ')}
+- Business Name: ${brandDna.businessName}
+- Overview: ${brandDna.overview}
+- Values: ${brandDna.values.join(', ')}
+- Tone: ${brandDna.tone}
+- Aesthetic: ${brandDna.aesthetic}
+- Colors: ${brandDna.colors.join(', ')}
+- Fonts: ${brandDna.fonts.join(', ')}
 
 **Campaign Details:**
-- User Prompt: \${prompt}
-- Campaign Tags (Page Themes): \${tags.join(', ')}
+- User Prompt: ${prompt}
+- Campaign Tags (Page Themes): ${tags.join(', ')}
 
 **Instructions:**
-1.  Generate a complete design with exactly \${tags.length} pages.
-2.  Each page's design should be inspired by one of the campaign tags: [\${tags.join(', ')}] respectively.
+1.  Generate a complete design with exactly ${tags.length} pages.
+2.  Each page's design should be inspired by one of the campaign tags: [${tags.join(', ')}] respectively.
 3.  All design elements (colors, fonts, text, imagery) MUST strictly adhere to the provided Brand DNA.
-4.  The returned \\\`themeColors\\\` array MUST be populated with the brand's colors: [\${brandDna.colors.join(', ')}].
+4.  The returned \`themeColors\` array MUST be populated with the brand's colors: [${brandDna.colors.join(', ')}].
 
 YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanation text before or after the JSON.
-Do NOT wrap in \\\`\\\`\\\`json code blocks. Return ONLY the raw JSON starting with { and ending with }.
+Do NOT wrap in \`\`\`json code blocks. Return ONLY the raw JSON starting with { and ending with }.
 
 CRITICAL RULES:
 1. ALWAYS populate EVERY page with multiple elements (minimum 3-5 elements).
 2. NEVER return an empty page.
 3. Elements MUST have proper positioning, sizing, font families, colors, and spacing.
-4. Match the Canvas dimensions: \${CANVAS_WIDTH}x\${CANVAS_HEIGHT}.
+4. Match the Canvas dimensions: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}.
 5. Use reasonable borderRadius values (0-24px for rectangles, 999 for circles/pills). Do NOT use excessive values.
 6. For optional style properties that are not applicable to an element, you MUST return them with a value of null.
 7. For 'text' and 'image' elements, backgroundColor MUST ALWAYS be null.
@@ -695,7 +695,7 @@ CRITICAL RULES:
 - **Layout 3 (Dynamic):** Text block at the top, with a CTA and a smaller image placed at the bottom.
 - **General:** Use shapes as subtle accents. Keep text very short and impactful.
 
-AVAILABLE FONTS: \${allFonts.map(f => f.value).join(', ')}.
+AVAILABLE FONTS: ${allFonts.map(f => f.value).join(', ')}.
 
 ELEMENT STRUCTURE - ALL FIELDS ARE REQUIRED FOR EACH ELEMENT:
 {
@@ -714,13 +714,13 @@ RESPONSE FORMAT:
   "pages": [ { "id": "page_1", "background": "#colorhex or image_url", "elements": [ { ... } ] } ],
   "currentPageIndex": 0,
   "selectedElementId": null,
-  "themeColors": ["\${brandDna.colors.join('", "')}"]
+  "themeColors": ["${brandDna.colors.join('", "')}"]
 }
 
-\${images.length > 0 ? \`
-USER HAS ATTACHED \${images.length} IMAGE(S). You MUST include them in the design as image elements using placeholders like "ATTACHED_IMAGE_0".
-\` : ''}\
-\`;
+${images.length > 0 ? `
+USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design as image elements using placeholders like "ATTACHED_IMAGE_0".
+` : ''}
+`;
 
       const userMessages = [
         {
@@ -811,7 +811,7 @@ USER HAS ATTACHED \${images.length} IMAGE(S). You MUST include them in the desig
 
     } catch (err: any) {
       console.error("Campaign Generation Fail:", err);
-      alert(\`AI Error: \${err?.message || "Unknown error"}. Please try again.\`);
+      alert(`AI Error: ${err?.message || "Unknown error"}. Please try again.`);
     } finally {
       setIsAiLoading(false);
       triggerStarAnimation();
@@ -829,7 +829,7 @@ USER HAS ATTACHED \${images.length} IMAGE(S). You MUST include them in the desig
     triggerHaptic(30);
 
     try {
-      const userCreditRef = ref(database, \`users/\${user.uid}/ugcredit\`);
+      const userCreditRef = ref(database, `users/${user.uid}/ugcredit`);
       await runTransaction(userCreditRef, (currentTokens) => {
         if (currentTokens < 150) {
           throw "Insufficient tokens";
@@ -846,14 +846,14 @@ USER HAS ATTACHED \${images.length} IMAGE(S). You MUST include them in the desig
       if (cleansedState.pages && Array.isArray(cleansedState.pages)) {
         cleansedState.pages.forEach((page: Page) => {
             if (page.background && typeof page.background === 'string' && page.background.startsWith('data:image')) {
-                const placeholder = \`__BASE64_PLACEHOLDER_\${placeholderIndex++}__\`;
+                const placeholder = `__BASE64_PLACEHOLDER_${placeholderIndex++}__`;
                 base64Map[placeholder] = page.background;
                 page.background = placeholder;
             }
             if (page.elements && Array.isArray(page.elements)) {
                 page.elements.forEach((element: DesignElement) => {
                     if (element.type === 'image' && element.content && typeof element.content === 'string' && element.content.startsWith('data:image')) {
-                        const placeholder = \`__BASE64_PLACEHOLDER_\${placeholderIndex++}__\`;
+                        const placeholder = `__BASE64_PLACEHOLDER_${placeholderIndex++}__`;
                         base64Map[placeholder] = element.content;
                         element.content = placeholder;
                     }
@@ -865,32 +865,32 @@ USER HAS ATTACHED \${images.length} IMAGE(S). You MUST include them in the desig
       let systemInstruction;
 
       if (useImageAsReference) {
-        systemInstruction = \`You are an expert UI/UX designer with a powerful vision model. Your task is to meticulously replicate an attached reference image within the Mockingjay editor. Your goal is to create a template that is as close to a pixel-perfect copy as possible using only the available tools (text, shape, icon). You are performing a high-fidelity 'image-to-template' conversion.
+        systemInstruction = `You are an expert UI/UX designer with a powerful vision model. Your task is to meticulously replicate an attached reference image within the Mockingjay editor. Your goal is to create a template that is as close to a pixel-perfect copy as possible using only the available tools (text, shape, icon). You are performing a high-fidelity 'image-to-template' conversion.
 
 **CRITICAL INSTRUCTIONS:**
 1. **Exact Replication is Key:** Analyze the attached image with extreme precision. Replicate the layout, dimensions, colors, typography, and spacing of every single element.
 2. **Use Vision, Don't Hallucinate:** Your response must be based *only* on the visual information in the image. Do not add any new elements or content that is not present in the reference.
 3. **Tool Conversion:** Convert visual elements into Mockingjay elements:
     - **Color Palette:** Use an eyedropper tool on the image to extract the exact hex codes for all colors (background, text, shapes) and use them in your output.
-    - **Layout & Sizing:** Measure the position (x, y) and dimensions (width, height) of every element relative to the canvas size (\${CANVAS_WIDTH}x\${CANVAS_HEIGHT}) and replicate them precisely.
+    - **Layout & Sizing:** Measure the position (x, y) and dimensions (width, height) of every element relative to the canvas size (${CANVAS_WIDTH}x${CANVAS_HEIGHT}) and replicate them precisely.
     - **Typography:** Identify the font family (e.g., serif, sans-serif), font weight, font size, and letter spacing. Match them as closely as possible using the available fonts.
     - **Shapes & Graphics:** Recreate all shapes, lines, and graphic elements using 'shape' elements with appropriate backgroundColor, borderRadius, clipPath, etc.
 4. **DO NOT INCLUDE THE IMAGE:** The reference image must **NOT** be included in the final output. You are recreating it, not embedding it.
-5. **Return Only JSON:** Your entire response must be ONLY the raw JSON object. No explanations, no markdown.\`;
+5. **Return Only JSON:** Your entire response must be ONLY the raw JSON object. No explanations, no markdown.`;
       } else {
-        systemInstruction = \`You are "Mockingjay AI", a world-class Lead Designer and UI/UX expert.
+        systemInstruction = `You are "Mockingjay AI", a world-class Lead Designer and UI/UX expert.
 Your task is to transform user prompts into complete, high-fidelity design structures.
 ALWAYS generate RICH content with multiple elements. Never generate empty or minimal designs.
 
 YOU MUST RETURN ONLY A RAW JSON OBJECT. No markdown, no code fences, no explanation text before or after the JSON.
-Do NOT wrap in \\\`\\\`\\\`json code blocks. Return ONLY the raw JSON starting with { and ending with }.
+Do NOT wrap in \`\`\`json code blocks. Return ONLY the raw JSON starting with { and ending with }.
 
 CRITICAL RULES:
 1. ALWAYS populate the current page with multiple elements (minimum 3-5 elements)
 2. NEVER return an empty page with only a background color
 3. Elements MUST have proper positioning, sizing, font families, colors, and spacing
 4. Apply the user's request (color theme, brand, style) throughout ALL elements
-5. Match the Canvas dimensions: \${CANVAS_WIDTH}x\${CANVAS_HEIGHT}
+5. Match the Canvas dimensions: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}
 6. When user asks for additional pages, append new pages to the pages array. Every page MUST have elements.
 7. Use reasonable borderRadius values (0-24px for rectangles, 999 for circles/pills). Do NOT use excessive values.
 8. For optional style properties that are not applicable to an element, you MUST return them with a value of null.
@@ -902,7 +902,7 @@ CRITICAL RULES:
 - **Layout 3 (Dynamic):** Text block at the top, with a CTA and a smaller image placed at the bottom.
 - **General:** Use shapes as subtle accents. Keep text very short and impactful.
 
-AVAILABLE FONTS: \${allFonts.map(f => f.value).join(', ')}.
+AVAILABLE FONTS: ${allFonts.map(f => f.value).join(', ')}.
 
 ELEMENT STRUCTURE - ALL FIELDS ARE REQUIRED FOR EACH ELEMENT:
 {
@@ -927,15 +927,15 @@ RESPONSE FORMAT:
 REMEMBER: Never generate empty pages. Always fill pages with rich, varied content.
 The user's current design contains placeholders for images in the format __BASE64_PLACEHOLDER_X__. If you wish to retain an image in the updated design, you must use its corresponding placeholder in the 'content' for image elements or 'background' for pages.
 
-\${aiAttachedImages.length > 0 ? \`
+${aiAttachedImages.length > 0 ? `
 
-USER HAS ATTACHED \${aiAttachedImages.length} IMAGE(S). You MUST include them in the design as image elements.
+USER HAS ATTACHED ${aiAttachedImages.length} IMAGE(S). You MUST include them in the design as image elements.
 For each attached image, create an image element with type "image" and set content to the placeholder:
 - First image: "ATTACHED_IMAGE_0"
 - Second image: "ATTACHED_IMAGE_1"
 - Third image: "ATTACHED_IMAGE_2"
 - Fourth image: "ATTACHED_IMAGE_3"
-Position them prominently in the design with good sizing (at least 200x200).\` : ''}\`;
+Position them prominently in the design with good sizing (at least 200x200).` : ''}`;
       }
 
       const userMessages = [
@@ -944,7 +944,7 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
           content: [
             {
               type: "text",
-              text: \`\${systemInstruction}\\n\\nCurrent Editor State: \${JSON.stringify(cleansedState)}\\n\\nUser Request: \${aiPrompt}\`
+              text: `${systemInstruction}\n\nCurrent Editor State: ${JSON.stringify(cleansedState)}\n\nUser Request: ${aiPrompt}`
             }
           ]
         }
@@ -1058,7 +1058,7 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
     } catch (err: any) {
       console.error("Design Engine Fail:", err, "Raw Response:", (err as any).textResponse);
       const errorMsg = err?.message || "Unknown error";
-      alert(\`AI Error: \${errorMsg}. Please try again with a more specific design prompt.\`);
+      alert(`AI Error: ${errorMsg}. Please try again with a more specific design prompt.`);
     } finally {
       setIsAiLoading(false);
       triggerStarAnimation();
@@ -1135,10 +1135,10 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
   };
 
   const addElement = useCallback((element: Partial<DesignElement>) => {
-    const defaultFont = allFonts.length > 0 ? allFonts[0].value : "\'Inter\', sans-serif";
+    const defaultFont = allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif";
     const newElement: DesignElement = {
       id: generateId(),
-      name: element.name || (element.type ? \`\${element.type.charAt(0).toUpperCase() + element.type.slice(1)}\` : 'Element'),
+      name: element.name || (element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : 'Element'),
       type: (element.type as any) || 'shape',
       box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 50, rotation: 0, ...element.box },
       content: '',
@@ -1340,7 +1340,7 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
   const saveToPublicTemplates = async () => {
     if (!canvasRef.current || !currentDesignId) return;
 
-    const publicTemplateRef = ref(database, \`public_templates/\${currentDesignId}\`);
+    const publicTemplateRef = ref(database, `public_templates/${currentDesignId}`);
     const snapshot = await get(publicTemplateRef);
 
     if (snapshot.exists()) {
@@ -1390,7 +1390,7 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
         'Cookie', 'Satisfy', 'Kaushan Script', 'Pinyon Script', 'Rochester', 'Abril Fatface',
         'Comfortaa:wght@300;700', 'UnifrakturMaguntia', 'Creepster', 'Nosifer', 'Bungee Shade'
       ];
-      const googleFontsUrl = \`https://fonts.googleapis.com/css2?\${fontFamilies.map(f => \`family=\${f.replace(/ /g, '+')}\`).join('&')}&display=swap\`;
+      const googleFontsUrl = `https://fonts.googleapis.com/css2?${fontFamilies.map(f => `family=${f.replace(/ /g, '+')}`).join('&')}&display=swap`;
 
       const inlineFontCss = await embedGoogleFonts(googleFontsUrl);
       if (inlineFontCss) {
@@ -1402,9 +1402,9 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
 
       const userFontStyles = document.querySelectorAll('style[id^="font-face-"]');
       let userFontCss = '';
-      userFontStyles.forEach(el => { userFontCss += el.textContent + '\\n'; });
+      userFontStyles.forEach(el => { userFontCss += el.textContent + '\n'; });
       if (userFontCss && fontStyleEl) {
-        fontStyleEl.textContent += '\\n' + userFontCss;
+        fontStyleEl.textContent += '\n' + userFontCss;
       } else if (userFontCss && !fontStyleEl) {
         fontStyleEl = document.createElement('style');
         fontStyleEl.setAttribute('data-export-fonts', 'true');
@@ -1419,7 +1419,7 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
         backgroundColor: currentPage.background.startsWith('#') ? currentPage.background : undefined,
       });
       const link = document.createElement('a');
-      link.download = \`mockingjay-\${Date.now()}.png\`;
+      link.download = `mockingjay-${Date.now()}.png`;
       link.href = dataUrl;
       link.click();
       setExportStatus('success');
@@ -1561,7 +1561,7 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
       </AnimatePresence>
 
       <main className="flex-1 flex flex-col relative overflow-hidden">
-        <div className={\`absolute top-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 bg-white/80 backdrop-blur-md px-3 py-2 rounded-full border border-gray-200/80 shadow-lg transition-opacity \${isSidebarOpen && isMobile ? 'opacity-0' : 'opacity-100'}\`}>
+        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 bg-white/80 backdrop-blur-md px-3 py-2 rounded-full border border-gray-200/80 shadow-lg transition-opacity ${isSidebarOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
            <button className="p-1 text-gray-500 hover:text-gray-900 transition-colors" onClick={() => setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) }))}><Icons.ArrowLeft className="w-5 h-5"/></button>
            <span className="text-[10px] w-12 text-center font-bold text-gray-500 uppercase tracking-widest">{state.currentPageIndex + 1}/{state.pages.length}</span>
            <button className="p-1 text-gray-500 hover:text-gray-900 transition-colors" onClick={() => setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) }))}><Icons.ArrowRight className="w-5 h-5"/></button>
@@ -1581,8 +1581,8 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
         <div ref={workspaceRef} className="flex-1 flex items-center justify-center relative overflow-hidden p-4 transition-all duration-300">
            {snapLines.map((line, i) => (
              <div key={i} className="absolute bg-lime-400 z-[100] pointer-events-none" style={{
-                 left: line.type === 'vertical' ? \`calc(50% + (\${line.position - CANVAS_WIDTH / 2}px * \${canvasScale}))\` : 0,
-                 top: line.type === 'horizontal' ? \`calc(50% + (\${line.position - CANVAS_HEIGHT / 2}px * \${canvasScale}))\` : 0,
+                 left: line.type === 'vertical' ? `calc(50% + (${line.position - CANVAS_WIDTH / 2}px * ${canvasScale}))` : 0,
+                 top: line.type === 'horizontal' ? `calc(50% + (${line.position - CANVAS_HEIGHT / 2}px * ${canvasScale}))` : 0,
                  width: line.type === 'vertical' ? '1px' : '100%',
                  height: line.type === 'horizontal' ? '1px' : '100%',
                  opacity: 0.8
@@ -1596,13 +1596,13 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
              animate={{ scale: 1, opacity: 1 }}
              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
              className="relative"
-             style={{ transform: \`scale(\${canvasScale})\`, transformOrigin: 'center center' }}
+             style={{ transform: `scale(${canvasScale})`, transformOrigin: 'center center' }}
             >
                <div id="design-canvas" ref={canvasRef} onPointerDown={handleCanvasPointerDown} onContextMenu={e => e.preventDefault()} className="relative shadow-2xl shadow-gray-500/20 transition-all duration-300 origin-center overflow-hidden rounded-2xl"
                  style={{ 
                    width: CANVAS_WIDTH, height: CANVAS_HEIGHT,
                    backgroundColor: currentPage?.background.startsWith('#') ? currentPage.background : '#FFFFFF',
-                   backgroundImage: !currentPage?.background.startsWith('#') ? \`url(\${currentPage.background})\` : undefined,
+                   backgroundImage: !currentPage?.background.startsWith('#') ? `url(${currentPage.background})` : undefined,
                    backgroundSize: 'cover', backgroundPosition: 'center'
                  }}
                >
@@ -1618,7 +1618,7 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
 
                 <AnimatePresence>
                 {showStar && (
-                    <motion.svg className="absolute inset-0 w-full h-full pointer-events-none z-50" viewBox={\`0 0 \${CANVAS_WIDTH} \${CANVAS_HEIGHT}\`} fill="none">
+                    <motion.svg className="absolute inset-0 w-full h-full pointer-events-none z-50" viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`} fill="none">
                         <rect x="1" y="1" width={CANVAS_WIDTH - 2} height={CANVAS_HEIGHT - 2} rx="16" style={{
                             stroke: '#84cc16', strokeWidth: 3, strokeDasharray: '150 1600',
                             filter: 'drop-shadow(0 0 10px #a3e635)',
@@ -1658,7 +1658,7 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
                 <div className="relative">
                   <input 
                     autoFocus
-                    placeholder={useImageAsReference ? 'Describe the style or content to recreate...' : 'e.g., \\'Advertise my noodle brand\\''}
+                    placeholder={useImageAsReference ? 'Describe the style or content to recreate...' : 'e.g., \'Advertise my noodle brand\''}
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAiRefine()}
@@ -1668,7 +1668,7 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
                   <button onClick={() => aiImageInputRef.current?.click()} disabled={useImageAsReference ? aiAttachedImages.length >= 1 : aiAttachedImages.length >= 4} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800 transition-colors disabled:opacity-30">
                     <Icons.Paperclip className="w-5 h-5" />
                   </button>
-                  <button onClick={handleAiRefine} disabled={isAiLoading || (useImageAsReference && aiAttachedImages.length === 0)} className={\`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all \${isAiLoading ? 'bg-gray-200' : 'bg-lime-400 text-black active:scale-90 hover:shadow-lg hover:shadow-lime-500/30'} disabled:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed\`}>
+                  <button onClick={handleAiRefine} disabled={isAiLoading || (useImageAsReference && aiAttachedImages.length === 0)} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-gray-200' : 'bg-lime-400 text-black active:scale-90 hover:shadow-lg hover:shadow-lime-500/30'} disabled:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed`}>
                     {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom text-gray-500" /> : <Icons.ArrowRight className="w-6 h-6" />}
                   </button>
                 </div>
@@ -1676,7 +1676,7 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
                   <div className="flex gap-2 mt-3">
                     {aiAttachedImages.map((img, i) => (
                       <div key={i} className="relative w-14 h-14 rounded-xl overflow-hidden border border-gray-200 group">
-                        <img src={img} alt={\`Attachment \${i + 1}\`} className="w-full h-full object-cover" />
+                        <img src={img} alt={`Attachment ${i + 1}`} className="w-full h-full object-cover" />
                         <button onClick={() => setAiAttachedImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <Icons.X className="w-4 h-4 text-white" />
                         </button>
