@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { DesignElement, ElementStyle } from '../types';
 import { Icons } from './IconLibrary';
 
@@ -48,12 +48,13 @@ const QuickTools: React.FC<QuickToolsProps> = ({
 }) => {
     const [activeTool, setActiveTool] = useState<string | null>(null);
     const imageReplaceInputRef = useRef<HTMLInputElement>(null);
-    const prevSelectedElementId = useRef<string | null>(null);
 
-    if (selectedElement?.id !== prevSelectedElementId.current) {
+    useEffect(() => {
+        // This is the correct way to reset state when a prop changes.
+        // It ensures the tool panel is closed whenever the selection changes,
+        // preventing the crash.
         setActiveTool(null);
-        prevSelectedElementId.current = selectedElement?.id ?? null;
-    }
+    }, [selectedElement?.id]);
 
     const toggleTool = (name: string) => {
         setActiveTool(prevTool => (prevTool === name ? null : name));
@@ -204,7 +205,7 @@ const QuickTools: React.FC<QuickToolsProps> = ({
             default:
                 return (
                     <>
-                        <button onClick={() => onOpenSidebar()} className="flex flex-col items-center gap-1 text-lime-400 p-2 min-w-[50px]"><Icons.Sparkles className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Style</span></button>
+                        <button onClick={onOpenSidebar} className="flex flex-col items-center gap-1 text-lime-400 p-2 min-w-[50px]"><Icons.Sparkles className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Style</span></button>
                         <button onClick={() => onOpenSidebar()} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Layers className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Layer</span></button>
                         {selectedElement && <button onClick={() => deleteElement(selectedElement.id)} className="flex flex-col items-center gap-1 text-red-400 p-2 min-w-[50px]"><Icons.Trash2 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Delete</span></button>}
                     </>
