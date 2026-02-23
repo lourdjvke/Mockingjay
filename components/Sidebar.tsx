@@ -391,6 +391,18 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold"><span>Border</span><span>{selectedElement.style.strokeWidth ?? 0}px</span></div>
                     <input type="range" min="0" max="30" step="1" value={selectedElement.style.strokeWidth ?? 0} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, strokeWidth: parseInt(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
                   </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold"><span>Perspective</span><span>{selectedElement.style.perspective ?? 1000}px</span></div>
+                    <input type="range" min="0" max="2000" step="10" value={selectedElement.style.perspective ?? 1000} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, perspective: parseInt(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold"><span>Vertical Tilt</span><span>{selectedElement.style.rotateX ?? 0}°</span></div>
+                    <input type="range" min="-90" max="90" step="1" value={selectedElement.style.rotateX ?? 0} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, rotateX: parseInt(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold"><span>Horizontal Tilt</span><span>{selectedElement.style.rotateY ?? 0}°</span></div>
+                    <input type="range" min="-90" max="90" step="1" value={selectedElement.style.rotateY ?? 0} onChange={(e) => updateElement(selectedElement.id, { style: { ...selectedElement.style, rotateY: parseInt(e.target.value) } })} className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-lime-400" />
+                  </div>
                </div>
             </Section>
 
