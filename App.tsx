@@ -81,7 +81,6 @@ const App: React.FC = () => {
   const [isBrandDnaOpen, setIsBrandDnaOpen] = useState(false);
   const [brandData, setBrandData] = useState(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [editingElementId, setEditingElementId] = useState<string | null>(null);
 
   // Firebase and Design-related state
   const [user, setUser] = useState<User | null>(null);
@@ -97,7 +96,6 @@ const App: React.FC = () => {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiImageInputRef = useRef<HTMLInputElement>(null);
-  const lastTap = useRef(0);
 
   const allFonts = [...userFonts, ...BASE_FONTS];
 
@@ -1077,41 +1075,21 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     const element = currentPage.elements.find(el => el.id === id);
     if (!element) return;
 
-    const now = Date.now();
-    const timeSinceLastTap = now - lastTap.current;
-    lastTap.current = now;
-
-    if (isMobile && element.type === 'text' && state.selectedElementId === id && timeSinceLastTap < 300) {
-        setEditingElementId(id);
-        setDragStart(null);
-        return;
-    }
-
     if (state.selectedElementId !== id) {
         setState(prev => ({ ...prev, selectedElementId: id }));
         triggerHaptic(5);
     }
     
-    if (!isMobile && element.type === 'text' && timeSinceLastTap < 300) {
-        setEditingElementId(id);
-        setDragStart(null);
-        return;
-    }
-
-    if (element.locked || editingElementId === id) return;
+    if (element.locked) return;
 
     setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
     setElementStartPos({ ...element.box });
 
-  }, [state.selectedElementId, currentPage, isMobile, triggerHaptic, editingElementId]);
+  }, [state.selectedElementId, currentPage, triggerHaptic]);
 
 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
     if (e.target !== e.currentTarget) return;
-
-    if (editingElementId) {
-        (document.activeElement as? HTMLElement)?.blur();
-    }
 
     if (state.selectedElementId) {
         setState(prev => ({ ...prev, selectedElementId: null }));
@@ -1270,11 +1248,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       window.removeEventListener('pointerup', handlePointerUp);
     };
   }, [handlePointerMove, handlePointerUp]);
-
-  const handleFinishEdit = useCallback((id: string, updates: Partial<DesignElement>) => {
-      updateElement(id, updates);
-      setEditingElementId(null);
-  }, [updateElement]);
 
   const saveToPublicTemplates = async () => {
     if (!canvasRef.current || !currentDesignId) return;
@@ -1552,11 +1525,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   <ElementRenderer 
                     element={el} 
                     isSelected={state.selectedElementId === el.id} 
-                    isEditing={editingElementId === el.id}
                     onSelect={handleElementPointerDown} 
-                    onFinishEdit={handleFinishEdit}
                   />
-                  {state.selectedElementId === el.id && !el.locked && editingElementId !== el.id && (
+                  {state.selectedElementId === el.id && !el.locked && (
                     <div className="absolute pointer-events-none" style={{ left: el.box.x, top: el.box.y, width: el.box.width, height: el.box.height, transform: `rotate(${el.box.rotation}deg)`, zIndex: 60, border: '2px solid #bef264' }}>
                         <>
                           {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(h => {
