@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react';
 import { EditorState, DesignElement, BoundingBox, Page, ElementStyle, HistoryEntry } from './types.ts';
 import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
 import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, embedGoogleFonts } from './utils.ts';
@@ -427,7 +427,7 @@ const App: React.FC = () => {
           try {
             const base64 = bufferToBase64(font.data);
             injectFontFace(font.name, base64);
-            const fontFace = new FontFace(font.name, font.data);
+            const fontFace = new FontFace(font.name, data);
             await fontFace.load();
             document.fonts.add(fontFace);
             loadedFonts.push({ name: font.name, value: `'${font.name}', sans-serif` });
@@ -504,31 +504,31 @@ const App: React.FC = () => {
 
   useLayoutEffect(() => {
     const calculateScale = () => {
-        if (!workspaceRef.current) return;
-        const { clientWidth, clientHeight } = workspaceRef.current;
+      if (isMobile) {
+        setCanvasScale(0.85);
+        return;
+      }
+      if (!workspaceRef.current) return;
+      const { clientWidth, clientHeight } = workspaceRef.current;
 
-        const topToolbarHeight = topToolbarRef.current?.offsetHeight || 0;
-        const quickToolsHeight = (isMobile && !isAiModalOpen) ? (quickToolsRef.current?.offsetHeight || 0) : 0;
-        
-        const verticalPadding = topToolbarHeight + quickToolsHeight + (isMobile ? 80 : 120);
-        const horizontalPadding = isMobile ? 32 : 120;
+      const verticalPadding = 120;
+      const horizontalPadding = 120;
 
-        const availableWidth = clientWidth - horizontalPadding;
-        const availableHeight = clientHeight - verticalPadding;
-        
-        const scaleX = availableWidth / CANVAS_WIDTH;
-        const scaleY = availableHeight / CANVAS_HEIGHT;
-        
-        setCanvasScale(Math.min(scaleX, scaleY, 1));
+      const availableWidth = clientWidth - horizontalPadding;
+      const availableHeight = clientHeight - verticalPadding;
+      
+      const scaleX = availableWidth / CANVAS_WIDTH;
+      const scaleY = availableHeight / CANVAS_HEIGHT;
+      
+      setCanvasScale(Math.min(scaleX, scaleY, 1));
     };
 
     calculateScale();
     const resizeObserver = new ResizeObserver(calculateScale);
     if (workspaceRef.current) resizeObserver.observe(workspaceRef.current);
-    if (quickToolsRef.current) resizeObserver.observe(quickToolsRef.current);
 
     return () => resizeObserver.disconnect();
-  }, [isMobile, isAiModalOpen, state.selectedElementId, isSidebarOpen]);
+}, [isMobile, isAiModalOpen, state.selectedElementId, isSidebarOpen]);
 
   const currentPage = state.pages[state.currentPageIndex];
   const selectedElement = currentPage?.elements.find(e => e.id === state.selectedElementId) || null;
@@ -1169,7 +1169,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
     if (state.selectedElementId) {
         setState(prev => ({ ...prev, selectedElementId: null }));
-    } else if (isMobile && state.pages.length > 1) {
+    } else if (isMobile && state.pages.length > 1 && !state.selectedElementId) {
         setDragStart({ x: e.clientX, y: e.clientY, type: 'swipe' });
     }
   };
@@ -1314,7 +1314,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     const dx = (e.clientX - dragStart.x) / scale;
     const dy = (e.clientY - dragStart.y) / scale;
 
-    if (dragStart.type === 'swipe' && isMobile) {
+    if (dragStart.type === 'swipe' && isMobile && !selectedElement) {
         const swipeThreshold = 50;
         if (Math.abs(dx) > swipeThreshold) {
             setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, Math.max(0, p.currentPageIndex + (dx > 0 ? -1 : 1))) }));
@@ -1359,7 +1359,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       if (Math.abs(rotation % 45) < 5) rotation = Math.round(rotation / 45) * 45;
       updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation } });
     }
-  }, [dragStart, elementStartPos, state.selectedElementId, canvasScale, updateElement, isMobile]);
+  }, [dragStart, elementStartPos, state.selectedElementId, canvasScale, updateElement, isMobile, selectedElement]);
 
   const handlePointerUp = useCallback(() => {
     if(dragStart) debouncedSave.flush();
@@ -1772,6 +1772,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                   onAddShape={(shape) => { onAddShape(shape); setIsSidebarOpen(false); }}
                   onAddImage={(src) => { onAddImage(src); setIsSidebarOpen(false); }}
                   onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
+                  onClose={() => setIsSidebarOpen(false)}
                 />
               </div>
             </div>
