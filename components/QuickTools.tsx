@@ -49,8 +49,12 @@ const QuickTools: React.FC<QuickToolsProps> = ({
     const imageReplaceInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        setActiveTool(null);
-    }, [selectedElement?.id]);
+        if (selectedElement && selectedElement.type === 'text') {
+            setActiveTool('text');
+        } else {
+            setActiveTool(null);
+        }
+    }, [selectedElement?.id, selectedElement?.type]);
 
     const handleStyleChange = (property: keyof ElementStyle, value: any) => {
         if (!selectedElement) return;
@@ -78,6 +82,12 @@ const QuickTools: React.FC<QuickToolsProps> = ({
         if (!selectedElement) return null;
 
         switch (activeTool) {
+            case 'text':
+                return (
+                    <div className="w-full bg-zinc-900 border border-white/10 rounded-xl p-3 focus-within:border-lime-400/50 transition-colors">
+                        <textarea value={selectedElement.content} onBlur={(e) => updateElement(selectedElement.id, { content: e.target.value })} onChange={(e) => updateElement(selectedElement.id, { content: e.target.value })} className="bg-transparent border-none outline-none w-full text-sm font-medium resize-none h-20 text-white" placeholder="Type something..."/>
+                    </div>
+                )
             case 'font':
                 return (
                     <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
