@@ -18,7 +18,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({
     onRotateStart 
 }) => {
     
-    const { perspective = 1000, rotateX = 0, rotateY = 0 } = element.style;
+    const { perspective = 1000, rotateX = 0, rotateY = 0, opacity = 1, ...style } = element.style;
     const transform = `perspective(${perspective}px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) rotate(${element.box.rotation}deg)`;
 
     const containerStyle: React.CSSProperties = {
@@ -32,21 +32,28 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({
         boxSizing: 'border-box',
         visibility: element.visible ? 'visible' : 'hidden',
         pointerEvents: 'auto',
+        zIndex: isSelected ? 1000 : 'auto',
+        opacity: opacity,
     };
 
     const contentWrapperStyle: React.CSSProperties = {
       width: '100%',
       height: '100%',
-      ...element.style,
+      ...style,
       backgroundColor: (element.type === 'text' || element.type === 'image' || element.type === 'icon') 
           ? 'transparent' 
           : element.style.backgroundColor,
-      outline: isSelected ? '2px solid #84cc16' : 'none',
-      outlineOffset: '2px',
-      transition: 'outline 0.1s ease-in-out',
       borderRadius: element.style.borderRadius,
       overflow: 'hidden',
     };
+    
+    const selectionStyle: React.CSSProperties = {
+      position: 'absolute',
+      inset: 0,
+      outline: '2px solid #84cc16',
+      outlineOffset: '2px',
+      pointerEvents: 'none',
+    }
 
     const renderContent = () => {
         switch (element.type) {
@@ -76,7 +83,10 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({
         }
     };
 
-    const resizeHandles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+    let resizeHandles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+    if (element.type === 'text') {
+      resizeHandles = ['e', 'w'];
+    }
 
     return (
         <div
@@ -89,6 +99,8 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({
 
             {isSelected && (
                 <>
+                    <div style={selectionStyle} />
+
                     {/* Resize Handles */}
                     {resizeHandles.map(handle => (
                         <div
@@ -98,7 +110,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({
                                 top: handle.includes('n') ? -8 : handle.includes('s') ? 'calc(100% - 8px)' : 'calc(50% - 8px)',
                                 left: handle.includes('w') ? -8 : handle.includes('e') ? 'calc(100% - 8px)' : 'calc(50% - 8px)',
                                 cursor: `${handle}-resize`,
-                                zIndex: 100
+                                zIndex: 1001
                             }}
                             onPointerDown={(e) => {
                                 e.stopPropagation();
@@ -114,7 +126,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({
                             top: -32,
                             left: 'calc(50% - 10px)',
                             cursor: 'alias',
-                            zIndex: 100
+                            zIndex: 1001
                         }}
                         onPointerDown={(e) => {
                             e.stopPropagation();
