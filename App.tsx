@@ -502,15 +502,17 @@ const App: React.FC = () => {
     if (!workspaceRef.current) return 1;
     const { clientWidth, clientHeight } = workspaceRef.current;
     
-    const padding = isMobile ? 32 : 120;
-    const availableWidth = clientWidth - padding;
-    const availableHeight = clientHeight - padding;
+    const paddingX = isMobile ? 32 : 120;
+    const paddingY = isMobile ? 200 : 120;
+
+    const availableWidth = clientWidth - paddingX;
+    const availableHeight = clientHeight - paddingY;
     
     const scaleX = availableWidth / CANVAS_WIDTH;
     const scaleY = availableHeight / CANVAS_HEIGHT;
     
     return Math.min(scaleX, scaleY, 1);
-  }, [isMobile, workspaceRef.current, state.pages[state.currentPageIndex]]); // Re-calculate on resize and page change
+  }, [isMobile, workspaceRef.current]);
 
   const currentPage = state.pages[state.currentPageIndex];
   const selectedElement = currentPage?.elements.find(e => e.id === state.selectedElementId) || null;
