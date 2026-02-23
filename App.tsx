@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { EditorState, DesignElement, BoundingBox, Page, ElementStyle, HistoryEntry } from './types.ts';
 import { INITIAL_STATE, CANVAS_WIDTH, CANVAS_HEIGHT, FONTS as BASE_FONTS } from './constants.ts';
 import { generateId, downloadTemplate, FontStore, MediaStore, sanitizeAiJson, embedGoogleFonts } from './utils.ts';
@@ -90,6 +90,7 @@ const App: React.FC = () => {
   const [brandData, setBrandData] = useState(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [showStar, setShowStar] = useState(false);
+  const [canvasScale, setCanvasScale] = useState(1);
 
   // Firebase and Design-related state
   const [user, setUser] = useState<User | null>(null);
@@ -105,6 +106,9 @@ const App: React.FC = () => {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiImageInputRef = useRef<HTMLInputElement>(null);
+  const topToolbarRef = useRef<HTMLDivElement>(null);
+  const quickToolsRef = useRef<HTMLDivElement>(null);
+  const mobileSidebarRef = useRef<HTMLDivElement>(null);
 
   const allFonts = [...userFonts, ...BASE_FONTS];
 
@@ -498,21 +502,33 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const canvasScale = useMemo(() => {
-    if (!workspaceRef.current) return 1;
-    const { clientWidth, clientHeight } = workspaceRef.current;
-    
-    const paddingX = isMobile ? 32 : 120;
-    const paddingY = isMobile ? 200 : 120;
+  useLayoutEffect(() => {
+    const calculateScale = () => {
+        if (!workspaceRef.current) return;
+        const { clientWidth, clientHeight } = workspaceRef.current;
 
-    const availableWidth = clientWidth - paddingX;
-    const availableHeight = clientHeight - paddingY;
-    
-    const scaleX = availableWidth / CANVAS_WIDTH;
-    const scaleY = availableHeight / CANVAS_HEIGHT;
-    
-    return Math.min(scaleX, scaleY, 1);
-  }, [isMobile, workspaceRef.current]);
+        const topToolbarHeight = topToolbarRef.current?.offsetHeight || 0;
+        const quickToolsHeight = (isMobile && !isAiModalOpen) ? (quickToolsRef.current?.offsetHeight || 0) : 0;
+        
+        const verticalPadding = topToolbarHeight + quickToolsHeight + (isMobile ? 80 : 120);
+        const horizontalPadding = isMobile ? 32 : 120;
+
+        const availableWidth = clientWidth - horizontalPadding;
+        const availableHeight = clientHeight - verticalPadding;
+        
+        const scaleX = availableWidth / CANVAS_WIDTH;
+        const scaleY = availableHeight / CANVAS_HEIGHT;
+        
+        setCanvasScale(Math.min(scaleX, scaleY, 1));
+    };
+
+    calculateScale();
+    const resizeObserver = new ResizeObserver(calculateScale);
+    if (workspaceRef.current) resizeObserver.observe(workspaceRef.current);
+    if (quickToolsRef.current) resizeObserver.observe(quickToolsRef.current);
+
+    return () => resizeObserver.disconnect();
+  }, [isMobile, isAiModalOpen, state.selectedElementId, isSidebarOpen]);
 
   const currentPage = state.pages[state.currentPageIndex];
   const selectedElement = currentPage?.elements.find(e => e.id === state.selectedElementId) || null;
@@ -1125,6 +1141,28 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   }, [state.selectedElementId, currentPage, triggerHaptic]);
 
+  const handleResizePointerDown = useCallback((id: string, handle: string, e: React.PointerEvent) => {
+      e.stopPropagation();
+      const element = currentPage.elements.find(el => el.id === id);
+      if (!element || element.locked) return;
+      setDragStart({ x: e.clientX, y: e.clientY, type: 'resize', handle });
+      setElementStartPos({ ...element.box });
+  }, [currentPage]);
+
+  const handleRotatePointerDown = useCallback((id: string, e: React.PointerEvent) => {
+      e.stopPropagation();
+      const element = currentPage.elements.find(el => el.id === id);
+      if (!element || !canvasRef.current || element.locked) return;
+      
+      const rect = canvasRef.current.getBoundingClientRect();
+      const cX = rect.left + (element.box.x + element.box.width / 2) * canvasScale;
+      const cY = rect.top + (element.box.y + element.box.height / 2) * canvasScale;
+      const initialAngle = Math.atan2(e.clientY - cY, e.clientX - cX) * (180 / Math.PI);
+      
+      setDragStart({ x: e.clientX, y: e.clientY, type: 'rotate', initialAngle });
+      setElementStartPos({ ...element.box });
+  }, [currentPage, canvasScale]);
+
 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
     if (e.target !== e.currentTarget) return;
@@ -1563,7 +1601,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       </AnimatePresence>
 
       <main className="flex-1 flex flex-col relative overflow-hidden">
-        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 bg-white/80 backdrop-blur-md px-3 py-2 rounded-full border border-gray-200/80 shadow-lg transition-opacity ${isSidebarOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
+        <div ref={topToolbarRef} className={`absolute top-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 bg-white/80 backdrop-blur-md px-3 py-2 rounded-full border border-gray-200/80 shadow-lg transition-opacity ${isSidebarOpen && isMobile ? 'opacity-0' : 'opacity-100'}`}>
            <button className="p-1 text-gray-500 hover:text-gray-900 transition-colors" onClick={() => setState(p => ({ ...p, currentPageIndex: Math.max(0, p.currentPageIndex - 1) }))}><Icons.ArrowLeft className="w-5 h-5"/></button>
            <span className="text-[10px] w-12 text-center font-bold text-gray-500 uppercase tracking-widest">{state.currentPageIndex + 1}/{state.pages.length}</span>
            <button className="p-1 text-gray-500 hover:text-gray-900 transition-colors" onClick={() => setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) }))}><Icons.ArrowRight className="w-5 h-5"/></button>
@@ -1613,7 +1651,9 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                         key={el.id}
                         element={el} 
                         isSelected={state.selectedElementId === el.id} 
-                        onSelect={handleElementPointerDown} 
+                        onSelect={handleElementPointerDown}
+                        onResizeStart={handleResizePointerDown}
+                        onRotateStart={handleRotatePointerDown}
                       />
                   ))}
                </div>
@@ -1693,7 +1733,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         </AnimatePresence>
         
         {isMobile && !isAiModalOpen && (
-          <div className="absolute bottom-0 left-0 right-0 z-20">
+          <div ref={quickToolsRef} className="absolute bottom-0 left-0 right-0 z-20">
                 <QuickTools
                     selectedElement={selectedElement}
                     updateElement={updateElement}
@@ -1711,6 +1751,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         <AnimatePresence>
         {isMobile && isSidebarOpen && (
           <motion.div 
+            ref={mobileSidebarRef}
             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
             transition={motionProps}
             className="fixed inset-0 z-[110] flex flex-col justify-end"
