@@ -10,13 +10,16 @@ interface ElementRendererProps {
 
 const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, onSelect }) => {
     
+    const { perspective = 1000, rotateX = 0, rotateY = 0 } = element.style;
+    const transform = `perspective(${perspective}px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) rotate(${element.box.rotation}deg)`;
+
     const containerStyle: React.CSSProperties = {
         position: 'absolute',
         left: element.box.x,
         top: element.box.y,
         width: element.box.width,
         height: element.box.height,
-        transform: `rotate(${element.box.rotation}deg)`,
+        transform,
         backfaceVisibility: 'hidden',
         boxSizing: 'border-box',
         visibility: element.visible ? 'visible' : 'hidden',
