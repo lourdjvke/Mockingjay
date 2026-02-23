@@ -1,8 +1,9 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Icons } from './IconLibrary.tsx';
 import { DesignElement, Page } from '../types.ts';
 import type { User } from 'firebase/auth';
+import { DragDropContext, Droppable, Draggable, OnDragEndResponder } from 'react-beautiful-dnd';
+
 
 interface SectionProps {
   title: string;
@@ -24,10 +25,10 @@ const Section: React.FC<SectionProps> = ({ title, id, icon, children, isOpen, on
         {icon}
         <span>{title}</span>
       </div>
-      <Icons.ChevronDown className={`w-4 h-4 transform transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+      <Icons.ChevronDown className={\`w-4 h-4 transform transition-transform duration-300 \${isOpen ? 'rotate-180' : ''}\`} />
     </button>
     <div
-      className={`overflow-hidden transition-all ease-in-out duration-500 ${isOpen ? 'max-h-[1000px]' : 'max-h-0'}`}
+      className={\`overflow-hidden transition-all ease-in-out duration-500 \${isOpen ? 'max-h-[1000px]' : 'max-h-0'}\`}
     >
       <div className="px-5 pb-5 pt-1">
         {children}
@@ -57,7 +58,7 @@ interface SidebarProps {
   onAddText: (type: 'Header' | 'Subheader' | 'Paragraph') => void;
   onAddShape: (type: string) => void;
   onAddImage: (src: string) => void;
-  onReorder: (id: string, direction: 'up' | 'down') => void;
+  onLayerReorder: (startIndex: number, endIndex: number) => void;
   onAddCustomFont: (name: string, data: ArrayBuffer) => void;
   onDeleteCustomFont: (name: string) => void;
   onUpdateColors?: (colors: string[]) => void;
@@ -85,7 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onAddText,
   onAddShape,
   onAddImage,
-  onReorder,
+  onLayerReorder,
   onAddCustomFont,
   onDeleteCustomFont,
   onUpdateColors,
@@ -97,7 +98,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     media: false,
     text: !isMobile,
     appearance: false,
-    layers: false,
+    layers: true, // Default open
     elements: isMobile
   });
   const [showFontList, setShowFontList] = useState(false);
@@ -168,6 +169,15 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const handleDragEnd: OnDragEndResponder = (result) => {
+    if (!result.destination) return;
+    const startIndex = result.source.index;
+    const endIndex = result.destination.index;
+    const totalLayers = currentPage.elements.length;
+    onLayerReorder(totalLayers - 1 - startIndex, totalLayers - 1 - endIndex);
+    triggerHaptic(10);
+  };
+
   const SHAPES = [
     { id: 'square', label: 'Square', icon: <div className="w-5 h-5 bg-gray-800/20 rounded-sm" /> },
     { id: 'circle', label: 'Circle', icon: <div className="w-5 h-5 bg-gray-800/20 rounded-full" /> },
@@ -183,7 +193,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const showFillColor = selectedElement && selectedElement.type !== 'text' && selectedElement.type !== 'image' && selectedElement.type !== 'icon';
 
   return (
-    <div className={`${isMobile ? 'w-full' : 'w-[380px]'} h-full bg-white ${isMobile ? '' : 'border-l'} border-gray-200 flex flex-col select-none overflow-hidden`}>
+    <div className={\`\${isMobile ? 'w-full' : 'w-[380px]'} h-full bg-white \${isMobile ? '' : 'border-l'} border-gray-200 flex flex-col select-none overflow-hidden\`}>
       <input type="file" ref={imageUploadRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
       <input type="file" ref={fontUploadRef} className="hidden" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} />
       <input type="color" ref={colorPickerRef} className="hidden" onChange={handleAddColor} />
@@ -213,7 +223,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <div key={design.id} className="group relative">
                     <button
                         onClick={() => loadDesign(design.id)}
-                        className={`w-full aspect-[4/3] rounded-lg text-left text-xs overflow-hidden transform transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98] ${currentDesignId === design.id ? 'border-2 border-lime-500' : 'border border-gray-200'}`}>
+                        className={\`w-full aspect-[4/3] rounded-lg text-left text-xs overflow-hidden transform transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98] \${currentDesignId === design.id ? 'border-2 border-lime-500' : 'border border-gray-200'}\`}>
                         <img src={design.thumbnail} alt="Design thumbnail" className="w-full h-full object-cover bg-gray-100"/>
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
                             <p className="font-bold truncate text-white">{design.pages?.[0]?.elements?.[0]?.content || 'Untitled Design'}</p>
@@ -243,7 +253,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => { triggerHaptic(5); updatePage({ background: c }); }}
                     onContextMenu={(e) => { e.preventDefault(); handleRemoveColor(c); }}
                     style={{ backgroundColor: c }}
-                    className={`w-8 h-8 rounded-full border-2 transform transition-all duration-150 ease-out hover:scale-110 active:scale-95 ${currentPage?.background === c ? 'border-gray-800 shadow-[0_0_10px_rgba(0,0,0,0.2)]' : 'border-gray-200'}`}
+                    className={\`w-8 h-8 rounded-full border-2 transform transition-all duration-150 ease-out hover:scale-110 active:scale-95 \${currentPage?.background === c ? 'border-gray-800 shadow-[0_0_10px_rgba(0,0,0,0.2)]' : 'border-gray-200'}\`}
                   />
                   <button
                     onClick={() => handleRemoveColor(c)}
@@ -274,7 +284,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                <div className="grid grid-cols-3 gap-2">
                  {recentImages.map((src, idx) => (
                    <button key={idx} onClick={() => { triggerHaptic(5); onAddImage(src); }} className="group relative aspect-[3/4] rounded-lg overflow-hidden border border-gray-200 bg-gray-100 active:scale-95 transition-transform transform">
-                     <img src={src} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={`Recent ${idx}`} />
+                     <img src={src} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={\`Recent \${idx}\`} />
                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity" />
                      {idx === 0 && <span className="absolute top-1 left-1 px-1.5 py-0.5 bg-lime-400 text-black text-[7px] font-black uppercase rounded-[2px] tracking-tighter shadow-sm">Latest</span>}
                    </button>
@@ -324,7 +334,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                              </span>
                            </button>
                            <button className="w-12 flex items-center justify-center hover:bg-gray-100/50 transition-colors" onClick={() => setShowFontList(!showFontList)}>
-                             <Icons.ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showFontList ? 'rotate-180' : ''}`} />
+                             <Icons.ChevronDown className={\`w-4 h-4 text-gray-500 transition-transform \${showFontList ? 'rotate-180' : ''}\`} />
                            </button>
                         </div>
                         {showFontList && (
@@ -336,8 +346,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                              </div>
                              {availableFonts.map(font => (
                                <div key={font.value} className="group relative">
-                                 <button onClick={() => { updateElement(selectedElement.id, { style: { ...selectedElement.style, fontFamily: font.value } }); setShowFontList(false); triggerHaptic(5); }} className={`w-full px-5 py-3 text-left hover:bg-gray-100 transition-colors text-gray-800 ${selectedElement.style.fontFamily === font.value ? 'bg-lime-400/20 text-lime-600' : ''}`} style={{ fontFamily: font.value }}>{font.name}</button>
-                                 {font.value.startsWith("'") && !["'Debrosee'", "'Pirate One'", "'Inter'", "'Playfair Display'", "'Montserrat'"].some(b => font.value.includes(b)) && (
+                                 <button onClick={() => { updateElement(selectedElement.id, { style: { ...selectedElement.style, fontFamily: font.value } }); setShowFontList(false); triggerHaptic(5); }} className={\`w-full px-5 py-3 text-left hover:bg-gray-100 transition-colors text-gray-800 \${selectedElement.style.fontFamily === font.value ? 'bg-lime-400/20 text-lime-600' : ''}\`} style={{ fontFamily: font.value }}>{font.name}</button>
+                                 {font.value.startsWith("\'") && !["\'Debrosee\'", "\'Pirate One\'", "\'Inter\'", "\'Playfair Display\'", "\'Montserrat\'"].some(b => font.value.includes(b)) && (
                                    <button onClick={(e) => { e.stopPropagation(); onDeleteCustomFont(font.name); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icons.Trash2 className="w-4 h-4" /></button>
                                  )}
                                </div>
@@ -355,7 +365,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                          </div>
                          <div className="flex bg-gray-100 rounded-lg p-1 border border-gray-200">
                             {['left', 'center', 'right'].map((align) => (
-                              <button key={align} onClick={() => { triggerHaptic(2); updateElement(selectedElement.id, { style: { ...selectedElement.style, textAlign: align as any } }); }} className={`p-2 rounded-md transition-all ${selectedElement.style.textAlign === align ? 'bg-lime-400 text-black' : 'text-gray-500 hover:text-gray-800'}`}>{align[0].toUpperCase()}</button>
+                              <button key={align} onClick={() => { triggerHaptic(2); updateElement(selectedElement.id, { style: { ...selectedElement.style, textAlign: align as any } }); }} className={\`p-2 rounded-md transition-all \${selectedElement.style.textAlign === align ? 'bg-lime-400 text-black' : 'text-gray-500 hover:text-gray-800'}\`}>{align[0].toUpperCase()}</button>
                             ))}
                          </div>
                       </div>
@@ -374,14 +384,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <div className="flex items-center gap-2">
                     <div className="flex-1 flex gap-2 bg-gray-100 p-2 rounded-xl border border-gray-200 overflow-x-auto no-scrollbar">
                       {themeColors.map(color => (
-                        <button key={color} onClick={() => handleColorClick(color)} style={{ backgroundColor: color }} className={`w-7 h-7 rounded-full shrink-0 border-2 transform transition-all active:scale-90 ${selectedElement.style.color === color || (showFillColor && selectedElement.style.backgroundColor === color) ? 'border-gray-800' : 'border-transparent'}`}/>
+                        <button key={color} onClick={() => handleColorClick(color)} style={{ backgroundColor: color }} className={\`w-7 h-7 rounded-full shrink-0 border-2 transform transition-all active:scale-90 \${selectedElement.style.color === color || (showFillColor && selectedElement.style.backgroundColor === color) ? 'border-gray-800' : 'border-transparent'}\`}/>
                       ))}
                     </div>
                   </div>
                </div>
             </Section>
 
-            <Section title="Design" id="appearance" icon={<Icons.Sparkles className="w-4 h-4" />} isOpen={openSections.appearance} onToggle={toggleSection}>
+            <Section title="Appearance" id="appearance" icon={<Icons.Sparkles className="w-4 h-4" />} isOpen={openSections.appearance} onToggle={toggleSection}>
                <div className="space-y-5">
                   <div className="space-y-2">
                     <div className="flex justify-between text-[10px] text-gray-400 uppercase font-bold"><span>Opacity</span><span>{Math.round((selectedElement.style.opacity ?? 1) * 100)}%</span></div>
@@ -411,17 +421,32 @@ const Sidebar: React.FC<SidebarProps> = ({
             </Section>
 
             <Section title="Layers" id="layers" icon={<Icons.Layout className="w-4 h-4" />} isOpen={openSections.layers} onToggle={toggleSection}>
-               <div className="space-y-2">
-                 {currentPage?.elements.slice().reverse().map((el) => (
-                   <div key={el.id} className={`flex items-center justify-between p-3 rounded-xl text-xs transition-colors ${selectedElement.id === el.id ? 'bg-lime-400/20 text-lime-700 border border-lime-500/30' : 'bg-gray-100 border border-gray-200 text-gray-600'}`}>
-                      <span className="truncate flex-1 font-bold italic">{el.name}</span>
-                      <div className="flex gap-1">
-                         <button onClick={() => onReorder(el.id, 'up')} className="p-1.5 hover:bg-black/5 rounded-lg transition-colors"><Icons.ChevronUp className="w-4 h-4" /></button>
-                         <button onClick={() => onReorder(el.id, 'down')} className="p-1.5 hover:bg-black/5 rounded-lg transition-colors"><Icons.ChevronDown className="w-4 h-4" /></button>
-                      </div>
-                   </div>
-                 ))}
-               </div>
+                <DragDropContext onDragEnd={handleDragEnd}>
+                    <Droppable droppableId="layers">
+                        {(provided) => (
+                            <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
+                                {currentPage?.elements.slice().reverse().map((el, index) => (
+                                    <Draggable key={el.id} draggableId={el.id} index={index}>
+                                        {(provided, snapshot) => (
+                                            <div
+                                                ref={provided.innerRef}
+                                                {...provided.draggableProps}
+                                                {...provided.dragHandleProps}
+                                                className={\`flex items-center justify-between p-3 rounded-xl text-xs transition-all \${selectedElement?.id === el.id ? 'bg-lime-400/30 text-lime-800 border border-lime-500/50' : 'bg-gray-100 border border-gray-200 text-gray-700'} \${snapshot.isDragging ? 'shadow-lg scale-105' : ''}\`}
+                                            >
+                                                <span className="truncate flex-1 font-bold italic">{el.name}</span>
+                                                <div className="flex gap-1 text-gray-400">
+                                                  <Icons.Move className="w-4 h-4" />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </Draggable>
+                                ))}
+                                {provided.placeholder}
+                            </div>
+                        )}
+                    </Droppable>
+                </DragDropContext>
             </Section>
           </>
         )}
