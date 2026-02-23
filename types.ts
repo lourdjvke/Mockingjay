@@ -9,13 +9,7 @@ export interface BoundingBox {
   rotation: number;
 }
 
-export interface DesignElement {
-  id: string;
-  type: ElementType;
-  name: string;
-  box: BoundingBox;
-  content: string; // text content, svg path, or image src
-  style: {
+export interface ElementStyle {
     color?: string;
     backgroundColor?: string;
     fontSize?: number;
@@ -30,7 +24,19 @@ export interface DesignElement {
     letterSpacing?: number;
     lineHeight?: number;
     clipPath?: string;
-  };
+    filter?: string | null;
+    perspective?: number;
+    rotateX?: number;
+    rotateY?: number;
+}
+
+export interface DesignElement {
+  id: string;
+  type: ElementType;
+  name: string;
+  box: BoundingBox;
+  content: string; // text content, svg path, or image src
+  style: ElementStyle;
   visible: boolean;
   locked: boolean;
 }
