@@ -62,6 +62,7 @@ interface SidebarProps {
   onAddCustomFont: (name: string, data: ArrayBuffer) => void;
   onDeleteCustomFont: (name: string) => void;
   onUpdateColors?: (colors: string[]) => void;
+  onClose?: () => void;
   isMobile?: boolean;
 }
 
@@ -90,6 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onAddCustomFont,
   onDeleteCustomFont,
   onUpdateColors,
+  onClose,
   isMobile = false
 }) => {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -198,14 +200,18 @@ const Sidebar: React.FC<SidebarProps> = ({
       <input type="file" ref={fontUploadRef} className="hidden" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} />
       <input type="color" ref={colorPickerRef} className="hidden" onChange={handleAddColor} />
 
-      {!isMobile && (
-        <div className="p-5 flex items-center justify-between border-b border-gray-200">
+      <div className="p-5 flex items-center justify-between border-b border-gray-200">
           <div className="flex items-center gap-2">
             <Icons.Layout className="w-5 h-5 text-lime-500" />
             <h1 className="font-semibold text-lg italic tracking-tight uppercase text-gray-800">Mockingjay</h1>
           </div>
+          {isMobile && (
+              <div className="flex items-center gap-2">
+                  <button onClick={() => window.dispatchEvent(new CustomEvent('open-export-modal'))} className="p-2.5 bg-gray-100 rounded-full text-gray-700 active:scale-90 transform transition-transform"><Icons.Download className="w-4 h-4" /></button>
+                  <button onClick={onClose} className="p-2.5 bg-lime-400 rounded-full text-black active:scale-90 transform transition-transform"><Icons.Check className="w-4 h-4" /></button>
+              </div>
+          )}
         </div>
-      )}
 
       <div className="flex-1 overflow-y-auto">
         <Section title="Design History" id="history" icon={<Icons.History className="w-4 h-4" />} isOpen={openSections.history} onToggle={toggleSection}>
