@@ -1,4 +1,56 @@
-@tailwind base;
+@font-face {
+      font-family: 'Debrosee';
+      src: url('/Debrosee-ALPnL.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: 'Pirate One';
+      src: url('/PirataOne-Regular.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+      background-color: #000;
+      color: white;
+      touch-action: none;
+    }
+    
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+    .canvas-container {
+      background: radial-gradient(circle at center, #1a1a1a 0%, #0a0a0a 100%);
+    }
+
+    .bottom-sheet-transition {
+      transition: transform 0.4s cubic-bezier(0.33, 1, 0.68, 1);
+    }
+    
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .animate-spin-custom { animation: spin 2s linear infinite; }
+
+    #design-canvas * {
+      transform-style: preserve-3d;
+      backface-visibility: hidden;
+    }
+
+    @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
