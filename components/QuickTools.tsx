@@ -1,8 +1,10 @@
+
 import React, { useState, useRef } from 'react';
 import { DesignElement, ElementStyle } from '../types';
 import { Icons } from './IconLibrary';
 
-const CustomColorPicker = ({ color, onChange, themeColors, onUpdateColors }) => {
+// Moved CustomColorPicker outside of QuickTools to give it a stable identity
+const CustomColorPicker = ({ color, onChange, themeColors }) => {
     return (
         <div className="flex flex-wrap items-center gap-2 p-2 bg-gray-800 rounded-lg">
             {themeColors.map(c => (
@@ -131,7 +133,6 @@ const QuickTools: React.FC<QuickToolsProps> = ({
                         color={selectedElement.style[prop]}
                         onChange={color => handleStyleChange(prop, color)}
                         themeColors={themeColors}
-                        onUpdateColors={onUpdateColors}
                     />
                 );
             case 'format':
