@@ -7,10 +7,10 @@ interface ElementRendererProps {
     isSelected: boolean;
     isEditing: boolean;
     onSelect: (id: string, e: React.PointerEvent<HTMLDivElement>) => void;
-    onUpdate: (id: string, updates: Partial<DesignElement>) => void;
+    onFinishEdit: (id: string, updates: Partial<DesignElement>) => void;
 }
 
-const getTextHeight = (element: DesignElement) => {
+const getTextHeight = (element: DesignElement, content: string) => {
     const tempDiv = document.createElement('div');
     Object.assign(tempDiv.style, {
         width: `${element.box.width}px`,
@@ -27,7 +27,7 @@ const getTextHeight = (element: DesignElement) => {
         top: '-9999px',
         left: '-9999px',
     });
-    const cleansedContent = (element.content || '').replace(/^(<br\s*\/?>|\s|&nbsp;)+|(<br\s*\/?>|\s|&nbsp;)+$/g, "");
+    const cleansedContent = content.replace(/^(<br\s*\/?>|\s|&nbsp;)+|(<br\s*\/?>|\s|&nbsp;)+$/g, "");
     tempDiv.innerHTML = cleansedContent || '&nbsp;';
     document.body.appendChild(tempDiv);
     const height = tempDiv.scrollHeight;
@@ -35,8 +35,9 @@ const getTextHeight = (element: DesignElement) => {
     return height;
 };
 
-const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, isEditing, onSelect, onUpdate }) => {
+const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, isEditing, onSelect, onFinishEdit }) => {
     const textRef = useRef<HTMLDivElement>(null);
+    const isEditingRef = useRef(false);
 
     useLayoutEffect(() => {
         const div = textRef.current;
@@ -46,13 +47,13 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
     }, [element.content, isEditing]);
 
     useEffect(() => {
-        if (element.type === 'text') {
-            const requiredHeight = getTextHeight(element);
+        if (element.type === 'text' && isSelected) {
+            const requiredHeight = getTextHeight(element, element.content);
             if (element.box.height < requiredHeight) {
-                onUpdate(element.id, { box: { ...element.box, height: requiredHeight } });
+                onFinishEdit(element.id, { box: { ...element.box, height: requiredHeight } });
             }
         }
-    }, [element.content, element.box.width, element.style]);
+    }, [element.content, element.box.width, element.style, element.type, isSelected, onFinishEdit, element.id, element.box]);
 
     useEffect(() => {
         if (isEditing && textRef.current) {
@@ -66,15 +67,16 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ element, isSelected, 
                 sel.addRange(range);
             }
         }
+        isEditingRef.current = isEditing;
     }, [isEditing]);
 
     const handleBlur = () => {
         if (textRef.current && isEditing) {
             const newContent = textRef.current.innerHTML;
             const cleansedContent = newContent.replace(/^(<br\s*\/?>|\s|&nbsp;)+|(<br\s*\/?>|\s|&nbsp;)+$/g, "");
-            const newHeight = getTextHeight({ ...element, content: cleansedContent });
+            const newHeight = getTextHeight({ ...element, content: cleansedContent }, cleansedContent);
 
-            onUpdate(element.id, {
+            onFinishEdit(element.id, {
                 content: cleansedContent,
                 box: { ...element.box, height: newHeight },
             });
