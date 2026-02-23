@@ -4,13 +4,39 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  
+  <!-- SEO and Core Meta Tags -->
+  <title>Mockingjay - Intuitive Design Editor</title>
+  <meta name="description" content="Create stunning graphics, social media posts, and marketing materials with Mockingjay, the intuitive and powerful online design editor. No design experience needed.">
+  <meta name="keywords" content="graphic design, online editor, social media graphics, marketing materials, design tool, easy design, lourdjvke">
+  <meta name="author" content="lourdjvke">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://mockingjay.pages.dev/">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mockingjay.pages.dev/">
+  <meta property="og:title" content="Mockingjay - Intuitive Design Editor">
+  <meta property="og:description" content="Design anything, publish anywhere. Mockingjay is your free, all-in-one design tool for creating beautiful content.">
+  <meta property="og:image" content="https://mockingjay.pages.dev/mockingjay.PNG">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="https://mockingjay.pages.dev/">
+  <meta property="twitter:title" content="Mockingjay - Intuitive Design Editor">
+  <meta property="twitter:description" content="Design anything, publish anywhere. Mockingjay is your free, all-in-one design tool for creating beautiful content.">
+  <meta property="twitter:image" content="https://mockingjay.pages.dev/mockingjay.PNG">
+
+  <!-- PWA and Mobile Specific -->
   <meta name="theme-color" content="#000000">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Mockingjay">
   <link rel="apple-touch-icon" href="/pwa-192x192.jpg">
-  <title>Mockingjay - Professional Design Editor</title>
+  <link rel="manifest" href="/manifest.json">
+
   <script src="https://cdn.tailwindcss.com"></script>
+  
   <style>
     @font-face {
       font-family: 'Debrosee';
@@ -59,7 +85,6 @@
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .animate-spin-custom { animation: spin 2s linear infinite; }
 
-    /* Force canvas elements to be visible during capture */
     #design-canvas * {
       transform-style: preserve-3d;
       backface-visibility: hidden;
@@ -79,6 +104,36 @@
     }
   }
   </script>
+  <!-- FAQ Schema -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [{
+      "@type": "Question",
+      "name": "What is Mockingjay?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Mockingjay is a powerful and intuitive online design editor that allows you to create stunning graphics, social media posts, and marketing materials with ease. It\'s designed for everyone, from beginners to professional designers."
+      }
+    }, {
+      "@type": "Question",
+      "name": "Is Mockingjay free to use?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes, Mockingjay offers a robust free tier that provides access to all core design tools. We also offer premium features for users who need more advanced capabilities."
+      }
+    }, {
+      "@type": "Question",
+      "name": "Do I need design experience to use Mockingjay?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Not at all! Mockingjay\'s user-friendly interface and pre-made templates make it easy for anyone to create professional-quality designs in minutes."
+      }
+    }]
+  }
+  </script>
+
   <script type="module" src="index.tsx"></script>
 </head>
 <body>
