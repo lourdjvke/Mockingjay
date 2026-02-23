@@ -49,12 +49,8 @@ const QuickTools: React.FC<QuickToolsProps> = ({
     const imageReplaceInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        if (selectedElement && selectedElement.type === 'text') {
-            setActiveTool('text');
-        } else {
-            setActiveTool(null);
-        }
-    }, [selectedElement?.id, selectedElement?.type]);
+        setActiveTool(null);
+    }, [selectedElement?.id]);
 
     const handleStyleChange = (property: keyof ElementStyle, value: any) => {
         if (!selectedElement) return;
@@ -169,6 +165,7 @@ const QuickTools: React.FC<QuickToolsProps> = ({
             case 'text':
                 return (
                     <>
+                        <button onClick={() => setActiveTool(activeTool === 'text' ? null : 'text')} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Edit3 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Edit</span></button>
                         <button onClick={() => setActiveTool(activeTool === 'font' ? null : 'font')} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Type className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Font</span></button>
                         <button onClick={() => setActiveTool(activeTool === 'fontSize' ? null : 'fontSize')} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Baseline className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Size</span></button>
                         <button onClick={() => setActiveTool(activeTool === 'color' ? null : 'color')} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Palette className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Color</span></button>
