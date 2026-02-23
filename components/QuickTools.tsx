@@ -3,7 +3,6 @@ import React, { useState, useRef } from 'react';
 import { DesignElement, ElementStyle } from '../types';
 import { Icons } from './IconLibrary';
 
-// Moved CustomColorPicker outside of QuickTools to give it a stable identity
 const CustomColorPicker = ({ color, onChange, themeColors }) => {
     return (
         <div className="flex flex-wrap items-center gap-2 p-2 bg-gray-800 rounded-lg">
@@ -47,15 +46,17 @@ const QuickTools: React.FC<QuickToolsProps> = ({
     updatePage,
     onApplyEffect
 }) => {
-    const [currentTool, setCurrentTool] = useState<{ name: string | null, elementId: string | null }>({ name: null, elementId: null });
+    const [activeTool, setActiveTool] = useState<string | null>(null);
     const imageReplaceInputRef = useRef<HTMLInputElement>(null);
+    const prevSelectedElementId = useRef<string | null>(null);
 
-    const activeToolName = selectedElement && selectedElement.id === currentTool.elementId ? currentTool.name : null;
+    if (selectedElement?.id !== prevSelectedElementId.current) {
+        setActiveTool(null);
+        prevSelectedElementId.current = selectedElement?.id ?? null;
+    }
 
     const toggleTool = (name: string) => {
-        if (!selectedElement) return;
-        const newName = activeToolName === name ? null : name;
-        setCurrentTool({ name: newName, elementId: selectedElement.id });
+        setActiveTool(prevTool => (prevTool === name ? null : name));
     };
 
     const handleStyleChange = (property: keyof ElementStyle, value: any) => {
@@ -81,9 +82,9 @@ const QuickTools: React.FC<QuickToolsProps> = ({
     };
 
     const renderActiveTool = () => {
-        if (!selectedElement || !activeToolName) return null;
+        if (!selectedElement || !activeTool) return null;
 
-        switch (activeToolName) {
+        switch (activeTool) {
             case 'text':
                 return (
                     <div className="w-full bg-zinc-900 border border-white/10 rounded-xl p-3 focus-within:border-lime-400/50 transition-colors">
@@ -176,11 +177,11 @@ const QuickTools: React.FC<QuickToolsProps> = ({
             case 'text':
                 return (
                     <>
-                        <button onClick={() => toggleTool('text')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeToolName === 'text' ? 'text-lime-400' : 'text-white/60'}`}><Icons.Edit3 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Edit</span></button>
-                        <button onClick={() => toggleTool('font')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeToolName === 'font' ? 'text-lime-400' : 'text-white/60'}`}><Icons.Type className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Font</span></button>
-                        <button onClick={() => toggleTool('fontSize')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeToolName === 'fontSize' ? 'text-lime-400' : 'text-white/60'}`}><Icons.Baseline className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Size</span></button>
-                        <button onClick={() => toggleTool('color')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeToolName === 'color' ? 'text-lime-400' : 'text-white/60'}`}><Icons.Palette className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Color</span></button>
-                        <button onClick={() => toggleTool('format')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeToolName === 'format' ? 'text-lime-400' : 'text-white/60'}`}><Icons.AlignLeft className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Format</span></button>
+                        <button onClick={() => toggleTool('text')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeTool === 'text' ? 'text-lime-400' : 'text-white/60'}`}><Icons.Edit3 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Edit</span></button>
+                        <button onClick={() => toggleTool('font')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeTool === 'font' ? 'text-lime-400' : 'text-white/60'}`}><Icons.Type className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Font</span></button>
+                        <button onClick={() => toggleTool('fontSize')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeTool === 'fontSize' ? 'text-lime-400' : 'text-white/60'}`}><Icons.Baseline className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Size</span></button>
+                        <button onClick={() => toggleTool('color')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeTool === 'color' ? 'text-lime-400' : 'text-white/60'}`}><Icons.Palette className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Color</span></button>
+                        <button onClick={() => toggleTool('format')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeTool === 'format' ? 'text-lime-400' : 'text-white/60'}`}><Icons.AlignLeft className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Format</span></button>
                     </>
                 );
             case 'image':
@@ -188,14 +189,14 @@ const QuickTools: React.FC<QuickToolsProps> = ({
                     <>
                         <input type="file" accept="image/*" ref={imageReplaceInputRef} className="hidden" onChange={handleImageReplace} />
                         <button onClick={() => imageReplaceInputRef.current?.click()} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Image className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Replace</span></button>
-                        <button onClick={() => toggleTool('effects')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeToolName === 'effects' ? 'text-lime-400' : 'text-white/60'}`}><Icons.Wand2 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Effects</span></button>
+                        <button onClick={() => toggleTool('effects')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeTool === 'effects' ? 'text-lime-400' : 'text-white/60'}`}><Icons.Wand2 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Effects</span></button>
                         <button onClick={() => onOpenSidebar()} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Layers className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Layer</span></button>
                     </>
                 );
             case 'shape':
                 return (
                     <>
-                         <button onClick={() => toggleTool('color')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeToolName === 'color' ? 'text-lime-400' : 'text-white/60'}`}><Icons.Palette className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Color</span></button>
+                         <button onClick={() => toggleTool('color')} className={`flex flex-col items-center gap-1 p-2 min-w-[50px] ${activeTool === 'color' ? 'text-lime-400' : 'text-white/60'}`}><Icons.Palette className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Color</span></button>
                          <button onClick={() => onOpenSidebar()} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.Layers className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Style</span></button>
                          <button onClick={() => onReorder(selectedElement.id, 'up')} className="flex flex-col items-center gap-1 text-white/60 p-2 min-w-[50px]"><Icons.ChevronUp className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Layer</span></button>
                     </>
@@ -214,7 +215,7 @@ const QuickTools: React.FC<QuickToolsProps> = ({
 
     return (
         <div className="mx-4 mb-4 bg-zinc-900/95 backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl p-2">
-            {activeToolName && (
+            {activeTool && (
                 <div className="p-2 border-b border-white/10 mb-2">
                     {renderActiveTool()}
                 </div>
