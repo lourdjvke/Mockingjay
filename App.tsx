@@ -1219,12 +1219,16 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
       const page = { ...newPages[prev.currentPageIndex] };
       const index = page.elements.findIndex(el => el.id === id);
       if (index === -1) return prev;
+
       const newElements = [...page.elements];
-      if (direction === 'up') {
-        if (index < newElements.length - 1) [newElements[index], newElements[index + 1]] = [newElements[index + 1], newElements[index]];
-      } else {
-        if (index > 0) [newElements[index], newElements[index - 1]] = [newElements[index - 1], newElements[index]];
+      const targetIndex = direction === 'up' ? index + 1 : index - 1;
+
+      if (targetIndex >= 0 && targetIndex < newElements.length) {
+        const temp = newElements[index];
+        newElements[index] = newElements[targetIndex];
+        newElements[targetIndex] = temp;
       }
+      
       page.elements = newElements;
       newPages[prev.currentPageIndex] = page;
       const newState = { ...prev, pages: newPages };
@@ -1233,6 +1237,23 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
     });
     triggerHaptic(5);
   }, [triggerHaptic, updateHistory]);
+
+  const onLayerReorder = useCallback((startIndex: number, endIndex: number) => {
+    setState(prev => {
+      const page = prev.pages[prev.currentPageIndex];
+      const newElements = Array.from(page.elements);
+      const [removed] = newElements.splice(startIndex, 1);
+      newElements.splice(endIndex, 0, removed);
+
+      const newPages = prev.pages.map((p, i) => 
+        i === prev.currentPageIndex ? { ...p, elements: newElements } : p
+      );
+      
+      const newState = { ...prev, pages: newPages };
+      updateHistory(newState);
+      return newState;
+    });
+  }, [updateHistory]);
 
   const handleApplyEffect = useCallback((effect: string) => {
       if (!selectedElement) return;
@@ -1514,19 +1535,30 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
         {isBrandDnaOpen && <BrandDna onClose={() => setIsBrandDnaOpen(false)} onStartCampaign={handleGenerateCampaign} />}
       </AnimatePresence>
       
-      <div className={\`\${isMobile ? 'hidden' : 'block'} h-full\`}>
-        <Sidebar 
-          user={user} designs={designs} brandData={brandData} currentDesignId={currentDesignId}
-          loadDesign={loadDesign} createNewDesign={createNewDesign} deleteDesign={deleteDesign}
-          importDesign={() => fileInputRef.current?.click()} openBrandDna={() => setIsBrandDnaOpen(true)}
-          selectedElement={selectedElement} themeColors={state.themeColors} pages={state.pages}
-          currentPageIndex={state.currentPageIndex} updateElement={updateElement} updatePage={updatePage}
-          onReorder={onReorder} recentImages={recentImages} isMobile={false} availableFonts={allFonts}
-          onAddCustomFont={handleAddCustomFont} onDeleteCustomFont={handleDeleteCustomFont}
-          onAddText={onAddText} onAddShape={onAddShape} onAddImage={onAddImage}
-          onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
-        />
-      </div>
+      <AnimatePresence>
+        {isSidebarOpen && !isMobile && (
+          <motion.div
+              key="sidebar-desktop"
+              initial={{ x: -380 }}
+              animate={{ x: 0 }}
+              exit={{ x: -380 }}
+              transition={motionProps}
+              className="h-full w-[380px] z-40 bg-white shadow-2xl"
+          >
+            <Sidebar 
+              user={user} designs={designs} brandData={brandData} currentDesignId={currentDesignId}
+              loadDesign={loadDesign} createNewDesign={createNewDesign} deleteDesign={deleteDesign}
+              importDesign={() => fileInputRef.current?.click()} openBrandDna={() => setIsBrandDnaOpen(true)}
+              selectedElement={selectedElement} themeColors={state.themeColors} pages={state.pages}
+              currentPageIndex={state.currentPageIndex} updateElement={updateElement} updatePage={updatePage}
+              onLayerReorder={onLayerReorder} recentImages={recentImages} isMobile={false} availableFonts={allFonts}
+              onAddCustomFont={handleAddCustomFont} onDeleteCustomFont={handleDeleteCustomFont}
+              onAddText={onAddText} onAddShape={onAddShape} onAddImage={onAddImage}
+              onUpdateColors={(cols) => setState(p => ({ ...p, themeColors: cols }))}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <main className="flex-1 flex flex-col relative overflow-hidden">
         <div className={\`absolute top-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 bg-white/80 backdrop-blur-md px-3 py-2 rounded-full border border-gray-200/80 shadow-lg transition-opacity \${isSidebarOpen && isMobile ? 'opacity-0' : 'opacity-100'}\`}>
@@ -1691,7 +1723,7 @@ Position them prominently in the design with good sizing (at least 200x200).\` :
                   importDesign={() => fileInputRef.current?.click()} openBrandDna={() => setIsBrandDnaOpen(true)}
                   selectedElement={selectedElement} themeColors={state.themeColors} pages={state.pages}
                   currentPageIndex={state.currentPageIndex} updateElement={updateElement} updatePage={updatePage}
-                  onReorder={onReorder} recentImages={recentImages} isMobile={true} availableFonts={allFonts}
+                  onLayerReorder={onLayerReorder} recentImages={recentImages} isMobile={true} availableFonts={allFonts}
                   onAddCustomFont={handleAddCustomFont} onDeleteCustomFont={handleDeleteCustomFont}
                   onAddText={(type) => { onAddText(type); setIsSidebarOpen(false); }}
                   onAddShape={(shape) => { onAddShape(shape); setIsSidebarOpen(false); }}
