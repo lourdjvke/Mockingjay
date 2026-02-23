@@ -37,6 +37,7 @@
     "@fontsource/special-elite": "^5.2.8",
     "@fontsource/unifrakturmaguntia": "^5.2.8",
     "firebase": "^10.12.2",
+    "framer-motion": "^12.34.3",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "0.460.0",
     "modern-screenshot": "4.4.37",
