@@ -362,7 +362,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                              {availableFonts.map(font => (
                                <div key={font.value} className="group relative">
                                  <button onClick={() => { updateElement(selectedElement.id, { style: { ...selectedElement.style, fontFamily: font.value } }); setShowFontList(false); triggerHaptic(5); }} className={`w-full px-5 py-3 text-left hover:bg-gray-100 transition-colors text-gray-800 ${selectedElement.style.fontFamily === font.value ? 'bg-lime-400/20 text-lime-600' : ''}`} style={{ fontFamily: font.value }}>{font.name}</button>
-                                 {font.value.startsWith("'"') && !["'"'Debrosee'"'", "'"'Pirate One'"'", "'"'Inter'"'", "'"'Playfair Display'"'", "'"'Montserrat'"'"].some(b => font.value.includes(b)) && (
+                                 {font.value.startsWith("'") && !["'Debrosee'", "'Pirate One'", "'Inter'", "'Playfair Display'", "'Montserrat'"].some(b => font.value.includes(b)) && (
                                    <button onClick={(e) => { e.stopPropagation(); onDeleteCustomFont(font.name); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icons.Trash2 className="w-4 h-4" /></button>
                                  )}
                                </div>
