@@ -1,11 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Lock, Chrome } from 'lucide-react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '../firebase';
 
 const Auth: React.FC = () => {
   const [phase, setPhase] = useState('initial'); // initial, snapped, moved-up
-  const [activeField, setActiveField] = useState<string | null>(null);
+  const [activeField, setActiveField] = useState<'name' | 'email' | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,12 +14,13 @@ const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Animation Sequence
   useEffect(() => {
     const snapTimer = setTimeout(() => setPhase('snapped'), 100);
     const moveTimer = setTimeout(() => {
       setPhase('moved-up');
       setIsLoaded(true);
-    }, 2500);
+    }, 2500); // Adjusted timing for a smoother feel
 
     return () => {
       clearTimeout(snapTimer);
@@ -28,11 +30,14 @@ const Auth: React.FC = () => {
 
   const letters = "ockingjay".split("");
 
-  const handleFocus = (field: string) => setActiveField(field);
+  // Input Focus Handlers
+  const handleFocus = (field: 'name' | 'email') => setActiveField(field);
   const handleBlur = () => {
+    setTimeout(() => {
       if (!['nameInput', 'emailInput'].includes(document.activeElement?.id || '')) {
         setActiveField(null);
       }
+    }, 150);
   };
 
   const handleAuthAction = async () => {
@@ -47,7 +52,6 @@ const Auth: React.FC = () => {
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
       }
-      // No onLogin call needed. App.tsx listener will handle the user state change.
     } catch (err: any) {
       setError(err.message.replace('Firebase: ', ''));
     }
@@ -58,8 +62,7 @@ const Auth: React.FC = () => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-      // No onLogin call needed.
-    } catch (err: any) {
+    } catch (err: any) { 
       setError(err.message.replace('Firebase: ', ''));
     }
   };
@@ -76,12 +79,12 @@ const Auth: React.FC = () => {
             ${phase === 'moved-up' ? 'top-[10%] -translate-x-1/2 translate-y-0 scale-[0.4]' : ''}
           `}
         >
-          <div className="text-[4rem] font-[900] uppercase flex gap-[0.05em] text-black transition-colors duration-500" style={{fontFamily: '"Archivo Black", sans-serif'}}>
-            <span>M</span>
+          <div className="text-[4rem] font-[900] uppercase flex gap-[0.05em] text-black transition-colors duration-500">
+            <span style={{ fontFamily: '"Archivo Black", sans-serif' }}>M</span>
             {letters.map((char, i) => (
               <span 
                 key={i} 
-                className={`inline-block min-w-[0.6em] text-center transition-all ${!isLoaded ? 'animate-font-cycle' : ''}`}
+                className={`inline-block min-w-[0.6em] text-center transition-all ${!isLoaded ? 'animate-font-cycle' : 'font-sans'}`}
                 style={{ 
                   animationDelay: !isLoaded ? `${((i % 4) + 1) * 0.3}s` : '0s',
                   animationIterationCount: 'infinite',
@@ -101,61 +104,60 @@ const Auth: React.FC = () => {
             ${isLoaded ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-10 pointer-events-none'}
           `}
         >
-          {!isLogin && (
-            <div className={`relative h-12 flex items-center transition-all duration-300 ease-in-out`}>
-              <User size={20} className="absolute left-4 text-gray-400 z-10" />
-              <input 
-                id="nameInput"
-                type="text" 
-                placeholder="Name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onFocus={() => handleFocus('name')}
-                onBlur={handleBlur}
-                className="w-full h-full pl-12 pr-5 rounded-full border border-gray-200 outline-none text-sm bg-white focus:border-lime-500 transition-colors"
+          <div className={`flex gap-2.5 items-center h-12 transition-all duration-500 ${!isLogin ? 'mb-0' : '-mb-12 opacity-0 pointer-events-none'}`}>
+            <div className={`relative h-full flex items-center transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${activeField === 'email' ? 'flex-[0_0_48px]' : 'flex-1'}`}>
+                <User 
+                  size={20}
+                  className={`absolute left-4 transition-all duration-300 ease-[cubic-bezier(0.68,-0.6,0.32,1.6)] z-20 ${activeField === 'email' ? 'left-1/2 -translate-x-1/2 scale-125 text-[#906efc] cursor-pointer' : 'text-gray-400'}`}
+                  onClick={() => document.getElementById('nameInput')?.focus()}
+                />
+                <input 
+                  id="nameInput"
+                  type="text" 
+                  placeholder="Name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onFocus={() => handleFocus('name')}
+                  onBlur={handleBlur}
+                  className={`w-full h-full pl-[45px] pr-5 rounded-[50px] border border-gray-200 outline-none text-[0.85rem] bg-white focus:border-[#906efc] transition-opacity duration-300 ${activeField === 'email' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                />
+              </div>
+          </div>
+          
+          <div className="relative h-12 flex items-center">
+              <Mail 
+                  size={20}
+                  className="absolute left-4 text-gray-400 z-20"
               />
-            </div>
-          )}
-
-          <div className={`relative h-12 flex items-center transition-all duration-300 ease-in-out`}>
-            <Mail size={20} className="absolute left-4 text-gray-400 z-10" />
-            <input 
-              id="emailInput"
-              type="email" 
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onFocus={() => handleFocus('email')}
-              onBlur={handleBlur}
-              className="w-full h-full pl-12 pr-5 rounded-full border border-gray-200 outline-none text-sm bg-white focus:border-lime-500 transition-colors"
-            />
+              <input 
+                  id="emailInput"
+                  type="email" 
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full h-full pl-[45px] pr-5 rounded-[50px] border border-gray-200 outline-none text-[0.85rem] bg-white focus:border-[#906efc] transition-all"
+              />
           </div>
 
           <div className="relative flex items-center h-12">
-            <Lock size={20} className="absolute left-4 text-gray-400 z-10" />
+            <Lock size={20} className="absolute left-4 text-gray-400 z-20" />
             <input 
               type="password" 
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAuthAction()}
-              className="w-full h-full pl-12 pr-5 rounded-full border border-gray-200 outline-none text-sm bg-white focus:border-lime-500 transition-colors"
+              className="w-full h-full pl-[45px] pr-5 rounded-[50px] border border-gray-200 outline-none text-[0.85rem] bg-white focus:border-[#906efc] transition-all"
             />
           </div>
-            
+          
           {error && <p className="text-red-500 text-xs text-center font-semibold px-4">{error}</p>}
 
-          <button onClick={handleAuthAction} className="w-full mt-2 py-3.5 rounded-full font-bold text-sm cursor-pointer text-white bg-gray-800 transition-all duration-300 ease-in-out hover:bg-gray-900 active:scale-95 transform">
-            {isLogin ? 'Continue' : 'Create Account'}
+          <button onClick={handleAuthAction} className="w-full py-3.5 mt-2 rounded-[50px] font-semibold text-[0.9rem] cursor-pointer border-2 border-[#906efc] text-[#906efc] bg-transparent transition-all duration-400 ease-[cubic-bezier(0.68,-0.6,0.32,1.6)] hover:bg-[#906efc] hover:text-white hover:-translate-y-1 hover:scale-[1.03] hover:shadow-[0_10px_20px_rgba(144,110,252,0.2)] active:scale-[0.92]">
+            {isLogin ? 'Login' : 'Create Account'}
           </button>
 
-          <div className="flex items-center gap-2 my-2">
-            <div className="flex-1 h-px bg-gray-200"></div>
-            <span className="text-xs font-semibold text-gray-400">OR</span>
-            <div className="flex-1 h-px bg-gray-200"></div>
-          </div>
-
-          <button onClick={handleGoogleSignIn} className="w-full py-3 rounded-full font-semibold text-sm cursor-pointer border border-gray-200 text-gray-700 bg-white flex items-center justify-center gap-2.5 transition-all duration-300 ease-in-out hover:bg-gray-50 active:scale-95 transform">
+          <button onClick={handleGoogleSignIn} className="w-full py-3.5 rounded-[50px] font-semibold text-[0.9rem] cursor-pointer border-none text-white bg-[linear-gradient(135deg,#5b86e5_0%,#906efc_100%)] flex items-center justify-center gap-2.5 shadow-[0_4px_10px_rgba(91,134,229,0.15)] transition-all duration-400 ease-[cubic-bezier(0.68,-0.6,0.32,1.6)] hover:brightness-[1.08] hover:-translate-y-1 hover:scale-[1.03] hover:shadow-[0_10px_20px_rgba(91,134,229,0.25)] active:scale-[0.92]">
             <Chrome size={18} />
             Continue with Google
           </button>
@@ -168,7 +170,6 @@ const Auth: React.FC = () => {
 
       <style dangerouslySetInnerHTML={{ __html: `
         @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Courier+Prime&family=Inter:wght@400;700&family=Playfair+Display&family=Space+Mono&family=Unbounded&display=swap');
-        
         @keyframes font-cycle {
           0% { font-family: 'Inter', sans-serif; }
           14% { font-family: 'Playfair Display', serif; }
