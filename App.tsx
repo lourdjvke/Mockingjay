@@ -503,24 +503,25 @@ const App: React.FC = () => {
   }, []);
 
   useLayoutEffect(() => {
-    const calculateScale = () => {
-      if (isMobile) {
+    if (isMobile) {
         setCanvasScale(0.85);
         return;
-      }
-      if (!workspaceRef.current) return;
-      const { clientWidth, clientHeight } = workspaceRef.current;
+    }
 
-      const verticalPadding = 120;
-      const horizontalPadding = 120;
+    const calculateScale = () => {
+        if (!workspaceRef.current) return;
+        const { clientWidth, clientHeight } = workspaceRef.current;
 
-      const availableWidth = clientWidth - horizontalPadding;
-      const availableHeight = clientHeight - verticalPadding;
-      
-      const scaleX = availableWidth / CANVAS_WIDTH;
-      const scaleY = availableHeight / CANVAS_HEIGHT;
-      
-      setCanvasScale(Math.min(scaleX, scaleY, 1));
+        const verticalPadding = 120;
+        const horizontalPadding = 120;
+
+        const availableWidth = clientWidth - horizontalPadding;
+        const availableHeight = clientHeight - verticalPadding;
+        
+        const scaleX = availableWidth / CANVAS_WIDTH;
+        const scaleY = availableHeight / CANVAS_HEIGHT;
+        
+        setCanvasScale(Math.min(scaleX, scaleY, 1));
     };
 
     calculateScale();
@@ -528,7 +529,7 @@ const App: React.FC = () => {
     if (workspaceRef.current) resizeObserver.observe(workspaceRef.current);
 
     return () => resizeObserver.disconnect();
-}, [isMobile, isAiModalOpen, state.selectedElementId, isSidebarOpen]);
+}, [isMobile]);
 
   const currentPage = state.pages[state.currentPageIndex];
   const selectedElement = currentPage?.elements.find(e => e.id === state.selectedElementId) || null;
@@ -1109,22 +1110,14 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
             return el;
         });
         const newState = { ...prev, pages: newPages };
-        updateHistory(newState);
+        // Do not update history on every minor update like auto-resizing
+        // This will be handled by pointer up or explicit save actions
         return newState;
     });
-  }, [updateHistory]);
-
-  const updatePage = (updates: Partial<Page>) => {
-    setState(prev => {
-      const newPages = [...prev.pages];
-      newPages[prev.currentPageIndex] = { ...newPages[prev.currentPageIndex], ...updates };
-      const newState = { ...prev, pages: newPages };
-      updateHistory(newState);
-      return newState;
-    });
-  };
+  }, []);
 
   const handleElementPointerDown = useCallback((id: string, e: React.PointerEvent) => {
+    if (dragStart?.type === 'swipe') return;
     e.stopPropagation();
     const element = currentPage.elements.find(el => el.id === id);
     if (!element) return;
@@ -1139,7 +1132,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
     setElementStartPos({ ...element.box });
 
-  }, [state.selectedElementId, currentPage, triggerHaptic]);
+  }, [currentPage, triggerHaptic, dragStart]);
 
   const handleResizePointerDown = useCallback((id: string, handle: string, e: React.PointerEvent) => {
       e.stopPropagation();
@@ -1169,6 +1162,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
     if (state.selectedElementId) {
         setState(prev => ({ ...prev, selectedElementId: null }));
+        updateHistory(state);
     } else if (isMobile && state.pages.length > 1 && !state.selectedElementId) {
         setDragStart({ x: e.clientX, y: e.clientY, type: 'swipe' });
     }
@@ -1362,11 +1356,17 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   }, [dragStart, elementStartPos, state.selectedElementId, canvasScale, updateElement, isMobile, selectedElement]);
 
   const handlePointerUp = useCallback(() => {
-    if(dragStart) debouncedSave.flush();
+    if (dragStart) {
+        // If the action was a resize or move, update the history
+        if (dragStart.type === 'move' || dragStart.type === 'resize' || dragStart.type === 'rotate') {
+            updateHistory(state);
+        }
+        debouncedSave.flush();
+    }
     setDragStart(null);
     setElementStartPos(null);
     setSnapLines([]);
-  }, [dragStart, debouncedSave]);
+}, [dragStart, debouncedSave, state, updateHistory]);
 
   useEffect(() => {
     window.addEventListener('pointermove', handlePointerMove);
@@ -1428,7 +1428,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         'Press Start 2P', 'Monoton', 'Alfa Slab One', 'Cinzel Decorative:wght@400;700;900',
         'Faster One', 'Righteous', 'Fredoka One', 'Orbitron:wght@400;700;900', 'Special Elite',
         'Cookie', 'Satisfy', 'Kaushan Script', 'Pinyon Script', 'Rochester', 'Abril Fatface',
-        'Comfortaa:wght@300;700', 'UnifrakturMaguntia', 'Creepster', 'Nosifer', 'Bungee Shade'
+        'Comfortaa:wght@300;700', 'UnifrakturMaguntia', 'Creepster', 'Nosifer', 'B bungee Shade'
       ];
       const googleFontsUrl = `https://fonts.googleapis.com/css2?${fontFamilies.map(f => `family=${f.replace(/ /g, '+')}`).join('&')}&display=swap`;
 
@@ -1654,6 +1654,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                         onSelect={handleElementPointerDown}
                         onResizeStart={handleResizePointerDown}
                         onRotateStart={handleRotatePointerDown}
+                        updateElement={updateElement}
                       />
                   ))}
                </div>
