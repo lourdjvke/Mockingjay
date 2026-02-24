@@ -472,12 +472,15 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleResize = () => {
-        setIsMobile(window.innerWidth < 768);
-        if(window.innerWidth >= 768) setIsSidebarOpen(true);
+        const mobile = window.innerWidth < 768;
+        setIsMobile(mobile);
+        if (!mobile) {
+            setIsSidebarOpen(true);
+        }
     }
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+}, []);
 
   useEffect(() => {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
@@ -1128,6 +1131,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   const handleElementPointerDown = useCallback((id: string, e: React.PointerEvent) => {
     if (dragStart?.type === 'swipe') return;
+    if (isMobile && !state.selectedElementId) return;
     e.stopPropagation();
     const element = currentPage.elements.find(el => el.id === id);
     if (!element) return;
@@ -1142,7 +1146,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
     setElementStartPos({ ...element.box });
 
-  }, [currentPage, triggerHaptic, dragStart]);
+  }, [currentPage, triggerHaptic, dragStart, isMobile, state.selectedElementId]);
 
   const handleResizePointerDown = useCallback((id: string, handle: string, e: React.PointerEvent) => {
       e.stopPropagation();
@@ -1646,7 +1650,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
              animate={{ scale: 1, opacity: 1 }}
              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
              className="relative"
-             style={{ transform: `scale(${canvasScale})`, transformOrigin: 'center center' }}
+             style={{ 
+                transform: `scale(${isMobile ? 0.85 : canvasScale})`,
+                transformOrigin: 'center center' 
+            }}
             >
                <div id="design-canvas" ref={canvasRef} onPointerDown={handleCanvasPointerDown} onContextMenu={e => e.preventDefault()} className="relative shadow-2xl shadow-gray-500/20 transition-all duration-300 origin-center overflow-hidden rounded-2xl"
                  style={{ 
