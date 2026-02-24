@@ -91,6 +91,8 @@ const App: React.FC = () => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [showStar, setShowStar] = useState(false);
   const [canvasScale, setCanvasScale] = useState(1);
+  const [potentialTap, setPotentialTap] = useState<{id: string, x: number, y: number} | null>(null);
+
 
   // Firebase and Design-related state
   const [user, setUser] = useState<User | null>(null);
@@ -430,7 +432,7 @@ const App: React.FC = () => {
             const fontFace = new FontFace(font.name, data);
             await fontFace.load();
             document.fonts.add(fontFace);
-            loadedFonts.push({ name: font.name, value: `'${font.name}', sans-serif` });
+            loadedFonts.push({ name: font.name, value: `\'${font.name}\', sans-serif` });
           } catch (e) { console.error(`Font init fail: ${font.name}`, e); }
         }
         setUserFonts(loadedFonts);
@@ -451,7 +453,7 @@ const App: React.FC = () => {
       await fontFace.load();
       document.fonts.add(fontFace);
       
-      setUserFonts(prev => [...prev, { name, value: `'${name}', sans-serif` }]);
+      setUserFonts(prev => [...prev, { name, value: `\'${font.name}\', sans-serif` }]);
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(20);
     } catch (err) {
       console.error("Font save failed:", err);
@@ -479,8 +481,10 @@ const App: React.FC = () => {
         }
     }
     window.addEventListener('resize', handleResize);
+    handleResize();
     return () => window.removeEventListener('resize', handleResize);
 }, []);
+
 
   useEffect(() => {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
@@ -505,34 +509,41 @@ const App: React.FC = () => {
     };
   }, []);
 
-  useLayoutEffect(() => {
-    if (isMobile) {
-        setCanvasScale(0.85);
-        return;
-    }
+    useLayoutEffect(() => {
+        if (isMobile) {
+            setCanvasScale(0.85);
+            return;
+        }
 
-    const calculateScale = () => {
-        if (!workspaceRef.current) return;
-        const { clientWidth, clientHeight } = workspaceRef.current;
+        if (!workspaceRef.current) {
+            setCanvasScale(1);
+            return;
+        }
 
-        const verticalPadding = 120;
-        const horizontalPadding = 120;
+        const calculateScale = () => {
+            if (!workspaceRef.current) return;
+            const { clientWidth, clientHeight } = workspaceRef.current;
+            const verticalPadding = 120;
+            const horizontalPadding = 120;
+            const availableWidth = clientWidth - horizontalPadding;
+            const availableHeight = clientHeight - verticalPadding;
+            const scaleX = availableWidth / CANVAS_WIDTH;
+            const scaleY = availableHeight / CANVAS_HEIGHT;
+            setCanvasScale(Math.min(scaleX, scaleY, 1));
+        };
 
-        const availableWidth = clientWidth - horizontalPadding;
-        const availableHeight = clientHeight - verticalPadding;
-        
-        const scaleX = availableWidth / CANVAS_WIDTH;
-        const scaleY = availableHeight / CANVAS_HEIGHT;
-        
-        setCanvasScale(Math.min(scaleX, scaleY, 1));
-    };
+        calculateScale();
+        const resizeObserver = new ResizeObserver(calculateScale);
+        if (workspaceRef.current) {
+            resizeObserver.observe(workspaceRef.current);
+        }
 
-    calculateScale();
-    const resizeObserver = new ResizeObserver(calculateScale);
-    if (workspaceRef.current) resizeObserver.observe(workspaceRef.current);
-
-    return () => resizeObserver.disconnect();
-}, [isMobile]);
+        return () => {
+            if (workspaceRef.current) {
+                resizeObserver.unobserve(workspaceRef.current);
+            }
+        };
+    }, [isMobile]);
 
   const currentPage = state.pages[state.currentPageIndex];
   const selectedElement = currentPage?.elements.find(e => e.id === state.selectedElementId) || null;
@@ -1113,8 +1124,6 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
             return el;
         });
         const newState = { ...prev, pages: newPages };
-        // Do not update history on every minor update like auto-resizing
-        // This will be handled by pointer up or explicit save actions
         return newState;
     });
   }, []);
@@ -1129,34 +1138,31 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     });
   }, [updateHistory]);
 
-  const handleElementPointerDown = useCallback((id: string, e: React.PointerEvent) => {
-    if (dragStart?.type === 'swipe') return;
-    if (isMobile && !state.selectedElementId) return;
-    e.stopPropagation();
-    const element = currentPage.elements.find(el => el.id === id);
-    if (!element) return;
+    const handleElementPointerDown = useCallback((id: string, e: React.PointerEvent) => {
+        e.stopPropagation();
+        if (dragStart) return;
 
-    setState(prev => {
-        if(prev.selectedElementId !== id) triggerHaptic(5);
-        return { ...prev, selectedElementId: id }
-    });
-    
-    if (element.locked) return;
+        const element = currentPage.elements.find(el => el.id === id);
+        if (!element) return;
 
-    setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
-    setElementStartPos({ ...element.box });
+        if (id === state.selectedElementId) {
+            if (element.locked) return;
+            setDragStart({ x: e.clientX, y: e.clientY, type: 'move' });
+            setElementStartPos({ ...element.box });
+        } else {
+            setPotentialTap({ id, x: e.clientX, y: e.clientY });
+        }
+    }, [dragStart, currentPage, state.selectedElementId]);
 
-  }, [currentPage, triggerHaptic, dragStart, isMobile, state.selectedElementId]);
-
-  const handleResizePointerDown = useCallback((id: string, handle: string, e: React.PointerEvent) => {
+    const handleResizePointerDown = useCallback((id: string, handle: string, e: React.PointerEvent) => {
       e.stopPropagation();
       const element = currentPage.elements.find(el => el.id === id);
       if (!element || element.locked) return;
       setDragStart({ x: e.clientX, y: e.clientY, type: 'resize', handle });
       setElementStartPos({ ...element.box });
-  }, [currentPage]);
+    }, [currentPage]);
 
-  const handleRotatePointerDown = useCallback((id: string, e: React.PointerEvent) => {
+    const handleRotatePointerDown = useCallback((id: string, e: React.PointerEvent) => {
       e.stopPropagation();
       const element = currentPage.elements.find(el => el.id === id);
       if (!element || !canvasRef.current || element.locked) return;
@@ -1168,19 +1174,24 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       
       setDragStart({ x: e.clientX, y: e.clientY, type: 'rotate', initialAngle });
       setElementStartPos({ ...element.box });
-  }, [currentPage, canvasScale]);
+    }, [currentPage, canvasScale]);
 
 
-  const handleCanvasPointerDown = (e: React.PointerEvent) => {
-    if (e.target !== e.currentTarget) return;
+    const handleCanvasPointerDown = (e: React.PointerEvent) => {
+        if (e.target !== e.currentTarget) return;
 
-    if (state.selectedElementId) {
-        setState(prev => ({ ...prev, selectedElementId: null }));
-        updateHistory(state);
-    } else if (isMobile && state.pages.length > 1 && !state.selectedElementId) {
-        setDragStart({ x: e.clientX, y: e.clientY, type: 'swipe' });
-    }
-  };
+        if (potentialTap) {
+            setPotentialTap(null);
+        }
+
+        if (state.selectedElementId) {
+            setState(prev => ({ ...prev, selectedElementId: null }));
+            updateHistory(state);
+        } else if (isMobile && state.pages.length > 1 && !dragStart) {
+            setDragStart({ x: e.clientX, y: e.clientY, type: 'swipe' });
+        }
+    };
+
 
   const addElement = useCallback((element: Partial<DesignElement>) => {
     const defaultFont = allFonts.length > 0 ? allFonts[0].value : "'Inter', sans-serif";
@@ -1315,72 +1326,88 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       updateElement(selectedElement.id, { style: { ...selectedElement.style, filter: filterValue } });
   }, [selectedElement, updateElement]);
 
-  const handlePointerMove = useCallback((e: PointerEvent) => {
-    if (!dragStart) return;
+    const handlePointerMove = useCallback((e: PointerEvent) => {
+        if (potentialTap) {
+            const dx = e.clientX - potentialTap.x;
+            const dy = e.clientY - potentialTap.y;
+            if (Math.sqrt(dx * dx + dy * dy) > 5) { // Drag threshold
+                setPotentialTap(null); // It's a drag/swipe, not a tap
+            }
+        }
 
-    const scale = canvasScale;
-    const dx = (e.clientX - dragStart.x) / scale;
-    const dy = (e.clientY - dragStart.y) / scale;
+        if (!dragStart) return;
 
-    if (dragStart.type === 'swipe' && isMobile && !selectedElement) {
-        const swipeThreshold = 50;
-        if (Math.abs(dx) > swipeThreshold) {
-            setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, Math.max(0, p.currentPageIndex + (dx > 0 ? -1 : 1))) }));
+        const currentScale = canvasScale;
+        const dx = (e.clientX - dragStart.x) / currentScale;
+        const dy = (e.clientY - dragStart.y) / currentScale;
+
+        if (dragStart.type === 'swipe') {
+            const swipeThreshold = 50;
+            if (Math.abs(dx) > swipeThreshold) {
+                setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, Math.max(0, p.currentPageIndex + (dx > 0 ? -1 : 1))) }));
+                setDragStart(null);
+            }
+            return;
+        }
+
+        if (!elementStartPos || !state.selectedElementId) return;
+
+        if (dragStart.type === 'move') {
+          const newX = elementStartPos.x + dx;
+          const newY = elementStartPos.y + dy;
+          const centerX = CANVAS_WIDTH / 2 - elementStartPos.width / 2;
+          const centerY = CANVAS_HEIGHT / 2 - elementStartPos.height / 2;
+          const isSnappedX = Math.abs(newX - centerX) < 5;
+          const isSnappedY = Math.abs(newY - centerY) < 5;
+          const snappedX = isSnappedX ? centerX : newX;
+          const snappedY = isSnappedY ? centerY : newY;
+          const lines: SnapLine[] = [];
+          if (isSnappedX) lines.push({ type: 'vertical', position: CANVAS_WIDTH / 2 });
+          if (isSnappedY) lines.push({ type: 'horizontal', position: CANVAS_HEIGHT / 2 });
+          setSnapLines(lines);
+          updateElement(state.selectedElementId, { box: { ...elementStartPos, x: snappedX, y: snappedY } });
+        } else if (dragStart.type === 'resize' && dragStart.handle) {
+          const h = dragStart.handle;
+          let { x, y, width, height } = elementStartPos;
+          if (h.includes('e')) width += dx;
+          if (h.includes('w')) { width -= dx; x += dx; }
+          if (h.includes('s')) height += dy;
+          if (h.includes('n')) { height -= dy; y += dy; }
+          width = Math.max(20, width);
+          height = Math.max(20, height);
+          updateElement(state.selectedElementId, { box: { ...elementStartPos, x, y, width, height } });
+        } else if (dragStart.type === 'rotate') {
+          const rect = canvasRef.current?.getBoundingClientRect();
+          if (!rect) return;
+          const cX = rect.left + (elementStartPos.x + elementStartPos.width / 2) * currentScale;
+          const cY = rect.top + (elementStartPos.y + elementStartPos.height / 2) * currentScale;
+          const currentAngle = Math.atan2(e.clientY - cY, e.clientX - cX) * (180 / Math.PI);
+          let rotation = elementStartPos.rotation + (currentAngle - (dragStart.initialAngle || 0));
+          if (Math.abs(rotation % 45) < 5) rotation = Math.round(rotation / 45) * 45;
+          updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation } });
+        }
+    }, [potentialTap, dragStart, elementStartPos, state.selectedElementId, canvasScale, updateElement]);
+
+    const handlePointerUp = useCallback(() => {
+        if (potentialTap) {
+            setState(prev => ({...prev, selectedElementId: potentialTap.id}));
+            triggerHaptic(5);
+            setPotentialTap(null);
             setDragStart(null);
+            return;
         }
-        return;
-    }
 
-    if (!elementStartPos || !state.selectedElementId) return;
-
-    if (dragStart.type === 'move') {
-      const newX = elementStartPos.x + dx;
-      const newY = elementStartPos.y + dy;
-      const centerX = CANVAS_WIDTH / 2 - elementStartPos.width / 2;
-      const centerY = CANVAS_HEIGHT / 2 - elementStartPos.height / 2;
-      const isSnappedX = Math.abs(newX - centerX) < 5;
-      const isSnappedY = Math.abs(newY - centerY) < 5;
-      const snappedX = isSnappedX ? centerX : newX;
-      const snappedY = isSnappedY ? centerY : newY;
-      const lines: SnapLine[] = [];
-      if (isSnappedX) lines.push({ type: 'vertical', position: CANVAS_WIDTH / 2 });
-      if (isSnappedY) lines.push({ type: 'horizontal', position: CANVAS_HEIGHT / 2 });
-      setSnapLines(lines);
-      updateElement(state.selectedElementId, { box: { ...elementStartPos, x: snappedX, y: snappedY } });
-    } else if (dragStart.type === 'resize' && dragStart.handle) {
-      const h = dragStart.handle;
-      let { x, y, width, height } = elementStartPos;
-      if (h.includes('e')) width += dx;
-      if (h.includes('w')) { width -= dx; x += dx; }
-      if (h.includes('s')) height += dy;
-      if (h.includes('n')) { height -= dy; y += dy; }
-      width = Math.max(20, width);
-      height = Math.max(20, height);
-      updateElement(state.selectedElementId, { box: { ...elementStartPos, x, y, width, height } });
-    } else if (dragStart.type === 'rotate') {
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const cX = rect.left + (elementStartPos.x + elementStartPos.width / 2) * scale;
-      const cY = rect.top + (elementStartPos.y + elementStartPos.height / 2) * scale;
-      const currentAngle = Math.atan2(e.clientY - cY, e.clientX - cX) * (180 / Math.PI);
-      let rotation = elementStartPos.rotation + (currentAngle - (dragStart.initialAngle || 0));
-      if (Math.abs(rotation % 45) < 5) rotation = Math.round(rotation / 45) * 45;
-      updateElement(state.selectedElementId, { box: { ...elementStartPos, rotation } });
-    }
-  }, [dragStart, elementStartPos, state.selectedElementId, canvasScale, updateElement, isMobile, selectedElement]);
-
-  const handlePointerUp = useCallback(() => {
-    if (dragStart) {
-        // If the action was a resize or move, update the history
-        if (dragStart.type === 'move' || dragStart.type === 'resize' || dragStart.type === 'rotate') {
-            updateHistory(state);
+        if (dragStart) {
+            if (dragStart.type === 'move' || dragStart.type === 'resize' || dragStart.type === 'rotate') {
+                updateHistory(state);
+            }
+            debouncedSave.flush();
         }
-        debouncedSave.flush();
-    }
-    setDragStart(null);
-    setElementStartPos(null);
-    setSnapLines([]);
-}, [dragStart, debouncedSave, state, updateHistory]);
+        setDragStart(null);
+        setElementStartPos(null);
+        setSnapLines([]);
+    }, [potentialTap, dragStart, state, updateHistory, debouncedSave, triggerHaptic]);
+
 
   useEffect(() => {
     window.addEventListener('pointermove', handlePointerMove);
@@ -1650,8 +1677,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
              animate={{ scale: 1, opacity: 1 }}
              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
              className="relative"
-             style={{ 
-                transform: `scale(${isMobile ? 0.85 : canvasScale})`,
+             style={{
+                transform: `scale(${isMobile ? 1 : canvasScale})`,
                 transformOrigin: 'center center' 
             }}
             >
