@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Lock, Chrome } from 'lucide-react';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth, database, ref, runTransaction } from '../firebase';
 
 const Auth: React.FC = () => {
   const [phase, setPhase] = useState('initial'); // initial, snapped, moved-up
@@ -13,6 +13,27 @@ const Auth: React.FC = () => {
   const [name, setName] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [isPWAInstalled, setIsPWAInstalled] = useState(false);
+
+  useEffect(() => {
+    const handleInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
+    };
+  }, []);
+
+  useEffect(() => {
+      if (window.matchMedia('(display-mode: standalone)').matches) {
+          setIsPWAInstalled(true);
+      }
+  }, []);
 
   // Animation Sequence
   useEffect(() => {
@@ -39,17 +60,47 @@ const Auth: React.FC = () => {
     }, 150);
   };
 
+  const handleInstallClick = () => {
+    if (installPrompt) {
+        installPrompt.prompt();
+        installPrompt.userChoice.then((choiceResult: any) => {
+            if (choiceResult.outcome === 'accepted') {
+                console.log('User accepted the install prompt');
+            } else {
+                console.log('User dismissed the install prompt');
+            }
+            setInstallPrompt(null);
+        });
+    }
+  };
+
   const handleAuthAction = async () => {
     setError(null);
     if ((!isLogin && !name) || !email || !password) {
         setError("Please fill in all fields.");
         return;
     }
+
+    if (!isLogin && installPrompt && !isPWAInstalled) {
+        setError("Please install the app to proceed with sign up.");
+        handleInstallClick();
+        return;
+    }
+
     try {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const userId = userCredential.user.uid;
+        const userRef = ref(database, 'users/' + userId);
+        await runTransaction(userRef, (currentData) => {
+            if (currentData === null) {
+                return { ugcredit: 100, name: name };
+            } else {
+                return { ...currentData, ugcredit: (currentData.ugcredit || 0) + 100 };
+            }
+        });
       }
     } catch (err: any) {
       setError(err.message.replace('Firebase: ', ''));
@@ -103,6 +154,14 @@ const Auth: React.FC = () => {
             ${isLoaded ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-10 pointer-events-none'}
           `}
         >
+          {installPrompt && !isPWAInstalled && (
+            <p 
+                className="text-center underline cursor-pointer pb-2" 
+                style={{color: '#777'}}
+                onClick={handleInstallClick}>
+                Install app
+            </p>
+          )}
           {!isLogin ? (
              <div className="flex gap-2.5 items-center h-12">
                 <div className={`relative h-full flex items-center transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${activeField === 'email' ? 'flex-[0_0_48px]' : 'flex-1'}`}>
