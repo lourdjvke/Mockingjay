@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useLayoutEffect } from 'react';
 import { DesignElement } from '../types';
 import { Icons } from './IconLibrary';
 
@@ -8,6 +8,7 @@ interface ElementRendererProps {
     onSelect: (id: string, e: React.PointerEvent<HTMLDivElement>) => void;
     onResizeStart: (id: string, handle: string, e: React.PointerEvent<HTMLDivElement>) => void;
     onRotateStart: (id: string, e: React.PointerEvent<HTMLDivElement>) => void;
+    updateElement: (id: string, updates: Partial<DesignElement>) => void;
 }
 
 const ElementRenderer: React.FC<ElementRendererProps> = ({ 
@@ -15,11 +16,22 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({
     isSelected, 
     onSelect, 
     onResizeStart, 
-    onRotateStart 
+    onRotateStart,
+    updateElement,
 }) => {
     
     const { perspective = 1000, rotateX = 0, rotateY = 0, opacity = 1, ...style } = element.style;
     const transform = `perspective(${perspective}px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) rotate(${element.box.rotation}deg)`;
+    const contentRef = useRef<HTMLDivElement>(null);
+
+    useLayoutEffect(() => {
+        if (element.type === 'text' && contentRef.current && isSelected) {
+            const currentHeight = contentRef.current.scrollHeight;
+            if (element.box.height !== currentHeight) {
+                updateElement(element.id, { box: { ...element.box, height: currentHeight } });
+            }
+        }
+    }, [element.content, element.box.width, element.style.fontSize, element.style.lineHeight, element.style.letterSpacing, isSelected]);
 
     const containerStyle: React.CSSProperties = {
         position: 'absolute',
@@ -34,6 +46,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({
         pointerEvents: 'auto',
         zIndex: isSelected ? 1000 : 'auto',
         opacity: opacity,
+        transition: 'height 0.2s ease-out',
     };
 
     const contentWrapperStyle: React.CSSProperties = {
@@ -60,14 +73,17 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({
             case 'text':
                 return (
                     <div
+                        ref={contentRef}
                         style={{
                             width: '100%',
-                            height: '100%',
+                            height: 'auto',
+                            minHeight: element.box.height,
                             wordBreak: 'break-word',
                             cursor: 'default',
                             padding: 10,
                             boxSizing: 'border-box',
                             outline: 'none',
+                            whiteSpace: 'pre-wrap',
                         }}
                         dangerouslySetInnerHTML={{ __html: element.content || '' }}
                     />
