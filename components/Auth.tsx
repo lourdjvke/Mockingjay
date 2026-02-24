@@ -76,7 +76,7 @@ const Auth: React.FC = () => {
             ${phase === 'moved-up' ? 'top-[10%] -translate-x-1/2 translate-y-0 scale-[0.4]' : ''}
           `}
         >
-          <div className="text-[4rem] font-[900] uppercase flex gap-[0.05em] text-black transition-colors duration-500" style={{fontFamily: '''"Archivo Black", sans-serif'''}}>
+          <div className="text-[4rem] font-[900] uppercase flex gap-[0.05em] text-black transition-colors duration-500" style={{fontFamily: '"Archivo Black", sans-serif'}}>
             <span>M</span>
             {letters.map((char, i) => (
               <span 
