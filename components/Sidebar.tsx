@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Icons } from './IconLibrary.tsx';
 import { DesignElement, Page } from '../types.ts';
@@ -107,6 +108,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const fontUploadRef = useRef<HTMLInputElement>(null);
   const colorPickerRef = useRef<HTMLInputElement>(null);
+  const [isPWA, setIsPWA] = useState(false);
+
+  useEffect(() => {
+      if (window.matchMedia('(display-mode: standalone)').matches) {
+          setIsPWA(true);
+      }
+  }, []);
 
   useEffect(() => {
     if (selectedElement && selectedElement.type === 'text' && !isMobile) {
@@ -193,9 +201,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const showFillColor = selectedElement && selectedElement.type !== 'text' && selectedElement.type !== 'image' && selectedElement.type !== 'icon';
+  const isBrowserMobile = isMobile && !isPWA;
 
   return (
-    <div className={`${isMobile ? 'w-full' : 'w-[380px]'} h-full bg-white ${isMobile ? '' : 'border-l'} border-gray-200 flex flex-col select-none overflow-hidden`}>
+    <div className={`${isMobile ? 'w-full' : 'w-[380px]'} h-full bg-white ${isMobile ? '' : 'border-l'} border-gray-200 flex flex-col select-none overflow-hidden ${isBrowserMobile ? 'bottom-[2em]' : ''}`}>
       <input type="file" ref={imageUploadRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
       <input type="file" ref={fontUploadRef} className="hidden" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} />
       <input type="color" ref={colorPickerRef} className="hidden" onChange={handleAddColor} />
@@ -353,7 +362,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                              {availableFonts.map(font => (
                                <div key={font.value} className="group relative">
                                  <button onClick={() => { updateElement(selectedElement.id, { style: { ...selectedElement.style, fontFamily: font.value } }); setShowFontList(false); triggerHaptic(5); }} className={`w-full px-5 py-3 text-left hover:bg-gray-100 transition-colors text-gray-800 ${selectedElement.style.fontFamily === font.value ? 'bg-lime-400/20 text-lime-600' : ''}`} style={{ fontFamily: font.value }}>{font.name}</button>
-                                 {font.value.startsWith("'") && !["'Debrosee'", "'Pirate One'", "'Inter'", "'Playfair Display'", "'Montserrat'"].some(b => font.value.includes(b)) && (
+                                 {font.value.startsWith("'"') && !["'"'Debrosee'"'", "'"'Pirate One'"'", "'"'Inter'"'", "'"'Playfair Display'"'", "'"'Montserrat'"'"].some(b => font.value.includes(b)) && (
                                    <button onClick={(e) => { e.stopPropagation(); onDeleteCustomFont(font.name); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icons.Trash2 className="w-4 h-4" /></button>
                                  )}
                                </div>
