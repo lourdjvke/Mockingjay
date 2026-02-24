@@ -1116,6 +1116,16 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     });
   }, []);
 
+  const updatePage = useCallback((updates: Partial<Page>) => {
+    setState(prev => {
+      const newPages = [...prev.pages];
+      newPages[prev.currentPageIndex] = { ...newPages[prev.currentPageIndex], ...updates };
+      const newState = { ...prev, pages: newPages };
+      updateHistory(newState);
+      return newState;
+    });
+  }, [updateHistory]);
+
   const handleElementPointerDown = useCallback((id: string, e: React.PointerEvent) => {
     if (dragStart?.type === 'swipe') return;
     e.stopPropagation();
@@ -1428,7 +1438,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         'Press Start 2P', 'Monoton', 'Alfa Slab One', 'Cinzel Decorative:wght@400;700;900',
         'Faster One', 'Righteous', 'Fredoka One', 'Orbitron:wght@400;700;900', 'Special Elite',
         'Cookie', 'Satisfy', 'Kaushan Script', 'Pinyon Script', 'Rochester', 'Abril Fatface',
-        'Comfortaa:wght@300;700', 'UnifrakturMaguntia', 'Creepster', 'Nosifer', 'B bungee Shade'
+        'Comfortaa:wght@300;700', 'UnifrakturMaguntia', 'Creepster', 'Nosifer', 'Bungee Shade'
       ];
       const googleFontsUrl = `https://fonts.googleapis.com/css2?${fontFamilies.map(f => `family=${f.replace(/ /g, '+')}`).join('&')}&display=swap`;
 
