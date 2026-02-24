@@ -132,3 +132,9 @@
     stroke-dashoffset: 0;
   }
 }
+
+@media (max-width: 48em) {
+    div#design-canvas {
+        transform: scale(0.85);
+    }
+}
