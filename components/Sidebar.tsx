@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Icons } from './IconLibrary.tsx';
 import { DesignElement, Page } from '../types.ts';
 import type { User } from 'firebase/auth';
-import { DragDropContext, Droppable, Draggable, OnDragEndResponder } from 'react-beautiful-dnd';
+import { DragDropContext, Droppable, Draggable, OnDragEndResponder } from '@hello-pangea/dnd';
 
 
 interface SectionProps {
