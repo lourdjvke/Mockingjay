@@ -46,6 +46,13 @@ const QuickTools: React.FC<QuickToolsProps> = ({
 }) => {
     const [currentTool, setCurrentTool] = useState<{ name: string | null, elementId: string | null }>({ name: null, elementId: null });
     const imageReplaceInputRef = useRef<HTMLInputElement>(null);
+    const [isPWA, setIsPWA] = useState(false);
+
+    useEffect(() => {
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            setIsPWA(true);
+        }
+    }, []);
 
     const activeToolName = selectedElement && selectedElement.id === currentTool.elementId ? currentTool.name : null;
 
@@ -234,9 +241,10 @@ const QuickTools: React.FC<QuickToolsProps> = ({
         }
     };
 
+    const isBrowser = !isPWA;
 
     return (
-        <div className="mx-4 mb-4 bg-white/80 backdrop-blur-xl border border-gray-200/80 rounded-2xl shadow-2xl shadow-gray-500/10 p-2 select-none">
+        <div className={`mx-4 mb-4 bg-white/80 backdrop-blur-xl border border-gray-200/80 rounded-2xl shadow-2xl shadow-gray-500/10 p-2 select-none ${isBrowser ? 'bottom-[2em]' : ''}`}>
             {renderActiveTool()}
             <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pl-1">
