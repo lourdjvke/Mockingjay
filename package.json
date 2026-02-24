@@ -36,6 +36,7 @@
     "@fontsource/satisfy": "^5.2.7",
     "@fontsource/special-elite": "^5.2.8",
     "@fontsource/unifrakturmaguntia": "^5.2.8",
+    "@hello-pangea/dnd": "^18.0.1",
     "@types/react-beautiful-dnd": "^13.1.8",
     "firebase": "^10.12.2",
     "framer-motion": "^12.34.3",
@@ -44,7 +45,6 @@
     "modern-screenshot": "4.4.37",
     "qrcode": "^1.5.3",
     "react": "19.0.0",
-    "react-beautiful-dnd": "^13.1.1",
     "react-contenteditable": "^3.3.7",
     "react-dom": "19.0.0",
     "use-debounce": "^10.0.0"
