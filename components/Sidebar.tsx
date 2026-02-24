@@ -5,6 +5,15 @@ import type { User } from 'firebase/auth';
 import { DragDropContext, Droppable, Draggable, OnDragEndResponder } from 'react-beautiful-dnd';
 import { motion, AnimatePresence } from 'framer-motion';
 
+interface SectionProps {
+  title: string;
+  id: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  isOpen: boolean;
+  onToggle: (id: string) => void;
+  isMobile: boolean;
+}
 
 const Section: React.FC<SectionProps> = ({ title, id, icon, children, isOpen, onToggle, isMobile }) => (
   <motion.div 
