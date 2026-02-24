@@ -7,12 +7,13 @@ import ElementRenderer from './components/ElementRenderer.tsx';
 import { Icons } from './components/IconLibrary.tsx';
 import BrandDna from './components/BrandDna.tsx';
 import { domToPng } from 'modern-screenshot';
-import { auth, database, provider, signInWithPopup, onAuthStateChanged, ref, set, onValue, get, child, remove, runTransaction } from './firebase.ts';
+import { auth, database, ref, set, onValue, get, remove, runTransaction, onAuthStateChanged } from './firebase.ts';
 import type { User } from 'firebase/auth';
 import { useDebouncedCallback } from 'use-debounce';
 import QuickTools from './components/QuickTools.tsx';
 import Share from './components/Share.tsx';
 import { motion, AnimatePresence } from 'framer-motion';
+import Auth from './components/Auth.tsx';
 
 
 interface SnapLine {
@@ -285,15 +286,6 @@ const App: React.FC = () => {
     }
 }, [user, designs, currentDesignId, isAuthLoading]);
 
-  const handleGoogleSignIn = async () => {
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Google Sign-In Error:", error);
-      alert("Could not sign in with Google. Please try again.");
-    }
-  };
-
   const createNewDesign = useCallback(() => {
     const newId = generateId();
     setState(INITIAL_STATE);
@@ -429,7 +421,7 @@ const App: React.FC = () => {
           try {
             const base64 = bufferToBase64(font.data);
             injectFontFace(font.name, base64);
-            const fontFace = new FontFace(font.name, data);
+            const fontFace = new FontFace(font.name, font.data);
             await fontFace.load();
             document.fonts.add(fontFace);
             loadedFonts.push({ name: font.name, value: `\'${font.name}\', sans-serif` });
@@ -453,7 +445,7 @@ const App: React.FC = () => {
       await fontFace.load();
       document.fonts.add(fontFace);
       
-      setUserFonts(prev => [...prev, { name, value: `\'${font.name}\', sans-serif` }]);
+      setUserFonts(prev => [...prev, { name, value: `\'${name}\', sans-serif` }]);
       if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(20);
     } catch (err) {
       console.error("Font save failed:", err);
@@ -831,7 +823,7 @@ USER HAS ATTACHED ${images.length} IMAGE(S). You MUST include them in the design
         pages: sanitizedPages,
         currentPageIndex: 0,
         selectedElementId: null,
-        themeColors: aiResponse.themeColors && aiResponse.themeColors.length > 0 ? aiResponse.themeColors : brandDna.colors,
+        themeColors: aiResponse.themeColors && aiResponse.themeColors.length > 0 ? aiResponse.themeColors : brandData.colors,
         isAiCreated: true,
         aiPrompt: prompt,
       };
@@ -1535,6 +1527,18 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
     transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
   };
 
+  if (isAuthLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen w-screen bg-white">
+        <Icons.Loader className="w-12 h-12 animate-spin text-lime-500" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Auth />;
+  }
+
   return (
     <div className="flex h-screen w-full bg-gray-100 font-sans overflow-hidden select-none touch-none">
       <PricingModal 
@@ -1551,25 +1555,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         onScanSuccess={handleScanSuccess}
       />
 
-       <AnimatePresence>
-       {!user && !isAuthLoading && (
-        <motion.div 
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[2000] bg-white/80 backdrop-blur-xl flex flex-col items-center justify-center gap-8">
-          <div className="text-center space-y-2">
-            <h1 className="text-4xl font-black text-gray-800 italic tracking-tighter uppercase">Mockingjay</h1>
-            <p className="text-gray-500">Your AI-powered design companion</p>
-          </div>
-          <button 
-            onClick={handleGoogleSignIn} 
-            className="bg-lime-400 text-black px-8 py-4 rounded-full font-bold text-lg flex items-center gap-3 hover:bg-lime-300 transition-all active:scale-95 shadow-lg shadow-lime-500/20"
-          >
-            Continue with Google
-          </button>
-        </motion.div>
-      )}
-      </AnimatePresence>
-      
+       
       <input type="file" ref={fileInputRef} className="hidden" accept="application/json" onChange={(e) => {
         const file = e.target.files?.[0];
         if (!file) return;
