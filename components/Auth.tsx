@@ -20,7 +20,7 @@ const Auth: React.FC = () => {
     const moveTimer = setTimeout(() => {
       setPhase('moved-up');
       setIsLoaded(true);
-    }, 2500); // Adjusted timing for a smoother feel
+    }, 2500);
 
     return () => {
       clearTimeout(snapTimer);
@@ -30,7 +30,6 @@ const Auth: React.FC = () => {
 
   const letters = "ockingjay".split("");
 
-  // Input Focus Handlers
   const handleFocus = (field: 'name' | 'email') => setActiveField(field);
   const handleBlur = () => {
     setTimeout(() => {
@@ -62,7 +61,7 @@ const Auth: React.FC = () => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (err: any) { 
+    } catch (err: any) {
       setError(err.message.replace('Firebase: ', ''));
     }
   };
@@ -104,40 +103,55 @@ const Auth: React.FC = () => {
             ${isLoaded ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-10 pointer-events-none'}
           `}
         >
-          <div className={`flex gap-2.5 items-center h-12 transition-all duration-500 ${!isLogin ? 'mb-0' : '-mb-12 opacity-0 pointer-events-none'}`}>
-            <div className={`relative h-full flex items-center transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${activeField === 'email' ? 'flex-[0_0_48px]' : 'flex-1'}`}>
-                <User 
-                  size={20}
-                  className={`absolute left-4 transition-all duration-300 ease-[cubic-bezier(0.68,-0.6,0.32,1.6)] z-20 ${activeField === 'email' ? 'left-1/2 -translate-x-1/2 scale-125 text-[#906efc] cursor-pointer' : 'text-gray-400'}`}
-                  onClick={() => document.getElementById('nameInput')?.focus()}
-                />
-                <input 
-                  id="nameInput"
-                  type="text" 
-                  placeholder="Name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onFocus={() => handleFocus('name')}
-                  onBlur={handleBlur}
-                  className={`w-full h-full pl-[45px] pr-5 rounded-[50px] border border-gray-200 outline-none text-[0.85rem] bg-white focus:border-[#906efc] transition-opacity duration-300 ${activeField === 'email' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-                />
+          {!isLogin ? (
+             <div className="flex gap-2.5 items-center h-12">
+                <div className={`relative h-full flex items-center transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${activeField === 'email' ? 'flex-[0_0_48px]' : 'flex-1'}`}>
+                  <User 
+                    size={20}
+                    className={`absolute left-4 transition-all duration-300 ease-[cubic-bezier(0.68,-0.6,0.32,1.6)] z-20 ${activeField === 'email' ? 'left-1/2 -translate-x-1/2 scale-125 text-[#906efc] cursor-pointer' : 'text-gray-400'}`}
+                    onClick={() => document.getElementById('nameInput')?.focus()}
+                  />
+                  <input 
+                    id="nameInput"
+                    type="text" 
+                    placeholder="Name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onFocus={() => handleFocus('name')}
+                    onBlur={handleBlur}
+                    className={`w-full h-full pl-[45px] pr-5 rounded-[50px] border border-gray-200 outline-none text-[0.85rem] bg-white focus:border-[#906efc] transition-opacity duration-300 ${activeField === 'email' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                  />
+                </div>
+                <div className={`relative h-full flex items-center transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${activeField === 'name' ? 'flex-[0_0_48px]' : 'flex-1'}`}>
+                  <Mail 
+                    size={20}
+                    className={`absolute left-4 transition-all duration-300 ease-[cubic-bezier(0.68,-0.6,0.32,1.6)] z-20 ${activeField === 'name' ? 'left-1/2 -translate-x-1/2 scale-125 text-[#906efc] cursor-pointer' : 'text-gray-400'}`}
+                    onClick={() => document.getElementById('emailInput')?.focus()}
+                  />
+                  <input 
+                    id="emailInput"
+                    type="email" 
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onFocus={() => handleFocus('email')}
+                    onBlur={handleBlur}
+                    className={`w-full h-full pl-[45px] pr-5 rounded-[50px] border border-gray-200 outline-none text-[0.85rem] bg-white focus:border-[#906efc] transition-opacity duration-300 ${activeField === 'name' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                  />
+                </div>
               </div>
-          </div>
-          
-          <div className="relative h-12 flex items-center">
-              <Mail 
-                  size={20}
-                  className="absolute left-4 text-gray-400 z-20"
-              />
-              <input 
-                  id="emailInput"
-                  type="email" 
-                  placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full h-full pl-[45px] pr-5 rounded-[50px] border border-gray-200 outline-none text-[0.85rem] bg-white focus:border-[#906efc] transition-all"
-              />
-          </div>
+          ) : (
+            <div className="relative h-12 flex items-center">
+                <Mail size={20} className="absolute left-4 text-gray-400 z-20" />
+                <input 
+                    type="email" 
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full h-full pl-[45px] pr-5 rounded-[50px] border border-gray-200 outline-none text-[0.85rem] bg-white focus:border-[#906efc] transition-all"
+                />
+            </div>
+          )}
 
           <div className="relative flex items-center h-12">
             <Lock size={20} className="absolute left-4 text-gray-400 z-20" />
@@ -154,7 +168,7 @@ const Auth: React.FC = () => {
           {error && <p className="text-red-500 text-xs text-center font-semibold px-4">{error}</p>}
 
           <button onClick={handleAuthAction} className="w-full py-3.5 mt-2 rounded-[50px] font-semibold text-[0.9rem] cursor-pointer border-2 border-[#906efc] text-[#906efc] bg-transparent transition-all duration-400 ease-[cubic-bezier(0.68,-0.6,0.32,1.6)] hover:bg-[#906efc] hover:text-white hover:-translate-y-1 hover:scale-[1.03] hover:shadow-[0_10px_20px_rgba(144,110,252,0.2)] active:scale-[0.92]">
-            {isLogin ? 'Login' : 'Create Account'}
+            {isLogin ? 'Login' : 'Sign up'}
           </button>
 
           <button onClick={handleGoogleSignIn} className="w-full py-3.5 rounded-[50px] font-semibold text-[0.9rem] cursor-pointer border-none text-white bg-[linear-gradient(135deg,#5b86e5_0%,#906efc_100%)] flex items-center justify-center gap-2.5 shadow-[0_4px_10px_rgba(91,134,229,0.15)] transition-all duration-400 ease-[cubic-bezier(0.68,-0.6,0.32,1.6)] hover:brightness-[1.08] hover:-translate-y-1 hover:scale-[1.03] hover:shadow-[0_10px_20px_rgba(91,134,229,0.25)] active:scale-[0.92]">
