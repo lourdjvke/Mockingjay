@@ -139,5 +139,5 @@
     }
 }
 .mesh-gradient {
-    background-image: linear-gradient(to right, #8B5CF6, #EC4899, #F59E0B, #10B981);
+    background-image: linear-gradient(to right, #8B5CF6, #EC4899, #F59E0B, #10B981) !important;
 }
