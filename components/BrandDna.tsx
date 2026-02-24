@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getDatabase, ref, push, onValue, remove } from "firebase/database";
+import { getDatabase, ref, push, onValue, remove, query, orderByChild, equalTo } from "firebase/database";
+import { getAuth } from "firebase/auth";
 import { 
   Beaker, 
   ChevronDown, 
@@ -31,6 +32,7 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
   const [brandData, setBrandData] = useState(null);
   const [images, setImages] = useState([]);
   const [history, setHistory] = useState([]);
+  const [isEditing, setIsEditing] = useState(null);
 
   // Campaign creation states
   const [isCampaignMode, setIsCampaignMode] = useState(false);
@@ -40,18 +42,23 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
   const campaignFileInputRef = useRef(null);
       
   const db = getDatabase();
+  const auth = getAuth();
+  const user = auth.currentUser;
       
   useEffect(() => {
-    const brandRef = ref(db, 'brands');
+    if (!user) return;
+    const brandRef = query(ref(db, 'brands'), orderByChild('userId'), equalTo(user.uid));
     onValue(brandRef, (snapshot) => {
       const data = snapshot.val();
-      const loadedHistory = [];
-      for (let id in data) {
-        loadedHistory.push({ id, ...data[id] });
+      if(data){
+        const [brandId] = Object.keys(data);
+        const loadedBrand = { id: brandId, ...data[brandId] };
+        setBrandData(loadedBrand);
+        setHistory([loadedBrand]); // Simplified history to just the one brand
+        openFromHistory(loadedBrand);
       }
-      setHistory(loadedHistory.sort((a, b) => b.timestamp - a.timestamp));
     });
-  }, [db]);
+  }, [db, user]);
       
   const fetchWithRetry = async (url, options, retries = 5, backoff = 1000) => {
     try {
@@ -87,7 +94,7 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
       
   const handleProcessBrand = async (e) => {
     e.preventDefault();
-    if (!url) return;
+    if (!url || !user) return;
       
     setLoading(true);
     setStatus("Capturing screenshot...");
@@ -120,13 +127,13 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
           
       const newEntry = {
         ...aiResult,
+        userId: user.uid,
         url: url,
-        screenshot: base64Image, // Save as base64
+        screenshot: base64Image, 
         images: [{ id: Date.now(), url: base64Image, label: 'Website Capture' }],
         timestamp: Date.now()
       };
     
-      // Save to Firebase
       const brandRef = ref(db, 'brands');
       await push(brandRef, newEntry);
           
@@ -151,6 +158,7 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
     e.stopPropagation();
     const brandRef = ref(db, `brands/${id}`);
     await remove(brandRef);
+    setBrandData(null);
   };
     
   const removeImage = (id) => {
@@ -219,88 +227,91 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
     onStartCampaign(brandData, campaignPrompt, selectedTags, base64Images);
   };
 
-  const EditableSection = ({ children, className = "" }) => (
-    <div className={`group relative cursor-pointer ${className}`}>
-      {children}
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 p-1.5 rounded-lg border border-white/10">
-        <Pencil size={14} className="text-[#d4e157]" />
+  const handleFieldUpdate = (field, value) => {
+    setBrandData(prev => ({...prev, [field]: value}));
+    // Here you would also update Firebase
+  };
+
+  const EditableField = ({ value, field, label, type = 'text' }) => {
+    if (isEditing === field) {
+      return (
+        <div className="w-full">
+          <input 
+            type={type}
+            defaultValue={value}
+            onBlur={(e) => { handleFieldUpdate(field, e.target.value); setIsEditing(null); }}
+            autoFocus
+            className="bg-white/10 border border-white/20 p-2 rounded-md w-full text-sm"
+          />
+        </div>
+      );
+    }
+    return (
+      <div onClick={() => setIsEditing(field)} className="group relative cursor-pointer w-full">
+        {label && <span className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1">{label}</span>}
+        <p className="text-sm text-gray-800 leading-relaxed group-hover:bg-gray-100 p-2 rounded-md w-full">{value}</p>
+        <Pencil size={12} className="absolute top-2 right-2 text-gray-400 opacity-0 group-hover:opacity-100" />
       </div>
-    </div>
-  );
+    );
+  };
+
+  const EditableList = ({ value, field, label }) => {
+    if (isEditing === field) {
+        return (
+            <div className="w-full">
+                <textarea
+                    defaultValue={value.join(', ')}
+                    onBlur={(e) => { handleFieldUpdate(field, e.target.value.split(',').map(s => s.trim())); setIsEditing(null); }}
+                    autoFocus
+                    className="bg-white/10 border border-white/20 p-2 rounded-md w-full text-sm h-24"
+                />
+            </div>
+        );
+    }
+    return (
+        <div onClick={() => setIsEditing(field)} className="group relative cursor-pointer w-full">
+            {label && <span className="text-[10px] text-gray-500 uppercase tracking-wider block mb-2">{label}</span>}
+            <ul className="text-sm text-gray-800 space-y-1">
+                {value.map((v, i) => <li key={i} className="p-1 rounded-md group-hover:bg-gray-100">• {v}</li>)}
+            </ul>
+            <Pencil size={12} className="absolute top-2 right-2 text-gray-400 opacity-0 group-hover:opacity-100" />
+        </div>
+    );
+  };
 
   const mainContent = () => {
     if (!brandData && !loading) {
       return (
-        <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-start p-6 pt-24">
+        <div className="min-h-screen bg-white flex flex-col items-center justify-start p-4 pt-20 md:p-6 md:pt-24">
           <div className="max-w-xl w-full text-center">
-             <div className="bg-[#d4e157] w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-8 text-black shadow-2xl shadow-[#d4e157]/20">
+             <div className="bg-lime-400 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 text-black shadow-2xl shadow-lime-500/20">
               <Beaker size={32} />
             </div>
-            <h1 className="text-4xl md:text-5xl font-serif italic text-white mb-4">Mock Lab</h1>
-            <p className="text-gray-400 mb-8 leading-relaxed">Enter your website URL to instantly extract your brand identity and build your Business DNA.</p>
+            <h1 className="text-4xl md:text-5xl font-black italic text-gray-800 mb-4">Mock Lab</h1>
+            <p className="text-gray-500 mb-8 leading-relaxed max-w-md mx-auto">Enter your website URL to instantly extract your brand identity and build your Business DNA.</p>
                 
-            <form onSubmit={handleProcessBrand} className="relative group mb-16">
-              <div className="absolute inset-y-0 left-5 flex items-center text-gray-500 group-focus-within:text-[#d4e157] transition-colors">
+            <form onSubmit={handleProcessBrand} className="relative group mb-12">
+              <div className="absolute inset-y-0 left-5 flex items-center text-gray-400 group-focus-within:text-lime-500 transition-colors">
                 <Globe size={20} />
               </div>
               <input 
                 type="text" 
                 placeholder="https://yourbrand.com" 
-                className="w-full bg-[#1a1a1a] border border-gray-800 rounded-2xl py-5 pl-14 pr-32 text-white focus:outline-none focus:border-[#d4e157] transition-all shadow-2xl"
+                className="w-full bg-gray-100 border border-gray-200 rounded-2xl py-5 pl-14 pr-32 text-gray-800 focus:outline-none focus:border-lime-400 transition-all shadow-lg shadow-gray-200/50"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
               />
               <button 
                 type="submit"
-                className="absolute right-2 top-2 bottom-2 bg-[#d4e157] text-black px-6 rounded-xl font-bold text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg"
+                className="absolute right-2 top-2 bottom-2 bg-lime-400 text-black px-6 rounded-xl font-bold text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-md"
               >
                 Analyze
               </button>
             </form>
-      
             {history.length > 0 && (
-              <div className="w-full text-left">
-                <div className="flex items-center gap-2 mb-6 text-gray-500 px-2">
-                  <History size={16} />
-                  <span className="text-[10px] uppercase tracking-widest font-bold">Recent Extractions</span>
-                </div>
-                <div className="grid grid-cols-1 gap-3">
-                  {history.map((item) => (
-                    <div 
-                      key={item.id} 
-                      onClick={() => openFromHistory(item)}
-                      className="bg-[#1a1a1a] border border-gray-800 rounded-2xl p-4 flex items-center justify-between group cursor-pointer hover:border-[#d4e157]/50 transition-all"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-800 flex-shrink-0">
-                          {item.screenshot ? (
-                            <img src={item.screenshot} className="w-full h-full object-cover" alt="" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center"><Dna size={16} className="text-gray-600" /></div>
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="text-white font-medium text-sm">{item.businessName}</h4>
-                          <p className="text-gray-500 text-[11px] truncate max-w-[180px]">{item.url}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex -space-x-1">
-                          {item.colors?.slice(0, 3).map((c, i) => (
-                            <div key={i} className="w-3 h-3 rounded-full border border-[#1a1a1a]" style={{ backgroundColor: c }}></div>
-                          ))}
-                        </div>
-                        <button 
-                          onClick={(e) => handleDeleteHistory(e, item.id)}
-                          className="p-2 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-800 transition-colors flex items-center gap-2 mx-auto">
+                <ArrowLeft size={16} /> Return to Editor
+              </button>
             )}
           </div>
         </div>
@@ -309,14 +320,14 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
       
     if (loading) {
       return (
-        <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6">
+        <div className="min-h-screen bg-white flex items-center justify-center p-6">
           <div className="text-center">
             <div className="relative inline-block mb-6">
-              <div className="absolute inset-0 bg-[#d4e157] blur-3xl opacity-20 animate-pulse"></div>
-              <Loader2 size={64} className="text-[#d4e157] animate-spin relative z-10" />
+              <div className="absolute inset-0 bg-lime-400 blur-3xl opacity-30 animate-pulse"></div>
+              <Loader2 size={64} className="text-lime-500 animate-spin relative z-10" />
             </div>
-            <p className="text-white font-serif italic text-2xl mb-2">{status || "Processing..."}</p>
-            <p className="text-gray-500 text-sm animate-pulse tracking-widest uppercase">Consulting with AI</p>
+            <p className="text-gray-800 font-bold italic text-2xl mb-2">{status || "Processing..."}</p>
+            <p className="text-lime-600 text-sm animate-pulse tracking-widest uppercase">Consulting with AI</p>
           </div>
         </div>
       );
@@ -325,40 +336,40 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
     if (brandData) {
         if (isCampaignMode) {
             return (
-                <div className="min-h-screen bg-[#0a0a0a] text-gray-200 font-sans p-4 md:p-8 flex flex-col">
+                <div className="min-h-screen bg-white text-gray-800 font-sans p-4 md:p-8 flex flex-col">
                   <input type="file" ref={campaignFileInputRef} onChange={handleCampaignImageUpload} multiple accept="image/*" className="hidden" />
-                  <header className="flex justify-between items-center mb-12 flex-shrink-0">
-                    <button onClick={() => setIsCampaignMode(false)} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+                  <header className="flex justify-between items-center mb-10 flex-shrink-0">
+                    <button onClick={() => setIsCampaignMode(false)} className="flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-colors">
                         <ArrowLeft size={18} />
                         Back to Brand DNA
                     </button>
-                    <div className="flex items-center gap-2 bg-gray-800/50 border border-gray-700/80 px-3 py-1 rounded-lg">
-                        <Megaphone size={16} className="text-[#d4e157]"/>
-                        <span className="text-sm font-bold text-white">New Campaign</span>
+                    <div className="flex items-center gap-2 bg-gray-100 border border-gray-200 px-3 py-1 rounded-lg">
+                        <Megaphone size={16} className="text-lime-500"/>
+                        <span className="text-sm font-bold text-gray-800">New Campaign</span>
                     </div>
                   </header>
     
                   <main className="flex-grow max-w-4xl mx-auto w-full overflow-y-auto custom-scrollbar pr-2">
-                      <div className="space-y-10">
+                      <div className="space-y-8">
                           <div>
-                              <label className="text-lg font-bold text-white mb-3 block">1. What's the campaign about?</label>
+                              <label className="text-lg font-bold text-gray-800 mb-3 block">1. What's the campaign about?</label>
                               <textarea
                                   value={campaignPrompt}
                                   onChange={(e) => setCampaignPrompt(e.target.value)}
-                                  placeholder="e.g., 'A summer sale campaign for our new line of eco-friendly sneakers. Emphasize sustainability and adventure.'"
-                                  className="w-full bg-[#1a1a1a] border border-gray-800 rounded-2xl py-4 px-5 text-white focus:outline-none focus:border-[#d4e157] transition-all"
-                                  rows="4"
+                                  placeholder="e.g., 'A summer sale for our new line of eco-friendly sneakers. Emphasize sustainability and adventure.'"
+                                  className="w-full bg-gray-100 border border-gray-200 rounded-xl py-4 px-5 text-gray-800 focus:outline-none focus:border-lime-400 transition-all"
+                                  rows="3"
                               ></textarea>
                           </div>
     
                           <div>
-                              <label className="text-lg font-bold text-white mb-3 block">2. Select Campaign Type (up to 3)</label>
+                              <label className="text-lg font-bold text-gray-800 mb-3 block">2. Select Campaign Type (up to 3)</label>
                               <div className="flex flex-wrap gap-3">
                                   {AVAILABLE_TAGS.map(tag => (
                                       <button
                                           key={tag}
                                           onClick={() => toggleTag(tag)}
-                                          className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${selectedTags.includes(tag) ? 'bg-[#d4e157] text-black border-[#d4e157]' : 'bg-transparent border-gray-700 hover:border-gray-500'}`}
+                                          className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${selectedTags.includes(tag) ? 'bg-lime-400 text-black border-lime-500' : 'bg-transparent border-gray-200 hover:border-gray-400'}`}
                                       >
                                           {tag}
                                       </button>
@@ -368,10 +379,10 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                           </div>
     
                           <div>
-                              <label className="text-lg font-bold text-white mb-3 block">3. Attach Images (Optional)</label>
-                              <div className={`grid gap-4 ${campaignImages.length > 0 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-1'}`}>
+                              <label className="text-lg font-bold text-gray-800 mb-3 block">3. Attach Images (Optional)</label>
+                              <div className={`grid gap-3 ${campaignImages.length > 0 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-1'}`}>
                                   {campaignImages.map(image => (
-                                      <div key={image.id} className="aspect-square rounded-xl overflow-hidden group relative border border-gray-800">
+                                      <div key={image.id} className="aspect-square rounded-lg overflow-hidden group relative border border-gray-200">
                                           <img src={image.preview} alt="Campaign upload preview" className="w-full h-full object-cover" />
                                           <button onClick={() => removeCampaignImage(image.id)} className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all">
                                               <X size={14}/>
@@ -381,7 +392,7 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                                   {selectedTags.length > 0 && campaignImages.length < selectedTags.length && (
                                      <div
                                         onClick={() => campaignFileInputRef.current?.click()}
-                                        className="aspect-square rounded-xl border-2 border-dashed border-gray-700 flex flex-col items-center justify-center text-gray-500 hover:border-[#d4e157] hover:text-[#d4e157] cursor-pointer transition-all"
+                                        className="aspect-square rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 hover:border-lime-500 hover:text-lime-500 cursor-pointer transition-all"
                                     >
                                         <UploadCloud size={32} />
                                         <span className="text-sm mt-2 font-medium">Upload Image</span>
@@ -389,15 +400,15 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                                     </div>
                                   )}
                               </div>
-                               {selectedTags.length === 0 && <p className="text-sm text-gray-600 italic mt-2">Please select a campaign type to enable image uploads.</p>}
+                               {selectedTags.length === 0 && <p className="text-sm text-gray-500 italic mt-2">Please select a campaign type to enable image uploads.</p>}
                           </div>
                       </div>
                   </main>
     
-                  <footer className="mt-12 text-center flex-shrink-0">
+                  <footer className="mt-10 text-center flex-shrink-0">
                       <button
                           onClick={handleCreateCampaign}
-                          className="bg-[#d4e157] text-black font-bold text-lg px-12 py-4 rounded-2xl hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-[#d4e157]/20 flex items-center gap-3 mx-auto"
+                          className="bg-lime-400 text-black font-bold text-lg px-10 py-3 rounded-xl hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-lime-500/20 flex items-center gap-3 mx-auto"
                       >
                           <Sparkles size={20} />
                           Create Campaign
@@ -405,148 +416,96 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                   </footer>
                   <style dangerouslySetInnerHTML={{ __html: `
                     .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-                    .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+                    .custom-scrollbar::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
                   `}} />
                 </div>
             );
         }
       return (
         <>
-            <div className="min-h-screen bg-[#0a0a0a] text-gray-200 font-sans p-4 md:p-8">
-              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-12">
-                <div className="flex flex-col gap-2 w-full md:w-auto">
-                  <div className="bg-[#1a1a1a] border border-gray-800 rounded-2xl p-3 flex items-center justify-between w-full md:w-64 shadow-xl">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-[#d4e157] p-1.5 rounded-lg text-black">
-                        <Beaker size={20} />
-                      </div>
-                      <span className="font-bold text-xl text-gray-100">Mockingjay</span>
-                      <span className="text-[10px] bg-gray-800 px-2 py-0.5 rounded-full text-gray-400 uppercase tracking-widest">DNA</span>
-                    </div>
-                    <X size={18} className="text-gray-500 cursor-pointer" onClick={onClose} />
-                  </div>
-                </div>
-            
-                <div className="flex items-center gap-4">
-                  <button 
-                    onClick={() => { setBrandData(null); setIsCampaignMode(false); }}
-                    className="flex items-center gap-2 bg-[#1a1a1a] px-4 py-2 rounded-xl border border-gray-800 text-sm hover:bg-gray-800 transition-colors"
-                  >
-                    <Search size={16} />
-                    New Scan
-                  </button>
-                  <div className="w-10 h-10 rounded-full border-2 border-[#d4e157] overflow-hidden bg-gray-700">
-                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${brandData.businessName}`} alt="User" />
-                  </div>
+            <div className="min-h-screen bg-white text-gray-800 font-sans p-4 sm:p-6 md:p-8">
+              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
+                <button onClick={onClose} className="flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-xl border border-gray-200 text-sm hover:bg-gray-200 transition-colors">
+                    <ArrowLeft size={16} />
+                    Return to Editor
+                </button>
+                <div className="w-10 h-10 rounded-full border-2 border-lime-400 overflow-hidden bg-gray-200 self-end">
+                    <img src={user?.photoURL} alt="User" />
                 </div>
               </header>
             
-              <main className="max-w-6xl mx-auto">
-                <div className="text-center mb-12">
-                  <div className="flex justify-center mb-4 text-[#d4e157]">
-                    <Sparkles size={40} />
+              <main className="max-w-5xl mx-auto">
+                <div className="text-center mb-10">
+                  <div className="inline-block bg-lime-400/20 p-3 rounded-2xl mb-4">
+                    <Dna size={32} className="text-lime-600" />
                   </div>
-                  <h1 className="text-4xl md:text-6xl font-serif italic mb-4 text-white">The DNA of {brandData.businessName}</h1>
-                  <p className="text-gray-400 max-w-xl mx-auto text-sm md:text-base">
-                    Generated from {brandData.url}. Review and refine your brand identity below.
+                  <h1 className="text-3xl md:text-5xl font-black italic mb-3 text-gray-800">The DNA of {brandData.businessName}</h1>
+                  <p className="text-gray-500 max-w-xl mx-auto text-sm md:text-base">
+                    Generated from <a href={brandData.url} target="_blank" className="text-lime-600 font-medium">{brandData.url}</a>. Review and refine your brand identity below.
                   </p>
                 </div>
             
-                <div className="bg-[#1a1a1a] rounded-[2.5rem] p-6 md:p-10 border border-gray-800 shadow-2xl grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div className="bg-white rounded-2xl md:rounded-[2rem] p-4 sm:p-6 md:p-8 border border-gray-200/80 shadow-2xl shadow-gray-300/30 grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
                       
-                  <div className="lg:col-span-8 space-y-8">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <EditableSection className="bg-[#262626] rounded-3xl p-8 border border-gray-700/50 flex flex-col justify-between">
-                        <div>
-                          <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">{brandData.businessName}</h2>
-                          <div className="flex items-center gap-2 text-[#d4e157]">
-                            <LinkIcon size={14} />
-                            <span className="text-xs font-mono">{brandData.url.replace(/(^\w+:|^)\/\//, '')}</span>
-                          </div>
-                        </div>
-                        <div className="mt-6">
-                           <p className="text-gray-400 text-sm leading-relaxed">
-                            {brandData.overview}
-                          </p>
-                        </div>
-                      </EditableSection>
+                  <div className="lg:col-span-8 space-y-4 md:space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                      <div className="bg-gray-50 rounded-xl md:rounded-2xl p-4 md:p-6 border border-gray-200/80 flex flex-col justify-between">
+                        <EditableField value={brandData.businessName} field="businessName" label="Business Name" />
+                        <EditableField value={brandData.overview} field="overview" label="Overview" />
+                      </div>
             
-                      <div className="bg-[#3a3d2e]/40 rounded-3xl p-6 border border-[#d4e157]/20 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-[#3a3d2e]/60 transition-colors h-full min-h-[180px]">
-                        <Plus size={24} className="text-[#d4e157]" />
-                        <span className="text-[#d4e157] font-bold text-sm">Upload Logo</span>
+                      <div className="bg-gray-50 rounded-xl md:rounded-2xl p-4 md:p-6 border border-gray-200/80 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-gray-100 transition-colors h-full min-h-[150px]">
+                        <Plus size={24} className="text-lime-500" />
+                        <span className="text-lime-600 font-bold text-sm">Upload Logo</span>
                       </div>
                     </div>
             
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <EditableSection className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
-                        <div className="flex items-center gap-2 mb-4 text-[#d4e157]">
-                           <ShieldCheck size={16} />
-                           <span className="text-[10px] uppercase font-bold tracking-widest">Values</span>
-                        </div>
-                        <ul className="text-sm text-gray-300 space-y-2">
-                          {brandData.values?.map((v, i) => <li key={i}>• {v}</li>)}
-                        </ul>
-                      </EditableSection>
-            
-                      <EditableSection className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
-                        <div className="flex items-center gap-2 mb-4 text-[#d4e157]">
-                           <MessageSquare size={16} />
-                           <span className="text-[10px] uppercase font-bold tracking-widest">Tone</span>
-                        </div>
-                        <p className="text-sm text-gray-300 italic">"{brandData.tone}"</p>
-                      </EditableSection>
-            
-                      <EditableSection className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
-                        <div className="flex items-center gap-2 mb-4 text-[#d4e157]">
-                           <Eye size={16} />
-                           <span className="text-[10px] uppercase font-bold tracking-widest">Aesthetic</span>
-                        </div>
-                        <p className="text-sm text-gray-300 capitalize">{brandData.aesthetic}</p>
-                      </EditableSection>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                       <div className="bg-gray-50 rounded-xl md:rounded-2xl p-4 md:p-6 border border-gray-200/80">
+                         <EditableList value={brandData.values || []} field="values" label="Values" />
+                       </div>
+                       <div className="bg-gray-50 rounded-xl md:rounded-2xl p-4 md:p-6 border border-gray-200/80">
+                         <EditableField value={brandData.tone} field="tone" label="Tone" />
+                       </div>
+                       <div className="bg-gray-50 rounded-xl md:rounded-2xl p-4 md:p-6 border border-gray-200/80">
+                         <EditableField value={brandData.aesthetic} field="aesthetic" label="Aesthetic" />
+                       </div>
                     </div>
             
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <div className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
-                        <span className="text-gray-500 text-[10px] uppercase tracking-widest block mb-6 font-bold">Brand Colors</span>
-                        <div className="flex justify-between items-center">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                      <div className="bg-gray-50 rounded-xl md:rounded-2xl p-4 md:p-6 border border-gray-200/80">
+                        <span className="text-gray-500 text-[10px] uppercase tracking-widest block mb-4 font-bold">Brand Colors</span>
+                        <div className="flex flex-wrap gap-3 items-center">
                           {brandData.colors?.map((hex) => (
                             <div key={hex} className="flex flex-col items-center gap-2 group/color cursor-pointer">
-                              <div className="w-10 h-10 rounded-full border border-gray-700 shadow-inner group-hover/color:scale-110 transition-transform" style={{ backgroundColor: hex }}></div>
+                              <div className="w-8 h-8 rounded-full border border-gray-200 shadow-inner group-hover/color:scale-110 transition-transform" style={{ backgroundColor: hex }}></div>
                               <span className="text-[8px] font-mono text-gray-500 uppercase">{hex}</span>
                             </div>
                           ))}
-                          <div className="w-10 h-10 rounded-full border border-dashed border-gray-700 flex items-center justify-center text-gray-600 hover:text-[#d4e157] cursor-pointer">
+                          <div className="w-8 h-8 rounded-full border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-lime-500 cursor-pointer">
                             <Plus size={14} />
                           </div>
                         </div>
                       </div>
             
-                      <div className="bg-[#262626] rounded-3xl p-6 border border-gray-700/50">
-                        <span className="text-gray-500 text-[10px] uppercase tracking-widest block mb-4 font-bold">Identified Fonts</span>
-                        <div className="space-y-2">
-                          {brandData.fonts?.map((f, i) => (
-                            <div key={i} className="flex items-center justify-between group/font cursor-pointer">
-                              <p className="text-sm font-medium text-white group-hover/font:text-[#d4e157] transition-colors">{f}</p>
-                              <span className="text-[8px] bg-white/5 px-2 py-1 rounded text-gray-500">Font {i+1}</span>
-                            </div>
-                          ))}
-                        </div>
+                      <div className="bg-gray-50 rounded-xl md:rounded-2xl p-4 md:p-6 border border-gray-200/80">
+                         <EditableList value={brandData.fonts || []} field="fonts" label="Identified Fonts" />
                       </div>
                     </div>
                   </div>
             
-                  <div className="lg:col-span-4 bg-[#262626] rounded-[2rem] p-6 border border-gray-700/50 flex flex-col h-full relative">
-                    <span className="text-gray-500 text-[10px] uppercase tracking-widest font-bold mb-6">Asset Discovery</span>
-                    <div className="grid grid-cols-2 gap-3 overflow-y-auto max-h-[600px] pr-2 custom-scrollbar">
+                  <div className="lg:col-span-4 bg-gray-50 rounded-xl md:rounded-2xl p-4 md:p-6 border border-gray-200/80 flex flex-col h-full relative">
+                    <span className="text-gray-500 text-[10px] uppercase tracking-widest font-bold mb-4">Asset Discovery</span>
+                    <div className="grid grid-cols-2 gap-3 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
                       {images.map((img) => (
-                        <div key={img.id} className="aspect-square rounded-2xl overflow-hidden group relative border border-white/5">
-                          <img src={img.url} className="w-full h-full object-cover grayscale-[0.3] group-hover:grayscale-0 transition-all duration-500" alt="" />
-                          <button onClick={() => removeImage(img.id)} className="absolute top-2 right-2 bg-black/70 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80">
-                            <X size={14} className="text-white" />
+                        <div key={img.id} className="aspect-square rounded-lg overflow-hidden group relative border border-gray-200">
+                          <img src={img.url} className="w-full h-full object-cover transition-all duration-500" alt="" />
+                          <button onClick={() => removeImage(img.id)} className="absolute top-1 right-1 bg-black/50 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80">
+                            <X size={12} className="text-white" />
                           </button>
                         </div>
                       ))}
-                      <div className="aspect-square rounded-2xl border border-dashed border-gray-700 flex flex-col items-center justify-center gap-2 text-gray-500 hover:border-[#d4e157] hover:text-[#d4e157] transition-all cursor-pointer">
+                      <div className="aspect-square rounded-lg border border-dashed border-gray-300 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-lime-500 hover:text-lime-500 transition-all cursor-pointer">
                         <Plus size={20} />
                         <span className="text-[10px]">Add Asset</span>
                       </div>
@@ -554,20 +513,13 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                   </div>
                 </div>
               </main>
-            
-              <style dangerouslySetInnerHTML={{ __html: `
-                @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
-                .font-serif { font-family: 'Instrument Serif', serif; }
-                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-              `}} />
             </div>
             <button
                 onClick={() => setIsCampaignMode(true)}
-                className="fixed z-[2001] bottom-8 right-8 bg-[#d4e157] text-black px-8 py-4 rounded-2xl font-bold text-lg hover:scale-105 active:scale-[0.98] transition-all shadow-2xl shadow-[#d4e157]/30 flex items-center gap-3"
+                className="fixed z-[2001] bottom-6 right-6 md:bottom-8 md:right-8 bg-lime-400 text-black px-6 py-3 md:px-8 md:py-4 rounded-xl md:rounded-2xl font-bold text-base md:text-lg hover:scale-105 active:scale-[0.98] transition-all shadow-2xl shadow-lime-500/30 flex items-center gap-3"
             >
                 <Megaphone size={22} />
-                Create a Campaign!
+                Create Campaign
             </button>
         </>
       );
@@ -576,8 +528,12 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-[#0a0a0a] z-[2000] overflow-y-auto">
+    <div className="fixed inset-0 bg-white z-[2000] overflow-y-auto">
         {mainContent()}
+        <style dangerouslySetInnerHTML={{ __html: `
+            .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+            .custom-scrollbar::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
+        `}} />
     </div>
   )
 };
