@@ -119,7 +119,7 @@ const Auth: React.FC = () => {
 
   return (
     <div className="flex justify-center items-end h-screen w-screen bg-white overflow-hidden font-sans select-none">
-      <div className="relative w-full max-w-[400px] h-full flex flex-col">
+      <div className="relative w-full max-w-[400px] h-full flex flex-col justify-end overflow-y-auto">
         
         {/* Text Transition Layer */}
         <div 
@@ -150,7 +150,7 @@ const Auth: React.FC = () => {
 
         {/* Form Container */}
         <div 
-          className={`absolute bottom-10 w-[90%] left-[5%] flex flex-col gap-3 transition-all duration-700 ease-[cubic-bezier(0.2,0.8,0.2,1)]
+          className={`w-[90%] self-center mb-10 flex flex-col gap-3 transition-all duration-700 ease-[cubic-bezier(0.2,0.8,0.2,1)]
             ${isLoaded ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-10 pointer-events-none'}
           `}
         >
