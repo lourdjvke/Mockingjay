@@ -118,7 +118,7 @@ const Auth: React.FC = () => {
   };
 
   return (
-    <div className="flex justify-center min-h-screen w-screen bg-white overflow-y-auto font-sans select-none">
+    <div className="flex justify-center items-end h-screen w-screen bg-white overflow-hidden font-sans select-none">
       <div className="relative w-full max-w-[400px] h-full flex flex-col">
         
         {/* Text Transition Layer */}
