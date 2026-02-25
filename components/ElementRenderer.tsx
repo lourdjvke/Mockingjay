@@ -25,13 +25,13 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({
     const contentRef = useRef<HTMLDivElement>(null);
 
     useLayoutEffect(() => {
-        if (element.type === 'text' && contentRef.current && isSelected) {
+        if (element.type === 'text' && contentRef.current) {
             const currentHeight = contentRef.current.scrollHeight;
-            if (element.box.height !== currentHeight) {
+            if (Math.abs(element.box.height - currentHeight) > 1) {
                 updateElement(element.id, { box: { ...element.box, height: currentHeight } });
             }
         }
-    }, [element.content, element.box.width, element.style.fontSize, element.style.lineHeight, element.style.letterSpacing, isSelected]);
+    }, [element.content, element.box.width, element.style.fontSize, element.style.lineHeight, element.style.letterSpacing, element.id, element.box.height, updateElement]);
 
     const containerStyle: React.CSSProperties = {
         position: 'absolute',
@@ -77,13 +77,12 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({
                         style={{
                             width: '100%',
                             height: 'auto',
-                            minHeight: element.box.height,
                             wordBreak: 'break-word',
-                            cursor: 'default',
                             padding: 10,
                             boxSizing: 'border-box',
                             outline: 'none',
                             whiteSpace: 'pre-wrap',
+                            pointerEvents: 'none',
                         }}
                         dangerouslySetInnerHTML={{ __html: element.content || '' }}
                     />
