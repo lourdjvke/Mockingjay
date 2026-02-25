@@ -14,7 +14,7 @@ import QuickTools from './components/QuickTools.tsx';
 import Share from './components/Share.tsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import Auth from './components/Auth.tsx';
-
+import CreditPopup from './components/CreditPopup.tsx';
 
 interface SnapLine {
   type: 'vertical' | 'horizontal';
@@ -104,6 +104,7 @@ const App: React.FC = () => {
   const [userTokens, setUserTokens] = useState(0);
   const [showPricingModal, setShowPricingModal] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [showCreditPopup, setShowCreditPopup] = useState(false);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -130,6 +131,16 @@ const App: React.FC = () => {
       document.body.removeChild(script);
     };
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      const hasSeenPopup = localStorage.getItem('hasSeenCreditPopup');
+      if (!hasSeenPopup) {
+        setShowCreditPopup(true);
+        localStorage.setItem('hasSeenCreditPopup', 'true');
+      }
+    }
+  }, [user]);
 
   const payWithPaystack = (amountToPay) => {
     if (!(window as any).PaystackPop) {
@@ -1530,7 +1541,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   if (isAuthLoading) {
     return (
       <div className="flex items-center justify-center h-screen w-screen bg-white">
-        <Icons.Loader className="w-12 h-12 animate-spin text-lime-500" />
+        <Icons.Loader className="w-12 h-12 animate-spin text-blue-500" />
       </div>
     );
   }
@@ -1541,6 +1552,14 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
   return (
     <div className="flex h-screen w-full bg-gray-100 font-sans overflow-hidden select-none touch-none">
+      <CreditPopup
+        show={showCreditPopup}
+        onClose={() => setShowCreditPopup(false)}
+        onCtaClick={() => {
+          setShowCreditPopup(false);
+          setIsAiModalOpen(true);
+        }}
+      />
       <PricingModal 
         show={showPricingModal} 
         onClose={() => setShowPricingModal(false)}
@@ -1584,15 +1603,15 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[1000] bg-white/60 backdrop-blur-xl flex flex-col items-center justify-center gap-8">
              <div className="relative">
-                <div className="w-32 h-32 border-2 border-lime-400/20 rounded-full animate-ping absolute inset-0"></div>
-                <div className="w-32 h-32 border-4 border-lime-400 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-32 h-32 border-2 border-blue-400/20 rounded-full animate-ping absolute inset-0"></div>
+                <div className="w-32 h-32 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
                 <div className="absolute inset-0 flex items-center justify-center">
-                   <Icons.Wand2 className="w-10 h-10 text-lime-500 animate-pulse" />
+                   <Icons.Wand2 className="w-10 h-10 text-blue-500 animate-pulse" />
                 </div>
              </div>
              <div className="text-center space-y-2">
                 <h2 className="text-lg md:text-2xl font-black italic uppercase tracking-tighter text-gray-800">Creating Design</h2>
-                <p className="text-lime-500/80 text-[10px] font-bold uppercase tracking-[0.4em] animate-pulse">Hang on tight</p>
+                <p className="text-blue-500/80 text-[10px] font-bold uppercase tracking-[0.4em] animate-pulse">Hang on tight</p>
              </div>
           </motion.div>
       )}
@@ -1633,12 +1652,12 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
            <span className="text-[10px] w-12 text-center font-bold text-gray-500 uppercase tracking-widest">{state.currentPageIndex + 1}/{state.pages.length}</span>
            <button className="p-1 text-gray-500 hover:text-gray-900 transition-colors" onClick={() => setState(p => ({ ...p, currentPageIndex: Math.min(p.pages.length - 1, p.currentPageIndex + 1) }))}><Icons.ArrowRight className="w-5 h-5"/></button>
            <div className="w-[1px] h-4 bg-gray-200 mx-1" />
-            <button className="p-1 text-lime-500 hover:scale-125 transition-transform w-5 h-5 flex items-center justify-center" onClick={addPage}>
+            <button className="p-1 text-blue-500 hover:scale-125 transition-transform w-5 h-5 flex items-center justify-center" onClick={addPage}>
               {saveStatus === 'saving' ? <Icons.RotateCw className="w-4 h-4 animate-spin" /> : 
                saveStatus === 'saved' ? <Icons.Check className="w-4 h-4 text-green-500" /> : 
                <Icons.Plus className="w-5 h-5" />}
             </button>
-           <button className="p-1.5 bg-gray-800 rounded-full text-white hover:rotate-12 transition-all shadow-md" onClick={() => setIsAiModalOpen(true)}><Icons.Wand2 className="w-4 h-4" /></button>
+           <button className="p-1.5 bg-blue-500 rounded-full text-white hover:rotate-12 transition-all shadow-md" onClick={() => setIsAiModalOpen(true)}><Icons.Wand2 style={{ color: 'white' }} className="w-4 h-4" /></button>
            {selectedElement ? 
             <button className="p-1 text-red-500/60 hover:text-red-500 transition-colors" onClick={() => deleteElement(selectedElement.id)}><Icons.Trash2 className="w-5 h-5"/></button> :
             <button className="p-1 text-gray-500 hover:text-gray-800 transition-colors" onClick={() => setIsShareModalOpen(true)}><Icons.Share2 className="w-5 h-5"/></button>
@@ -1647,7 +1666,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
 
         <div ref={workspaceRef} className="flex-1 flex items-center justify-center relative overflow-hidden p-4 transition-all duration-300">
            {snapLines.map((line, i) => (
-             <div key={i} className="absolute bg-lime-400 z-[100] pointer-events-none" style={{
+             <div key={i} className="absolute bg-blue-400 z-[100] pointer-events-none" style={{
                  left: line.type === 'vertical' ? `calc(50% + (${line.position - CANVAS_WIDTH / 2}px * ${canvasScale}))` : 0,
                  top: line.type === 'horizontal' ? `calc(50% + (${line.position - CANVAS_HEIGHT / 2}px * ${canvasScale}))` : 0,
                  width: line.type === 'vertical' ? '1px' : '100%',
@@ -1693,8 +1712,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                 {showStar && (
                     <motion.svg className="absolute inset-0 w-full h-full pointer-events-none z-50" viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`} fill="none">
                         <rect x="1" y="1" width={CANVAS_WIDTH - 2} height={CANVAS_HEIGHT - 2} rx="16" style={{
-                            stroke: '#84cc16', strokeWidth: 3, strokeDasharray: '150 1600',
-                            filter: 'drop-shadow(0 0 10px #a3e635)',
+                            stroke: '#60a5fa', strokeWidth: 3, strokeDasharray: '150 1600',
+                            filter: 'drop-shadow(0 0 10px #60a5fa)',
                             animation: 'star-trail 1.5s ease-out forwards'
                         }}/>
                         <rect x="1" y="1" width={CANVAS_WIDTH - 2} height={CANVAS_HEIGHT - 2} rx="16" style={{
@@ -1717,8 +1736,8 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
              <div className="bg-white/80 backdrop-blur-3xl border border-gray-200/80 rounded-[24px] p-6 shadow-2xl">
                 <div className="flex items-center justify-between gap-3 mb-4">
                    <div className="flex items-center gap-3">
-                     <div className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.4)]">
-                        <Icons.Wand2 className="w-5 h-5 text-black" />
+                     <div className="w-10 h-10 bg-blue-400 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(96,165,250,0.4)]">
+                        <Icons.Wand2 className="w-5 h-5 text-white" />
                      </div>
                      <h3 className="text-sm font-bold uppercase tracking-widest text-gray-800 italic">Mock-AI</h3>
                    </div>
@@ -1736,12 +1755,12 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     onChange={(e) => setAiPrompt(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAiRefine()}
                     disabled={isAiLoading}
-                    className="w-full bg-gray-100 border border-gray-200 rounded-2xl h-16 pl-12 pr-14 text-sm focus:outline-none focus:border-lime-400 transition-all placeholder:text-gray-400 text-gray-800"
+                    className="w-full bg-gray-100 border border-gray-200 rounded-2xl h-16 pl-12 pr-14 text-sm focus:outline-none focus:border-blue-400 transition-all placeholder:text-gray-400 text-gray-800"
                   />
                   <button onClick={() => aiImageInputRef.current?.click()} disabled={useImageAsReference ? aiAttachedImages.length >= 1 : aiAttachedImages.length >= 4} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800 transition-colors disabled:opacity-30">
                     <Icons.Paperclip className="w-5 h-5" />
                   </button>
-                  <button onClick={handleAiRefine} disabled={isAiLoading || (useImageAsReference && aiAttachedImages.length === 0)} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-gray-200' : 'bg-lime-400 text-black active:scale-90 hover:shadow-lg hover:shadow-lime-500/30'} disabled:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed`}>
+                  <button onClick={handleAiRefine} disabled={isAiLoading || (useImageAsReference && aiAttachedImages.length === 0)} className={`absolute right-2 top-2 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isAiLoading ? 'bg-gray-200' : 'bg-blue-400 text-white active:scale-90 hover:shadow-lg hover:shadow-blue-500/30'} disabled:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed`}>
                     {isAiLoading ? <Icons.Sparkles className="w-5 h-5 animate-spin-custom text-gray-500" /> : <Icons.ArrowRight className="w-6 h-6" />}
                   </button>
                 </div>
@@ -1824,7 +1843,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
                     <p className="text-gray-500 text-sm">Select format for high-res output</p>
                   </div>
                   <div className="grid gap-3">
-                    <button onClick={handleExportPng} className="group flex items-center gap-4 bg-lime-400 p-5 rounded-2xl text-black font-bold transition-all hover:bg-lime-300 active:scale-95">
+                    <button onClick={handleExportPng} className="group flex items-center gap-4 bg-blue-400 p-5 rounded-2xl text-black font-bold transition-all hover:bg-blue-300 active:scale-95">
                       <div className="w-12 h-12 bg-black/10 rounded-xl flex items-center justify-center"><Icons.ImageIcon className="w-6 h-6" /></div>
                       <div className="text-left"><div className="text-lg">Download PNG</div><div className="text-[10px] font-bold opacity-60 italic uppercase tracking-widest">Ultra High Fidelity</div></div>
                     </button>
