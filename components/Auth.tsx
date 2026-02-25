@@ -132,7 +132,7 @@ const Auth: React.FC = () => {
           `}
         >
           <div className="text-[4rem] font-[900] uppercase flex gap-[0.05em] text-black transition-colors duration-500">
-            <span style={{ fontFamily: '"Archivo Black"', sans-serif }}>M</span>
+            <span style={{ fontFamily: '"Archivo Black", sans-serif' }}>M</span>
             {letters.map((char, i) => (
               <span 
                 key={i} 
