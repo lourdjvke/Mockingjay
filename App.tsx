@@ -1203,11 +1203,10 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       name: element.name || (element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : 'Element'),
       type: (element.type as any) || 'shape',
       box: { x: (CANVAS_WIDTH - (element.box?.width || 200)) / 2, y: (CANVAS_HEIGHT - (element.box?.height || 50)) / 2, width: 200, height: 50, rotation: 0, ...element.box },
-      content: '',
+      content: element.content || '',
       style: { backgroundColor: 'transparent', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: '400', textAlign: 'center', filter: 'none', ...element.style },
       visible: true,
       locked: false,
-      ...element
     };
     setState(prev => {
       const newPages = [...prev.pages];
