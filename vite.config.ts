@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
       plugins: [
         react(),
         VitePWA({
+          injectRegister: 'auto',
           registerType: 'autoUpdate',
           includeAssets: ['Debrosee-ALPnL.ttf', 'PirataOne-Regular.ttf', 'pwa-192x192.jpg', 'pwa-512x512.jpg'],
           manifest: {
