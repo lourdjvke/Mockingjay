@@ -158,12 +158,12 @@ const Auth: React.FC = () => {
           `}
         >
           {installPrompt && !isPWAInstalled && (
-            <button
-                onClick={handleInstallClick}
-                className="w-full py-3.5 mb-2 rounded-[50px] font-semibold text-[0.9rem] cursor-pointer border-2 border-black text-black bg-transparent transition-all duration-400 ease-in-out hover:bg-black hover:text-white hover:-translate-y-1 hover:scale-105 active:scale-95"
-            >
-                Install App
-            </button>
+            <p 
+                className="text-center underline cursor-pointer pb-2"
+                style={{color: '#777'}}
+                onClick={handleInstallClick}>
+                Install app
+            </p>
           )}
           {!isLogin ? (
              <div className="flex gap-2.5 items-center h-12">
