@@ -82,7 +82,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({
                             boxSizing: 'border-box',
                             outline: 'none',
                             whiteSpace: 'pre-wrap',
-                            pointerEvents: 'none',
+                            cursor: 'default',
                         }}
                         dangerouslySetInnerHTML={{ __html: element.content || '' }}
                     />
