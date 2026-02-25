@@ -16,34 +16,7 @@ export default defineConfig(({ mode }) => {
           injectRegister: 'auto',
           registerType: 'autoUpdate',
           includeAssets: ['Debrosee-ALPnL.ttf', 'PirataOne-Regular.ttf', 'pwa-192x192.jpg', 'pwa-512x512.jpg'],
-          manifest: {
-            name: 'Mockingjay Design Editor',
-            short_name: 'Mockingjay',
-            description: 'Professional mobile-first design editor powered by AI',
-            theme_color: '#000000',
-            background_color: '#000000',
-            display: 'standalone',
-            orientation: 'portrait',
-            start_url: '/',
-            icons: [
-              {
-                src: 'pwa-192x192.jpg',
-                sizes: '192x192',
-                type: 'image/jpeg'
-              },
-              {
-                src: 'pwa-512x512.jpg',
-                sizes: '512x512',
-                type: 'image/jpeg'
-              },
-              {
-                src: 'pwa-512x512.jpg',
-                sizes: '512x512',
-                type: 'image/jpeg',
-                purpose: 'any maskable'
-              }
-            ]
-          },
+          manifest: false,
           workbox: {
             globPatterns: ['**/*.{js,css,html,ico,png,jpg,svg,ttf,woff2}'],
             runtimeCaching: [
