@@ -1,0 +1,35 @@
+{
+  "short_name": "Mockingjay",
+  "name": "Mockingjay",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "mocklogo.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "mocklogo.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "mockingjay.PNG",
+      "type": "image/png",
+      "sizes": "1080x1920",
+       "form_factor": "narrow"
+    },
+    {
+      "src": "pompom.PNG",
+      "type": "image/png",
+      "sizes": "1080x1920",
+      "form_factor": "narrow"
+    }
+  ]
+}
