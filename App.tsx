@@ -1202,7 +1202,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
       id: generateId(),
       name: element.name || (element.type ? `${element.type.charAt(0).toUpperCase() + element.type.slice(1)}` : 'Element'),
       type: (element.type as any) || 'shape',
-      box: { x: (CANVAS_WIDTH - 200) / 2, y: (CANVAS_HEIGHT - 200) / 2, width: 200, height: 50, rotation: 0, ...element.box },
+      box: { x: (CANVAS_WIDTH - (element.box?.width || 200)) / 2, y: (CANVAS_HEIGHT - (element.box?.height || 50)) / 2, width: 200, height: 50, rotation: 0, ...element.box },
       content: '',
       style: { backgroundColor: 'transparent', color: '#000000', borderRadius: 0, opacity: 1, strokeWidth: 0, strokePattern: 'solid', strokeColor: '#000000', letterSpacing: 0, lineHeight: 1.2, fontFamily: defaultFont, fontSize: 24, fontWeight: '400', textAlign: 'center', filter: 'none', ...element.style },
       visible: true,
@@ -1249,19 +1249,22 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
   const onAddText = useCallback((type: 'Header' | 'Subheader' | 'Paragraph') => {
     let fontSize = 24;
     let content = 'Paragraph';
+    let height = 50;
     if(type === 'Header') {
         fontSize = 48;
         content = 'Header';
+        height = 70;
     } else if (type === 'Subheader') {
         fontSize = 32;
         content = 'Subheader';
+        height = 60;
     }
     addElement({
         type: 'text',
         name: type,
         content,
         style: { fontSize, color: '#000000', textAlign: 'center' },
-        box: { width: 300, height: 60 }
+        box: { width: 300, height: height }
     })
   }, [addElement]);
 
