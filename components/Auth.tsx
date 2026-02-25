@@ -18,6 +18,7 @@ const Auth: React.FC = () => {
 
   useEffect(() => {
     const handleInstallPrompt = (e: Event) => {
+      console.log('beforeinstallprompt event fired!');
       e.preventDefault();
       setInstallPrompt(e);
     };
@@ -30,7 +31,8 @@ const Auth: React.FC = () => {
   }, []);
 
   useEffect(() => {
-      if (window.matchMedia('(display-mode: standalone)').matches) {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+      if (isStandalone) {
           setIsPWAInstalled(true);
       }
   }, []);
@@ -130,7 +132,7 @@ const Auth: React.FC = () => {
           `}
         >
           <div className="text-[4rem] font-[900] uppercase flex gap-[0.05em] text-black transition-colors duration-500">
-            <span style={{ fontFamily: '"Archivo Black", sans-serif' }}>M</span>
+            <span style={{ fontFamily: '"Archivo Black"', sans-serif }}>M</span>
             {letters.map((char, i) => (
               <span 
                 key={i} 
@@ -156,12 +158,12 @@ const Auth: React.FC = () => {
           `}
         >
           {installPrompt && !isPWAInstalled && (
-            <p 
-                className="text-center underline cursor-pointer pb-2" 
-                style={{color: '#777'}}
-                onClick={handleInstallClick}>
-                Install app
-            </p>
+            <button
+                onClick={handleInstallClick}
+                className="w-full py-3.5 mb-2 rounded-[50px] font-semibold text-[0.9rem] cursor-pointer border-2 border-black text-black bg-transparent transition-all duration-400 ease-in-out hover:bg-black hover:text-white hover:-translate-y-1 hover:scale-105 active:scale-95"
+            >
+                Install App
+            </button>
           )}
           {!isLogin ? (
              <div className="flex gap-2.5 items-center h-12">
