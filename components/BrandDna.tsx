@@ -284,26 +284,29 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
       return (
         <div className="min-h-screen bg-white flex flex-col items-center justify-start p-4 pt-20 md:p-6 md:pt-24">
           <div className="max-w-xl w-full text-center">
-             <div className="bg-lime-400 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 text-black shadow-2xl shadow-lime-500/20">
+             <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-800">
+                <ArrowLeft size={24} />
+             </button>
+             <div className="bg-blue-400 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 text-white shadow-2xl shadow-blue-500/20">
               <Beaker size={32} />
             </div>
             <h1 className="text-4xl md:text-5xl font-black italic text-gray-800 mb-4">Mock Lab</h1>
             <p className="text-gray-500 mb-8 leading-relaxed max-w-md mx-auto">Enter your website URL to instantly extract your brand identity and build your Business DNA.</p>
                 
             <form onSubmit={handleProcessBrand} className="relative group mb-12">
-              <div className="absolute inset-y-0 left-5 flex items-center text-gray-400 group-focus-within:text-lime-500 transition-colors">
+              <div className="absolute inset-y-0 left-5 flex items-center text-gray-400 group-focus-within:text-blue-500 transition-colors">
                 <Globe size={20} />
               </div>
               <input 
                 type="text" 
                 placeholder="https://yourbrand.com" 
-                className="w-full bg-gray-100 border border-gray-200 rounded-2xl py-5 pl-14 pr-32 text-gray-800 focus:outline-none focus:border-lime-400 transition-all shadow-lg shadow-gray-200/50"
+                className="w-full bg-gray-100 border border-gray-200 rounded-2xl py-5 pl-14 pr-32 text-gray-800 focus:outline-none focus:border-blue-400 transition-all shadow-lg shadow-gray-200/50"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
               />
               <button 
                 type="submit"
-                className="absolute right-2 top-2 bottom-2 bg-lime-400 text-black px-6 rounded-xl font-bold text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-md"
+                className="absolute right-2 top-2 bottom-2 bg-blue-400 text-white px-6 rounded-xl font-bold text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-md"
               >
                 Analyze
               </button>
@@ -323,11 +326,11 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
         <div className="min-h-screen bg-white flex items-center justify-center p-6">
           <div className="text-center">
             <div className="relative inline-block mb-6">
-              <div className="absolute inset-0 bg-lime-400 blur-3xl opacity-30 animate-pulse"></div>
-              <Loader2 size={64} className="text-lime-500 animate-spin relative z-10" />
+              <div className="absolute inset-0 bg-blue-400 blur-3xl opacity-30 animate-pulse"></div>
+              <Loader2 size={64} className="text-blue-500 animate-spin relative z-10" />
             </div>
             <p className="text-gray-800 font-bold italic text-2xl mb-2">{status || "Processing..."}</p>
-            <p className="text-lime-600 text-sm animate-pulse tracking-widest uppercase">Consulting with AI</p>
+            <p className="text-blue-600 text-sm animate-pulse tracking-widest uppercase">Consulting with AI</p>
           </div>
         </div>
       );
@@ -344,7 +347,7 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                         Back to Brand DNA
                     </button>
                     <div className="flex items-center gap-2 bg-gray-100 border border-gray-200 px-3 py-1 rounded-lg">
-                        <Megaphone size={16} className="text-lime-500"/>
+                        <Megaphone size={16} className="text-blue-500"/>
                         <span className="text-sm font-bold text-gray-800">New Campaign</span>
                     </div>
                   </header>
@@ -357,7 +360,7 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                                   value={campaignPrompt}
                                   onChange={(e) => setCampaignPrompt(e.target.value)}
                                   placeholder="e.g., 'A summer sale for our new line of eco-friendly sneakers. Emphasize sustainability and adventure.'"
-                                  className="w-full bg-gray-100 border border-gray-200 rounded-xl py-4 px-5 text-gray-800 focus:outline-none focus:border-lime-400 transition-all"
+                                  className="w-full bg-gray-100 border border-gray-200 rounded-xl py-4 px-5 text-gray-800 focus:outline-none focus:border-blue-400 transition-all"
                                   rows="3"
                               ></textarea>
                           </div>
@@ -369,7 +372,7 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                                       <button
                                           key={tag}
                                           onClick={() => toggleTag(tag)}
-                                          className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${selectedTags.includes(tag) ? 'bg-lime-400 text-black border-lime-500' : 'bg-transparent border-gray-200 hover:border-gray-400'}`}
+                                          className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${selectedTags.includes(tag) ? 'bg-blue-400 text-white border-blue-500' : 'bg-transparent border-gray-200 hover:border-gray-400'}`}
                                       >
                                           {tag}
                                       </button>
@@ -392,7 +395,7 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                                   {selectedTags.length > 0 && campaignImages.length < selectedTags.length && (
                                      <div
                                         onClick={() => campaignFileInputRef.current?.click()}
-                                        className="aspect-square rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 hover:border-lime-500 hover:text-lime-500 cursor-pointer transition-all"
+                                        className="aspect-square rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 hover:border-blue-500 hover:text-blue-500 cursor-pointer transition-all"
                                     >
                                         <UploadCloud size={32} />
                                         <span className="text-sm mt-2 font-medium">Upload Image</span>
@@ -408,7 +411,7 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                   <footer className="mt-10 text-center flex-shrink-0">
                       <button
                           onClick={handleCreateCampaign}
-                          className="bg-lime-400 text-black font-bold text-lg px-10 py-3 rounded-xl hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-lime-500/20 flex items-center gap-3 mx-auto"
+                          className="bg-blue-400 text-white font-bold text-lg px-10 py-3 rounded-xl hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-blue-500/20 flex items-center gap-3 mx-auto"
                       >
                           <Sparkles size={20} />
                           Create Campaign
@@ -429,19 +432,19 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                     <ArrowLeft size={16} />
                     Return to Editor
                 </button>
-                <div className="w-10 h-10 rounded-full border-2 border-lime-400 overflow-hidden bg-gray-200 self-end">
+                <div className="w-10 h-10 rounded-full border-2 border-blue-400 overflow-hidden bg-gray-200 self-end">
                     <img src={user?.photoURL} alt="User" />
                 </div>
               </header>
             
               <main className="max-w-5xl mx-auto">
                 <div className="text-center mb-10">
-                  <div className="inline-block bg-lime-400/20 p-3 rounded-2xl mb-4">
-                    <Dna size={32} className="text-lime-600" />
+                  <div className="inline-block bg-blue-400/20 p-3 rounded-2xl mb-4">
+                    <Dna size={32} className="text-blue-600" />
                   </div>
                   <h1 className="text-3xl md:text-5xl font-black italic mb-3 text-gray-800">The DNA of {brandData.businessName}</h1>
                   <p className="text-gray-500 max-w-xl mx-auto text-sm md:text-base">
-                    Generated from <a href={brandData.url} target="_blank" className="text-lime-600 font-medium">{brandData.url}</a>. Review and refine your brand identity below.
+                    Generated from <a href={brandData.url} target="_blank" className="text-blue-600 font-medium">{brandData.url}</a>. Review and refine your brand identity below.
                   </p>
                 </div>
             
@@ -455,8 +458,8 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                       </div>
             
                       <div className="bg-gray-50 rounded-xl md:rounded-2xl p-4 md:p-6 border border-gray-200/80 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-gray-100 transition-colors h-full min-h-[150px]">
-                        <Plus size={24} className="text-lime-500" />
-                        <span className="text-lime-600 font-bold text-sm">Upload Logo</span>
+                        <Plus size={24} className="text-blue-500" />
+                        <span className="text-blue-600 font-bold text-sm">Upload Logo</span>
                       </div>
                     </div>
             
@@ -482,7 +485,7 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                               <span className="text-[8px] font-mono text-gray-500 uppercase">{hex}</span>
                             </div>
                           ))}
-                          <div className="w-8 h-8 rounded-full border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-lime-500 cursor-pointer">
+                          <div className="w-8 h-8 rounded-full border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-blue-500 cursor-pointer">
                             <Plus size={14} />
                           </div>
                         </div>
@@ -505,7 +508,7 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
                           </button>
                         </div>
                       ))}
-                      <div className="aspect-square rounded-lg border border-dashed border-gray-300 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-lime-500 hover:text-lime-500 transition-all cursor-pointer">
+                      <div className="aspect-square rounded-lg border border-dashed border-gray-300 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-blue-500 hover:text-blue-500 transition-all cursor-pointer">
                         <Plus size={20} />
                         <span className="text-[10px]">Add Asset</span>
                       </div>
@@ -516,7 +519,7 @@ const BrandDna = ({ onClose, onStartCampaign }) => {
             </div>
             <button
                 onClick={() => setIsCampaignMode(true)}
-                className="fixed z-[2001] bottom-6 right-6 md:bottom-8 md:right-8 bg-lime-400 text-black px-6 py-3 md:px-8 md:py-4 rounded-xl md:rounded-2xl font-bold text-base md:text-lg hover:scale-105 active:scale-[0.98] transition-all shadow-2xl shadow-lime-500/30 flex items-center gap-3"
+                className="fixed z-[2001] bottom-6 right-6 md:bottom-8 md:right-8 bg-blue-400 text-white px-6 py-3 md:px-8 md:py-4 rounded-xl md:rounded-2xl font-bold text-base md:text-lg hover:scale-105 active:scale-[0.98] transition-all shadow-2xl shadow-blue-500/30 flex items-center gap-3"
             >
                 <Megaphone size={22} />
                 Create Campaign
