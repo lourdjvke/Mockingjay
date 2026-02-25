@@ -1783,7 +1783,7 @@ Position them prominently in the design with good sizing (at least 200x200).` : 
         </AnimatePresence>
         
         {isMobile && !isAiModalOpen && (
-          <div ref={quickToolsRef} className="absolute bottom-0 left-0 right-0 z-20">
+           <div ref={quickToolsRef} className={`absolute left-0 right-0 z-20 ${!isPwaInstalled ? 'bottom-[2em]' : 'bottom-0'}`}>
                 <QuickTools
                     selectedElement={selectedElement}
                     updateElement={updateElement}
